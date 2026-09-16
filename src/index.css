@@ -1,0 +1,682 @@
+@import "tailwindcss";
+
+/* Universal Box Sizing to prevent padding & borders from expanding element width */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    color: #0f172a;
+    background-color: #f8fafc;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+}
+
+/* =========================================================================
+   1. UNIFIED WYSIWYG DESIGN SYSTEM & CSS VARIABLES
+   Shared between Screen Preview and Print Engine for 100% Identical Output
+   ========================================================================= */
+:root {
+  /* Physical Paper Dimensions (Standard ISO A4 & Government F4/Folio) */
+  --page-width-a4-portrait: 210mm;
+  --page-height-a4-portrait: 297mm;
+  --page-width-a4-landscape: 297mm;
+  --page-height-a4-landscape: 210mm;
+
+  --page-width-f4-portrait: 215mm;
+  --page-height-f4-portrait: 330mm;
+  --page-width-f4-landscape: 330mm;
+  --page-height-f4-landscape: 215mm;
+
+  /* Standard Safe Physical Margins: 10mm 12mm 10mm 12mm (Jarak aman konten di dalam kertas A4)
+     Ensures effective printable width of 186mm on A4 portrait, avoiding edge cutoffs and clipping */
+  --page-margin-top: 10mm;
+  --page-margin-right: 12mm;
+  --page-margin-bottom: 10mm;
+  --page-margin-left: 12mm;
+
+  /* Typography: Normalized in pt for Print Driver & Screen Consistency */
+  --doc-font-family: 'Times New Roman', 'Liberation Serif', Times, Georgia, serif;
+  --doc-font-size-base: 9.5pt;
+  --doc-font-size-title: 12pt;
+  --doc-font-size-subtitle: 9.5pt;
+  --doc-font-size-meta: 8.5pt;
+  --doc-font-size-table: 8.5pt;
+  --doc-font-size-table-header: 8.5pt;
+  --doc-font-size-signature: 8.5pt;
+  --doc-font-size-small: 7.5pt;
+
+  /* Spasi Rapat (Compact Line-Height & Margin Control: 1.0 - 1.1) */
+  --doc-line-height-ultra: 1.0;
+  --doc-line-height-compact: 1.05;
+  --doc-line-height-tight: 1.1;
+  --doc-line-height-normal: 1.25;
+
+  /* Compact Spacing: 0px to 2px */
+  --doc-space-none: 0px;
+  --doc-space-compact: 1px;
+  --doc-space-tight: 2px;
+  --doc-table-pad-y: 2px;
+  --doc-table-pad-x: 4px;
+}
+
+/* =========================================================================
+   2. SCREEN PREVIEW PAPER SIMULATION (.print-sheet, .a4-page-container, .page-container)
+   Locks exact canvas size on screen matching physical paper dimensions.
+   Inner Sheet Padding: 10mm 12mm 10mm 12mm (Jarak aman konten di dalam kertas A4)
+   so printable text wrap, table columns, and page breaks are 100% pixel-perfect.
+   ========================================================================= */
+
+.print-sheet,
+.a4-page-container,
+.page-container,
+.paper-preview-a4,
+.paper-preview-a4-landscape,
+.paper-preview-f4,
+.paper-preview-f4-landscape {
+  box-sizing: border-box !important;
+  background-color: #ffffff;
+  color: #000000;
+  margin: 0 auto;
+  position: relative;
+  overflow: visible;
+  box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 20px 25px -5px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+/* A4 Portrait: 100% width with max-width: 210mm (Effective print width ~186mm) */
+.print-sheet,
+.print-sheet.a4-portrait,
+.a4-page-container.a4-portrait,
+.page-container.a4-portrait,
+.paper-preview-a4 {
+  width: 100%;
+  max-width: var(--page-width-a4-portrait);
+  min-height: var(--page-height-a4-portrait);
+  padding: var(--page-margin-top) var(--page-margin-right) var(--page-margin-bottom) var(--page-margin-left);
+}
+
+/* A4 Landscape: 100% width with max-width: 297mm (Effective print width ~273mm) */
+.print-sheet.a4-landscape,
+.a4-page-container.a4-landscape,
+.page-container.a4-landscape,
+.paper-preview-a4-landscape {
+  width: 100%;
+  max-width: var(--page-width-a4-landscape);
+  min-height: var(--page-height-a4-landscape);
+  padding: var(--page-margin-top) var(--page-margin-right) var(--page-margin-bottom) var(--page-margin-left);
+}
+
+/* F4 Folio Portrait: 100% width with max-width: 215mm */
+.print-sheet.f4-portrait,
+.a4-page-container.f4-portrait,
+.page-container.f4-portrait,
+.paper-preview-f4 {
+  width: 100%;
+  max-width: var(--page-width-f4-portrait);
+  min-height: var(--page-height-f4-portrait);
+  padding: var(--page-margin-top) var(--page-margin-right) var(--page-margin-bottom) var(--page-margin-left);
+}
+
+/* F4 Folio Landscape: 100% width with max-width: 330mm */
+.print-sheet.f4-landscape,
+.a4-page-container.f4-landscape,
+.page-container.f4-landscape,
+.paper-preview-f4-landscape {
+  width: 100%;
+  max-width: var(--page-width-f4-landscape);
+  min-height: var(--page-height-f4-landscape);
+  padding: var(--page-margin-top) var(--page-margin-right) var(--page-margin-bottom) var(--page-margin-left);
+}
+
+/* =========================================================================
+   3. TABLE AUTO-FIT & COMPACT SPACING RULES (SPASI RAPAT 1.0 - 1.1)
+   table-layout: fixed prevents tables from expanding past container.
+   word-wrap / overflow-wrap ensures cells wrap long text properly.
+   ========================================================================= */
+
+.doc-content {
+  font-family: var(--doc-font-family);
+  font-size: var(--doc-font-size-base);
+  color: #000000;
+  line-height: var(--doc-line-height-tight);
+}
+
+/* Paragraphs & Explanatory Texts */
+.doc-content p,
+.doc-desc {
+  margin-top: var(--doc-space-compact) !important;
+  margin-bottom: var(--doc-space-tight) !important;
+  line-height: var(--doc-line-height-tight) !important;
+  font-size: var(--doc-font-size-base);
+}
+
+/* Metadata & Identity Tables (Tabel Informasi Identitas: Petugas, Penerima, NIP, Jabatan/Unit, Peruntukan)
+   Aturan: Hilangkan seluruh garis/border hitam (clean layout), alignment label & titik dua sejajar rapi */
+.table-identity,
+.table-identity tr,
+.table-identity td,
+.table-identity th,
+.doc-meta-table,
+.doc-meta-table tr,
+.doc-meta-table td,
+.doc-meta-table th {
+  border: none !important;
+  border-width: 0 !important;
+  outline: none !important;
+  padding: 2px 4px !important;
+  background: transparent !important;
+  line-height: 1.1 !important;
+  font-size: var(--doc-font-size-meta) !important;
+}
+
+/* Kolom Label Identitas: Kunci lebar agar sejajar rapi */
+.table-identity td.col-label,
+.table-identity th.col-label,
+.doc-meta-table td.col-label,
+.table-identity-label {
+  width: 180px !important;
+  max-width: 180px !important;
+  min-width: 180px !important;
+  white-space: nowrap !important;
+  vertical-align: top !important;
+  font-weight: 500 !important;
+  color: #1e293b !important;
+  padding: 2px 4px !important;
+}
+
+/* Kolom Titik Dua (:): Kunci lebar 10px sejajar vertikal */
+.table-identity td.col-colon,
+.table-identity th.col-colon,
+.doc-meta-table td.col-colon,
+.table-identity-colon {
+  width: 10px !important;
+  max-width: 10px !important;
+  min-width: 10px !important;
+  text-align: center !important;
+  vertical-align: top !important;
+  padding: 2px 0 !important;
+}
+
+/* Kolom Nilai/Value Identitas */
+.table-identity td.col-value,
+.table-identity th.col-value,
+.doc-meta-table td.col-value,
+.table-identity-value {
+  vertical-align: top !important;
+  padding: 2px 4px !important;
+}
+
+/* All Document Tables: Strict 100% Width, table-layout: fixed, Border Collapse */
+.a4-page-container table,
+.doc-content table,
+.doc-table,
+.spb-table,
+table {
+  width: 100% !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+  box-sizing: border-box !important;
+}
+
+/* Cells Auto-Wrapping: Prevents long text from pushing column widths */
+.a4-page-container th,
+.a4-page-container td,
+.doc-content th,
+.doc-content td,
+.doc-table th,
+.doc-table td,
+.spb-table th,
+.spb-table td {
+  word-wrap: break-word !important;
+  overflow-wrap: break-word !important;
+  word-break: break-word !important;
+  box-sizing: border-box !important;
+}
+
+.doc-table,
+.spb-table {
+  margin-top: 3px !important;
+  margin-bottom: 3px !important;
+  font-size: var(--doc-font-size-table) !important;
+}
+
+.doc-table th,
+.spb-table th {
+  padding: var(--doc-table-pad-y) var(--doc-table-pad-x) !important;
+  font-size: var(--doc-font-size-table-header) !important;
+  line-height: var(--doc-line-height-compact) !important;
+  font-weight: bold !important;
+  border: 1px solid #000000 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+.doc-table td,
+.spb-table td {
+  padding: var(--doc-table-pad-y) var(--doc-table-pad-x) !important;
+  font-size: var(--doc-font-size-table) !important;
+  line-height: var(--doc-line-height-compact) !important;
+  border: 1px solid #000000 !important;
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+}
+
+/* Signature Blocks (Seksi Tanda Tangan) */
+.doc-signature-block {
+  margin-top: 6px !important;
+  padding-top: 2px !important;
+  line-height: var(--doc-line-height-compact) !important;
+  font-size: var(--doc-font-size-signature) !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.doc-signature-block p {
+  margin-top: 1px !important;
+  margin-bottom: 1px !important;
+  line-height: var(--doc-line-height-compact) !important;
+}
+
+/* Compact Signature Gap (40-44px instead of overflowing 80px) */
+.doc-signature-space {
+  height: 42px !important;
+  min-height: 40px !important;
+}
+
+/* =========================================================================
+   4. EXCEPTIONS: KOP SURAT & DOKUMEN TITLE (Pertahankan Proporsi Estetika)
+   Kop Surat and Document Title maintain standard proportions & spacing
+   for professional and formal government correspondence appearance.
+   ========================================================================= */
+
+.doc-header-kop {
+  margin-bottom: 6px !important;
+  line-height: normal !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.doc-title-block {
+  margin-top: 4px !important;
+  margin-bottom: 6px !important;
+  text-align: center;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
+
+.doc-title-block h2 {
+  font-size: var(--doc-font-size-title) !important;
+  line-height: var(--doc-line-height-normal) !important;
+  margin: 0 !important;
+  font-weight: bold !important;
+  text-decoration: underline !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+.doc-title-block p {
+  font-size: var(--doc-font-size-subtitle) !important;
+  line-height: 1.2 !important;
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
+  font-weight: 600 !important;
+}
+
+/* =========================================================================
+   5. PRINT CSS ENGINE (@media print) & @page RULES
+   Ensures 100% identical WYSIWYG output with screen preview and zero driver margins.
+   Removes browser/PDF white margins, moves margins to inner sheet padding (10mm 12mm 10mm 12mm).
+   ========================================================================= */
+
+@page {
+  size: A4 portrait;
+  margin: 0 !important; /* Menghilangkan margin bawaan driver browser/PDF */
+}
+
+@media print {
+  /* 1. Reset Margin Page & Window (@page & Body Reset) */
+  @page {
+    size: A4 portrait;
+    margin: 0 !important; /* Menghilangkan margin bawaan driver browser/PDF */
+  }
+
+  /* Force exact color rendering, borders, and universal box-sizing */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+    box-sizing: border-box !important;
+  }
+
+  /* HTML & Body Print Reset: No margins or overflow clipping */
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background-color: #ffffff !important;
+    background: #ffffff !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 100% !important;
+    min-height: 100% !important;
+    color: #000000 !important;
+    font-size: var(--doc-font-size-base) !important;
+    overflow: visible !important;
+    -webkit-font-smoothing: antialiased;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  /* Hide All Outside UI Elements */
+  .no-print,
+  nav,
+  header,
+  aside,
+  footer,
+  button,
+  .btn,
+  #toast-container,
+  [role="dialog"],
+  [aria-modal="true"] {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* 3. Penghilangan Bayangan & Border Pembungkus Screen:
+     Sembunyikan elemen visual preview layar seperti box-shadow, border, outline,
+     dan warna latar belakang abu-abu (gray canvas) saat @media print dipanggil
+     agar PDF murni berwarna putih penuh tanpa bingkai. */
+  main,
+  #root,
+  .screen-canvas-wrapper,
+  #document-preview-stage,
+  #preview-canvas-section,
+  .overflow-x-auto,
+  div {
+    overflow: visible !important;
+  }
+
+  main,
+  #root,
+  .screen-canvas-wrapper,
+  #document-preview-stage,
+  #preview-canvas-section {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    transform: none !important;
+  }
+
+  /* 2. Pengaturan Margin Dalam Kontainer Dokumen (Inner Sheet Padding):
+     Pindahkan margin cetak ke dalam kontainer utama dokumen (.print-sheet / .page-container / .a4-page-container)
+     menggunakan padding dalam: 10mm 12mm 10mm 12mm (Jarak aman konten di dalam kertas A4) */
+  .print-sheet,
+  .a4-page-container,
+  .page-container,
+  .paper-preview-a4,
+  .paper-preview-f4,
+  .paper-preview-a4-landscape,
+  .paper-preview-f4-landscape,
+  .print-container {
+    box-sizing: border-box !important;
+    padding: 10mm 12mm 10mm 12mm !important;
+    margin: 0 auto !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    position: relative !important;
+    overflow: visible !important;
+  }
+
+  /* A4 Portrait: 210mm x 297mm */
+  .print-sheet,
+  .print-sheet.a4-portrait,
+  .a4-page-container.a4-portrait,
+  .page-container.a4-portrait,
+  .paper-preview-a4 {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    min-height: 297mm !important;
+  }
+
+  /* A4 Landscape: 297mm x 210mm */
+  .print-sheet.a4-landscape,
+  .a4-page-container.a4-landscape,
+  .page-container.a4-landscape,
+  .paper-preview-a4-landscape {
+    width: 297mm !important;
+    max-width: 297mm !important;
+    min-height: 210mm !important;
+  }
+
+  /* F4 Folio Portrait: 215mm x 330mm */
+  .print-sheet.f4-portrait,
+  .a4-page-container.f4-portrait,
+  .page-container.f4-portrait,
+  .paper-preview-f4 {
+    width: 215mm !important;
+    max-width: 215mm !important;
+    min-height: 330mm !important;
+  }
+
+  /* F4 Folio Landscape: 330mm x 215mm */
+  .print-sheet.f4-landscape,
+  .a4-page-container.f4-landscape,
+  .page-container.f4-landscape,
+  .paper-preview-f4-landscape {
+    width: 330mm !important;
+    max-width: 330mm !important;
+    min-height: 215mm !important;
+  }
+
+  /* Page Break Controls */
+  .page-break,
+  .page-break-after,
+  .break-after-page {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  /* Prevent awkward page break splits */
+  .avoid-break,
+  .page-break-inside-avoid,
+  .break-inside-avoid,
+  .doc-header-kop,
+  .doc-title-block,
+  .doc-meta-block,
+  .doc-signature-block {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 4. Normalisasi Tabel & Penataan Halaman A4:
+     Kunci lebar tabel ke width: 100%; table-layout: fixed; di dalam kontainer dokumen
+     agar garis tabel mepet rapi ke batas margin dalam.
+     Pertahankan spasi rapat (line-height: 1.0) pada isi tabel agar seluruh 14 baris
+     dan 2 blok tanda tangan muat sempurna dalam 1 lembar halaman A4 tanpa melimpah ke halaman 2. */
+  table,
+  .doc-table,
+  .spb-table,
+  .doc-content table,
+  table.border-collapse {
+    width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse !important;
+    box-sizing: border-box !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  /* Spasi rapat 1.0 & padding presisi pada isi tabel */
+  .doc-table th,
+  .doc-table td,
+  .spb-table th,
+  .spb-table td,
+  table th,
+  table td,
+  .doc-content th,
+  .doc-content td {
+    line-height: 1.0 !important;
+    padding: 2px 4px !important;
+    font-size: var(--doc-font-size-table) !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    word-break: break-word !important;
+    box-sizing: border-box !important;
+    border: 1px solid #000000 !important;
+    border-color: #000000 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color: #000000 !important;
+  }
+
+  .doc-table th,
+  .spb-table th,
+  table th,
+  .doc-content th {
+    font-size: var(--doc-font-size-table-header) !important;
+    font-weight: bold !important;
+    text-align: center;
+    background-color: transparent !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  /* Blok Tanda Tangan: Spasi rapat dan anti-pecah halaman */
+  .doc-signature-block {
+    margin-top: 4px !important;
+    padding-top: 2px !important;
+    line-height: 1.0 !important;
+    font-size: var(--doc-font-size-signature) !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .doc-signature-block p {
+    margin-top: 1px !important;
+    margin-bottom: 1px !important;
+    line-height: 1.0 !important;
+  }
+
+  .doc-signature-space {
+    height: 38px !important;
+    min-height: 36px !important;
+  }
+
+  /* Force clean black text */
+  .doc-content,
+  .doc-content p,
+  .doc-content span,
+  .doc-content td,
+  .doc-content th,
+  .doc-content div {
+    color: #000000 !important;
+  }
+
+  /* 5. Penghilangan Border pada Blok Informasi Identitas (@media print):
+     Hilangkan seluruh garis/border hitam (border: none !important; / border: 0;)
+     pada tabel rincian identitas (Petugas, Penerima, NIP, Jabatan/Unit, dan Peruntukan).
+     Tabel Utama Rincian Barang tetap memiliki border 1px solid #000. */
+  .table-identity,
+  .table-identity tr,
+  .table-identity td,
+  .table-identity th,
+  .doc-meta-table,
+  .doc-meta-table tr,
+  .doc-meta-table td,
+  .doc-meta-table th {
+    border: none !important;
+    border-width: 0 !important;
+    outline: none !important;
+    padding: 2px 4px !important;
+    background: transparent !important;
+    line-height: 1.1 !important;
+    font-size: var(--doc-font-size-meta) !important;
+  }
+
+  .table-identity td.col-label,
+  .table-identity th.col-label,
+  .doc-meta-table td.col-label,
+  .table-identity-label {
+    width: 180px !important;
+    max-width: 180px !important;
+    min-width: 180px !important;
+    white-space: nowrap !important;
+    vertical-align: top !important;
+    font-weight: 500 !important;
+    color: #000000 !important;
+    padding: 2px 4px !important;
+  }
+
+  .table-identity td.col-colon,
+  .table-identity th.col-colon,
+  .doc-meta-table td.col-colon,
+  .table-identity-colon {
+    width: 10px !important;
+    max-width: 10px !important;
+    min-width: 10px !important;
+    text-align: center !important;
+    vertical-align: top !important;
+    padding: 2px 0 !important;
+  }
+
+  .table-identity td.col-value,
+  .table-identity th.col-value,
+  .doc-meta-table td.col-value,
+  .table-identity-value {
+    vertical-align: top !important;
+    padding: 2px 4px !important;
+    color: #000000 !important;
+  }
+
+  /* Tabel Utama Rincian Barang (Data Barang): Pertahankan bingkai/border garis hitam standar dokumen dinas */
+  .doc-table,
+  .doc-table th,
+  .doc-table td,
+  .spb-table,
+  .spb-table th,
+  .spb-table td {
+    border: 1px solid #000000 !important;
+    border-color: #000000 !important;
+  }
+}

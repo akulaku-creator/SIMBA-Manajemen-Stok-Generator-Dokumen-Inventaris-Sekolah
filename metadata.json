@@ -1,0 +1,8 @@
+{
+  "name": "Remix SIMBA - Manajemen Stok \u0026 Dokumen Inventaris Sekolah",
+  "description": "Aplikasi Manajemen Stok \u0026 Generator Dokumen Inventaris Sekolah Standar Instansi Pemerintah (A4/F4) dengan Kop Surat Dinamis, NPB, SPB, SPPB, BAST, dan Rekapitulasi BOS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

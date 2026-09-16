@@ -1,0 +1,567 @@
+import { Barang, KategoriBarangItem, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
+
+export const DEFAULT_KATEGORI_LIST: KategoriBarangItem[] = [
+  { id: 'kat-1', nama: 'ATK / Kertas', prefixKode: '1.01.03.01.', jenisDefault: 'BHP', deskripsi: 'Kertas HVS, spidol, map, pulpen, buku tulis' },
+  { id: 'kat-2', nama: 'Kebersihan', prefixKode: '1.01.03.04.', jenisDefault: 'BHP', deskripsi: 'Sapu, cairan pembersih, sabun, kain pel' },
+  { id: 'kat-3', nama: 'Elektronik & Komputer', prefixKode: '1.01.03.02.', jenisDefault: 'BHP', deskripsi: 'Tinta printer, toner, kabel, flashdisk' },
+  { id: 'kat-4', nama: 'Alat Praktik/Peraga', prefixKode: '1.01.03.06.', jenisDefault: 'BHP', deskripsi: 'Bahan kimia praktikum, preparat, peraga siswa' },
+  { id: 'kat-5', nama: 'Bahan Material', prefixKode: '1.01.03.05.', jenisDefault: 'BHP', deskripsi: 'Semen, cat, paku, kayu pemeliharaan gedung' },
+  { id: 'kat-6', nama: 'Perlengkapan Umum', prefixKode: '1.01.03.07.', jenisDefault: 'BHP', deskripsi: 'Lampu penerangan, baterai, perlengkapan serbaguna' },
+  { id: 'kat-7', nama: 'Peralatan & Mesin (Aset)', prefixKode: '1.03.02.01.', jenisDefault: 'Belanja Modal', deskripsi: 'PC, Laptop, Printer, Proyektor, Mesin Kantor' },
+  { id: 'kat-8', nama: 'Perabot & Meubelair (Aset)', prefixKode: '1.03.01.02.', jenisDefault: 'Belanja Modal', deskripsi: 'Meja siswa, kursi guru, lemari arsip besi' }
+];
+
+export const DEFAULT_KOP_SURAT: KopSuratConfig = {
+  pemerintahDaerah: 'PEMERINTAH DAERAH PROVINSI JAWA BARAT',
+  dinasPendidikan: 'DINAS PENDIDIKAN',
+  cabangDinas: 'CABANG DINAS PENDIDIKAN WILAYAH III',
+  namaSekolah: 'SMK NEGERI 1 KOTA PENDIDIKAN',
+  alamatLengkap: 'Jl. Ki Hajar Dewantara No. 107, Telp. (021) 89901234, Fax. (021) 89901235',
+  emailWebsite: 'Email: info@smkn1kotapendidikan.sch.id | Website: https://smkn1kotapendidikan.sch.id',
+  npsn: '20231945',
+  kotaSurat: 'Bekasi',
+  logoType: 'pemda',
+  logoProvinsiType: 'pemda',
+  tampilkanLogoProvinsi: true,
+  logoSekolahType: 'tutwuri',
+  tampilkanLogoSekolah: true
+};
+
+export const DEFAULT_PEJABAT: Pejabat[] = [
+  {
+    id: 'pejabat-kepsek',
+    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
+    nip: '19680512 199303 1 005',
+    pangkatGolongan: 'Pembina Utama Muda / IV c',
+    jabatan: 'Kepala Sekolah',
+    unitKerja: 'Pimpinan Lembaga'
+  },
+  {
+    id: 'pejabat-sarpras',
+    nama: 'Ahmad Fauzi, S.Pd., M.T.',
+    nip: '19780415 200501 1 009',
+    pangkatGolongan: 'Penata Tingkat I / III d',
+    jabatan: 'Wakasek Sarana Prasarana',
+    unitKerja: 'Wakasek Bidang Sarpras'
+  },
+  {
+    id: 'pejabat-pengurus-barang',
+    nama: 'Rina Kartikasari, S.AP.',
+    nip: '19890820 201402 2 003',
+    pangkatGolongan: 'Penata Muda / III a',
+    jabatan: 'Pengurus Barang Pembantu',
+    unitKerja: 'Pengelola Aset & Inventaris'
+  },
+  {
+    id: 'pejabat-tu',
+    nama: 'H. Dadang Irawan, S.Sos.',
+    nip: '19750311 200003 1 004',
+    pangkatGolongan: 'Penata / III c',
+    jabatan: 'Kepala Subbagian Tata Usaha',
+    unitKerja: 'Bagian Tata Usaha'
+  },
+  {
+    id: 'pejabat-lab-komputer',
+    nama: 'Dian Wahyuni, S.Kom.',
+    nip: '19850614 201001 2 018',
+    pangkatGolongan: 'Penata Muda Tingkat I / III b',
+    jabatan: 'Kepala Laboratorium Komputer',
+    unitKerja: 'Unit Lab Komputer'
+  },
+  {
+    id: 'pejabat-kurikulum',
+    nama: 'Sugeng Priyadi, S.Pd.',
+    nip: '19820207 200801 1 012',
+    pangkatGolongan: 'Penata / III c',
+    jabatan: 'Koordinator Kurikulum & Asesmen',
+    unitKerja: 'Bidang Kurikulum'
+  }
+];
+
+export const DEFAULT_BARANG: Barang[] = [
+  {
+    id: 'brg-001',
+    kodeBarang: '1.01.03.01.01',
+    nusp: '0001/2026',
+    namaBarang: 'Kertas HVS A4 70 gsm Sinar Dunia',
+    spesifikasi: 'Ukuran A4 210 x 297 mm, 70 gram, warna putih bersih',
+    kodeRekening: '5.1.02.01.01.0025',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+    kategori: 'ATK / Kertas',
+    satuan: 'Rim',
+    hargaSatuan: 48500,
+    stokAwal: 100,
+    stokSekarang: 82,
+    lokasiGudang: 'Gudang TU Rak A1'
+  },
+  {
+    id: 'brg-002',
+    kodeBarang: '1.01.03.01.02',
+    nusp: '0002/2026',
+    namaBarang: 'Kertas F4 / Folio 70 gsm Sinar Dunia',
+    spesifikasi: 'Ukuran Folio 215 x 330 mm, 70 gram',
+    kodeRekening: '5.1.02.01.01.0025',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+    kategori: 'ATK / Kertas',
+    satuan: 'Rim',
+    hargaSatuan: 55000,
+    stokAwal: 80,
+    stokSekarang: 68,
+    lokasiGudang: 'Gudang TU Rak A2'
+  },
+  {
+    id: 'brg-003',
+    kodeBarang: '1.01.03.01.08',
+    nusp: '0008/2026',
+    namaBarang: 'Spidol Whiteboard Snowman BG-12 Hitam',
+    spesifikasi: 'Boardmarker dapat dihapus, non-toxic, isi 12 pcs/box',
+    kodeRekening: '5.1.02.01.01.0024',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor',
+    kategori: 'ATK / Kertas',
+    satuan: 'Box',
+    hargaSatuan: 85000,
+    stokAwal: 30,
+    stokSekarang: 22,
+    lokasiGudang: 'Gudang TU Rak B1'
+  },
+  {
+    id: 'brg-004',
+    kodeBarang: '1.01.03.02.04',
+    nusp: '0015/2026',
+    namaBarang: 'Tinta Printer Epson 003 Black Original',
+    spesifikasi: 'Kemasan botol 65ml untuk Epson seri L3110 / L3210',
+    kodeRekening: '5.1.02.01.01.0029',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Komputer & Tinta/Toner',
+    kategori: 'Elektronik & Komputer',
+    satuan: 'Botol',
+    hargaSatuan: 95000,
+    stokAwal: 25,
+    stokSekarang: 17,
+    lokasiGudang: 'Lemari Khusus Elektronik'
+  },
+  {
+    id: 'brg-005',
+    kodeBarang: '1.01.03.02.05',
+    nusp: '0016/2026',
+    namaBarang: 'Tinta Printer Epson 003 Color (C/M/Y)',
+    spesifikasi: 'Botol 65ml per botol, warna Cyan, Magenta, Yellow',
+    kodeRekening: '5.1.02.01.01.0029',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Komputer & Tinta/Toner',
+    kategori: 'Elektronik & Komputer',
+    satuan: 'Botol',
+    hargaSatuan: 95000,
+    stokAwal: 20,
+    stokSekarang: 14,
+    lokasiGudang: 'Lemari Khusus Elektronik'
+  },
+  {
+    id: 'brg-006',
+    kodeBarang: '1.01.03.01.12',
+    nusp: '0022/2026',
+    namaBarang: 'Map Snelhecter Folio Kertas Buffalo',
+    spesifikasi: 'Bahan karton buffalo tebal warna biru & hijau, 1 pak isi 50 lembar',
+    kodeRekening: '5.1.02.01.01.0025',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+    kategori: 'ATK / Kertas',
+    satuan: 'Pak',
+    hargaSatuan: 65000,
+    stokAwal: 35,
+    stokSekarang: 28,
+    lokasiGudang: 'Gudang TU Rak A3'
+  },
+  {
+    id: 'brg-007',
+    kodeBarang: '1.01.03.01.15',
+    nusp: '0025/2026',
+    namaBarang: 'Stapler Max HD-10 Original',
+    spesifikasi: 'Bodi besi lapis plastik, kapasitas jilid 20 lembar kertas',
+    kodeRekening: '5.1.02.01.01.0024',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor',
+    kategori: 'ATK / Kertas',
+    satuan: 'Buah',
+    hargaSatuan: 22000,
+    stokAwal: 20,
+    stokSekarang: 16,
+    lokasiGudang: 'Gudang TU Rak B2'
+  },
+  {
+    id: 'brg-008',
+    kodeBarang: '1.01.03.01.16',
+    nusp: '0026/2026',
+    namaBarang: 'Isi Staples Max No. 10-1M',
+    spesifikasi: 'Ukuran staples kecil nomor 10, isi 20 box kecil/pak',
+    kodeRekening: '5.1.02.01.01.0024',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor',
+    kategori: 'ATK / Kertas',
+    satuan: 'Pak',
+    hargaSatuan: 38000,
+    stokAwal: 40,
+    stokSekarang: 33,
+    lokasiGudang: 'Gudang TU Rak B2'
+  },
+  {
+    id: 'brg-009',
+    kodeBarang: '1.01.03.03.02',
+    nusp: '0035/2026',
+    namaBarang: 'Sabun Cuci Tangan Cair Antiseptik 4 Liter',
+    spesifikasi: 'Jerigen 4 liter, aroma apel/lemon, sertifikasi Kemenkes',
+    kodeRekening: '5.1.02.01.01.0036',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Kebersihan dan Bahan Pembersih',
+    kategori: 'Kebersihan',
+    satuan: 'Jerigen',
+    hargaSatuan: 72000,
+    stokAwal: 15,
+    stokSekarang: 10,
+    lokasiGudang: 'Gudang Kebersihan'
+  },
+  {
+    id: 'brg-010',
+    kodeBarang: '1.01.03.02.10',
+    nusp: '0050/2026',
+    namaBarang: 'Flashdisk Kingston 32GB DataTraveler USB 3.2',
+    spesifikasi: 'Kapasitas 32GB, garansi resmi 5 tahun',
+    kodeRekening: '5.1.02.01.01.0029',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Komputer & Tinta/Toner',
+    kategori: 'Elektronik & Komputer',
+    satuan: 'Buah',
+    hargaSatuan: 65000,
+    stokAwal: 15,
+    stokSekarang: 10,
+    lokasiGudang: 'Lemari Khusus Elektronik'
+  },
+  {
+    id: 'brg-011',
+    kodeBarang: '1.01.03.01.30',
+    nusp: '0060/2026',
+    namaBarang: 'Buku Raport Siswa & Cover Emboss Emas',
+    spesifikasi: 'Bahan ASE emboss foil emas, plastik mika tebal 20 kantong',
+    kodeRekening: '5.1.02.01.01.0026',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Cetak',
+    kategori: 'ATK / Kertas',
+    satuan: 'Buah',
+    hargaSatuan: 32000,
+    stokAwal: 150,
+    stokSekarang: 120,
+    lokasiGudang: 'Gudang TU Rak C1'
+  },
+  {
+    id: 'brg-012',
+    kodeBarang: '1.01.03.04.05',
+    nusp: '0075/2026',
+    namaBarang: 'Lampu LED Philips 18 Watt Cool Daylight',
+    spesifikasi: 'Fitting E27, 2000 lumen, hemat energi 88%',
+    kodeRekening: '5.1.02.01.01.0031',
+    namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Listrik',
+    kategori: 'Perlengkapan Umum',
+    satuan: 'Buah',
+    hargaSatuan: 48000,
+    stokAwal: 25,
+    stokSekarang: 21,
+    lokasiGudang: 'Gudang Sarpras Rak L1'
+  },
+  {
+    id: 'brg-013',
+    kodeBarang: '1.01.03.05.02',
+    nusp: '0085/2026',
+    namaBarang: 'Semen Portland Tiga Roda 40 Kg',
+    spesifikasi: 'Semen tipe 1 SNI 40 kg per zak untuk renovasi ringan',
+    kodeRekening: '5.1.02.01.01.0001',
+    namaRekening: 'Belanja Bahan-Bahan Bangunan dan Konstruksi',
+    kategori: 'Bahan Material',
+    satuan: 'Zak',
+    hargaSatuan: 62000,
+    stokAwal: 20,
+    stokSekarang: 20,
+    lokasiGudang: 'Gudang Pemeliharaan',
+    jenisBarang: 'BHP'
+  },
+  // Item Belanja Modal (Aset Tetap) - Dikecualikan dari Laporan BHP, namun tetap tercatat pada Buku Aset & Dokumen Operasional
+  {
+    id: 'brg-014',
+    kodeBarang: '1.03.02.01.01',
+    nusp: '0101/2026',
+    namaBarang: 'Laptop Asus ExpertBook B1400 Core i5',
+    spesifikasi: 'Intel Core i5-1135G7, RAM 16GB DDR4, SSD 512GB NVMe, Layar 14" FHD, Win 11 Pro',
+    kodeRekening: '5.2.02.05.01.0005',
+    namaRekening: 'Belanja Modal Peralatan Komputer (PC, Laptop, Server)',
+    kategori: 'Peralatan & Mesin (Aset)',
+    satuan: 'Unit',
+    hargaSatuan: 11850000,
+    stokAwal: 5,
+    stokSekarang: 4,
+    lokasiGudang: 'Ruang Server & IT',
+    jenisBarang: 'Belanja Modal'
+  },
+  {
+    id: 'brg-015',
+    kodeBarang: '1.03.02.01.02',
+    nusp: '0102/2026',
+    namaBarang: 'Proyektor Epson EB-E01 3300 ANSI Lumens',
+    spesifikasi: 'XGA 1024x768, Kontras 15.000:1, HDMI/VGA Port, Lampu tahan 12.000 jam',
+    kodeRekening: '5.2.02.05.01.0007',
+    namaRekening: 'Belanja Modal Peralatan Studio Audio Visual & Proyektor',
+    kategori: 'Peralatan & Mesin (Aset)',
+    satuan: 'Unit',
+    hargaSatuan: 5600000,
+    stokAwal: 4,
+    stokSekarang: 4,
+    lokasiGudang: 'Gudang Media & Sarpras',
+    jenisBarang: 'Belanja Modal'
+  },
+  {
+    id: 'brg-016',
+    kodeBarang: '1.03.01.02.01',
+    nusp: '0103/2026',
+    namaBarang: 'Lemari Arsip Besi 2 Pintu Kaca Lion',
+    spesifikasi: 'Bahan plat baja 0.8mm powder coating, 4 rak ambalan adjustable, kunci central lock',
+    kodeRekening: '5.2.02.10.01.0002',
+    namaRekening: 'Belanja Modal Meubelair & Perabot Kantor (Meja, Kursi, Lemari)',
+    kategori: 'Perabot & Meubelair (Aset)',
+    satuan: 'Unit',
+    hargaSatuan: 3450000,
+    stokAwal: 3,
+    stokSekarang: 3,
+    lokasiGudang: 'Gudang Sarpras',
+    jenisBarang: 'Belanja Modal'
+  }
+];
+
+export const DEFAULT_TRANSAKSI_PENGELUARAN: TransaksiPengeluaran[] = [
+  {
+    id: 'trx-001',
+    nomorUrut: 1,
+    tanggal: '2026-09-01',
+    unitPemohon: 'Unit Laboratorium Komputer & Multimedia',
+    keperluanUmum: 'Dukungan Praktik Pemrograman & Administrasi Uji Kompetensi Keahlian (UKK)',
+    noNPB: '010/NPB/SMKN1-KP/IX/2026',
+    noSPB: '421.3/007/SPB-SMKN1-KP/IX/2026',
+    noSPPB: '028/006/SPPB-SMKN1-KP/IX/2026',
+    noBAST: '028/005/BAST-SMKN1-KP/IX/2026',
+    pemohonId: 'pejabat-lab-komputer',
+    sarprasId: 'pejabat-sarpras',
+    pengurusBarangId: 'pejabat-pengurus-barang',
+    kepsekId: 'pejabat-kepsek',
+    createdAt: '2026-09-01T08:30:00Z',
+    items: [
+      {
+        id: 'item-1',
+        barangId: 'brg-001',
+        kodeBarang: '1.01.03.01.01',
+        nusp: '0001/2026',
+        kodeRekening: '5.1.02.01.01.0025',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+        namaBarang: 'Kertas HVS A4 70 gsm Sinar Dunia',
+        spesifikasi: 'Ukuran A4 210 x 297 mm, 70 gram',
+        satuan: 'Rim',
+        sisaBarang: 90,
+        usulanJumlah: 8,
+        hargaSatuan: 48500,
+        keperluan: 'Pencetakan Soal & Lembar Panduan Praktik Siswa'
+      },
+      {
+        id: 'item-2',
+        barangId: 'brg-004',
+        kodeBarang: '1.01.03.02.04',
+        nusp: '0015/2026',
+        kodeRekening: '5.1.02.01.01.0029',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Komputer & Tinta/Toner',
+        namaBarang: 'Tinta Printer Epson 003 Black Original',
+        spesifikasi: 'Kemasan botol 65ml',
+        satuan: 'Botol',
+        sisaBarang: 20,
+        usulanJumlah: 3,
+        hargaSatuan: 95000,
+        keperluan: 'Refill Printer Lab Komputer 1 dan 2'
+      },
+      {
+        id: 'item-3',
+        barangId: 'brg-010',
+        kodeBarang: '1.01.03.02.10',
+        nusp: '0050/2026',
+        kodeRekening: '5.1.02.01.01.0029',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Komputer & Tinta/Toner',
+        namaBarang: 'Flashdisk Kingston 32GB DataTraveler USB 3.2',
+        spesifikasi: 'Kapasitas 32GB USB 3.2',
+        satuan: 'Buah',
+        sisaBarang: 15,
+        usulanJumlah: 2,
+        hargaSatuan: 65000,
+        keperluan: 'Backup Master Server & File Asesmen Siswa'
+      }
+    ]
+  },
+  {
+    id: 'trx-002',
+    nomorUrut: 2,
+    tanggal: '2026-09-02',
+    unitPemohon: 'Bidang Kurikulum & Penilaian',
+    keperluanUmum: 'Persiapan Dokumen Penilaian Sumatif Tengah Semester & Administrasi Guru',
+    noNPB: '011/NPB/SMKN1-KP/IX/2026',
+    noSPB: '421.3/008/SPB-SMKN1-KP/IX/2026',
+    noSPPB: '028/007/SPPB-SMKN1-KP/IX/2026',
+    noBAST: '028/006/BAST-SMKN1-KP/IX/2026',
+    pemohonId: 'pejabat-kurikulum',
+    sarprasId: 'pejabat-sarpras',
+    pengurusBarangId: 'pejabat-pengurus-barang',
+    kepsekId: 'pejabat-kepsek',
+    createdAt: '2026-09-02T09:15:00Z',
+    items: [
+      {
+        id: 'item-201',
+        barangId: 'brg-002',
+        kodeBarang: '1.01.03.01.02',
+        nusp: '0002/2026',
+        kodeRekening: '5.1.02.01.01.0025',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+        namaBarang: 'Kertas F4 / Folio 70 gsm Sinar Dunia',
+        spesifikasi: 'Ukuran Folio 215 x 330 mm',
+        satuan: 'Rim',
+        sisaBarang: 75,
+        usulanJumlah: 7,
+        hargaSatuan: 55000,
+        keperluan: 'Penggandaan Berita Acara & Lembar Jawaban Ujian'
+      },
+      {
+        id: 'item-202',
+        barangId: 'brg-003',
+        kodeBarang: '1.01.03.01.08',
+        nusp: '0008/2026',
+        kodeRekening: '5.1.02.01.01.0024',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor',
+        namaBarang: 'Spidol Whiteboard Snowman BG-12 Hitam',
+        spesifikasi: 'Isi 12 pcs/box',
+        satuan: 'Box',
+        sisaBarang: 26,
+        usulanJumlah: 4,
+        hargaSatuan: 85000,
+        keperluan: 'Distribusi ke Ruang Kelas Pembelajaran Aktif'
+      },
+      {
+        id: 'item-203',
+        barangId: 'brg-006',
+        kodeBarang: '1.01.03.01.12',
+        nusp: '0022/2026',
+        kodeRekening: '5.1.02.01.01.0025',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+        namaBarang: 'Map Snelhecter Folio Kertas Buffalo',
+        spesifikasi: '1 pak isi 50 lembar warna biru',
+        satuan: 'Pak',
+        sisaBarang: 32,
+        usulanJumlah: 4,
+        hargaSatuan: 65000,
+        keperluan: 'Pemberkasan Arsip Portofolio Kurikulum Merdeka'
+      }
+    ]
+  }
+];
+
+export const DEFAULT_TRANSAKSI_PENERIMAAN: TransaksiPenerimaan[] = [
+  {
+    id: 'rcv-001',
+    tanggal: '2026-08-25',
+    noBukti: 'BOS-REG/08/2026/019',
+    sumberDana: 'BOS Reguler',
+    penyedia: 'CV. Edukasi Sarana Mandiri',
+    penerimaId: 'pejabat-pengurus-barang',
+    keterangan: 'Pengadaan Belanja Bahan Pakai Habis ATK & Kebersihan Tahap II',
+    totalNilai: 6050000,
+    items: [
+      {
+        barangId: 'brg-001',
+        namaBarang: 'Kertas HVS A4 70 gsm Sinar Dunia',
+        kodeBarang: '1.01.03.01.01',
+        nusp: '0001/2026',
+        kodeRekening: '5.1.02.01.01.0025',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+        satuan: 'Rim',
+        jumlahMasuk: 50,
+        hargaSatuan: 48500,
+        subtotal: 2425000
+      },
+      {
+        barangId: 'brg-002',
+        namaBarang: 'Kertas F4 / Folio 70 gsm Sinar Dunia',
+        kodeBarang: '1.01.03.01.02',
+        nusp: '0002/2026',
+        kodeRekening: '5.1.02.01.01.0025',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+        satuan: 'Rim',
+        jumlahMasuk: 40,
+        hargaSatuan: 55000,
+        subtotal: 2200000
+      },
+      {
+        barangId: 'brg-004',
+        namaBarang: 'Tinta Printer Epson 003 Black Original',
+        kodeBarang: '1.01.03.02.04',
+        nusp: '0015/2026',
+        kodeRekening: '5.1.02.01.01.0029',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Komputer & Tinta/Toner',
+        satuan: 'Botol',
+        jumlahMasuk: 15,
+        hargaSatuan: 95000,
+        subtotal: 1425000
+      }
+    ]
+  },
+  {
+    id: 'rcv-002',
+    tanggal: '2026-09-01',
+    noBukti: 'BOS-REG/09/2026/041',
+    sumberDana: 'BOS Reguler',
+    penyedia: 'CV. Graha Sarana Sukses',
+    penerimaId: 'pejabat-pengurus-barang',
+    keterangan: 'Belanja Penunjang Pembelajaran & Kebersihan Sekolah Bulan September',
+    totalNilai: 4185000,
+    items: [
+      {
+        barangId: 'brg-003',
+        namaBarang: 'Spidol Whiteboard Snowman BG-12 Hitam',
+        kodeBarang: '1.01.03.01.08',
+        nusp: '0008/2026',
+        kodeRekening: '5.1.02.01.01.0024',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor',
+        satuan: 'Box',
+        jumlahMasuk: 15,
+        hargaSatuan: 85000,
+        subtotal: 1275000
+      },
+      {
+        barangId: 'brg-009',
+        namaBarang: 'Sabun Cuci Tangan Cair Antiseptik 4 Liter',
+        kodeBarang: '1.01.03.03.02',
+        nusp: '0035/2026',
+        kodeRekening: '5.1.02.01.01.0036',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Kebersihan dan Bahan Pembersih',
+        satuan: 'Jerigen',
+        jumlahMasuk: 10,
+        hargaSatuan: 72000,
+        subtotal: 720000
+      },
+      {
+        barangId: 'brg-011',
+        namaBarang: 'Buku Raport Siswa & Cover Emboss Emas',
+        kodeBarang: '1.01.03.01.30',
+        nusp: '0060/2026',
+        kodeRekening: '5.1.02.01.01.0026',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Bahan Cetak',
+        satuan: 'Buah',
+        jumlahMasuk: 50,
+        hargaSatuan: 32000,
+        subtotal: 1600000
+      },
+      {
+        barangId: 'brg-012',
+        namaBarang: 'Lampu LED Philips 18 Watt Cool Daylight',
+        kodeBarang: '1.01.03.04.05',
+        nusp: '0075/2026',
+        kodeRekening: '5.1.02.01.01.0031',
+        namaRekening: 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Listrik',
+        satuan: 'Buah',
+        jumlahMasuk: 12,
+        hargaSatuan: 48000,
+        subtotal: 576000
+      }
+    ]
+  }
+];
