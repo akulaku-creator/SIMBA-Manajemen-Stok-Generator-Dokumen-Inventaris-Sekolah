@@ -1,5 +1,5 @@
 import { Printer } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Barang, 
   DocumentType, 
@@ -85,6 +85,26 @@ export const DocumentViewer: React.FC<Props> = ({
   // Excel BOS Modal state
   const [isImportBOSModalOpen, setIsImportBOSModalOpen] = useState<boolean>(false);
   const [isExportingBOS, setIsExportingBOS] = useState<boolean>(false);
+
+  // Signatory Selection States
+  const initialKepsek = pejabatList.find(p => p.role === 'kepala_sekolah') || pejabatList[0];
+  const initialPengurus = pejabatList.find(p => p.role === 'pengurus_barang') || pejabatList[1] || pejabatList[0];
+
+  const [selectedKepalaSekolahId, setSelectedKepalaSekolahId] = useState<string>(initialKepsek?.id || '');
+  const [selectedPengurusBarangId, setSelectedPengurusBarangId] = useState<string>(initialPengurus?.id || '');
+
+  // Computed effectivePejabatList so all documents immediately reflect chosen signatories
+  const effectivePejabatList = useMemo(() => {
+    return pejabatList.map(p => {
+      if (p.id === selectedKepalaSekolahId) {
+        return { ...p, role: 'kepala_sekolah' as const };
+      }
+      if (p.id === selectedPengurusBarangId) {
+        return { ...p, role: 'pengurus_barang' as const };
+      }
+      return p;
+    });
+  }, [pejabatList, selectedKepalaSekolahId, selectedPengurusBarangId]);
 
   useEffect(() => {
     if (initialDocType) {
@@ -187,6 +207,10 @@ export const DocumentViewer: React.FC<Props> = ({
         onExportExcel={handleExportFullBOSExcel}
         isExportingExcel={isExportingBOS}
         canExportExcel={isBOSSheet}
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        selectedYear={selectedYear}
+        onSelectYear={setSelectedYear}
       />
 
       {/* Area Kelola Dokumen: Daftar Dokumen & Detail Dokumen */}
@@ -210,7 +234,7 @@ export const DocumentViewer: React.FC<Props> = ({
               />
             </div>
 
-            {/* Kolom Kanan: Panel Detail Dokumen */}
+            {/* Kolom Kanan: Panel Detail Dokumen Ringkas */}
             <div className="lg:col-span-5">
               <DocumentDetailPanel
                 selectedDocType={docType}
@@ -229,6 +253,10 @@ export const DocumentViewer: React.FC<Props> = ({
                 selectedYear={selectedYear}
                 onSelectYear={setSelectedYear}
                 pejabatList={pejabatList}
+                selectedKepalaSekolahId={selectedKepalaSekolahId}
+                onSelectKepalaSekolah={setSelectedKepalaSekolahId}
+                selectedPengurusBarangId={selectedPengurusBarangId}
+                onSelectPengurusBarang={setSelectedPengurusBarangId}
                 transaksiPenerimaanList={transaksiPenerimaanList}
                 onExportExcelBOS={handleExportFullBOSExcel}
                 isExportingBOS={isExportingBOS}
@@ -250,7 +278,7 @@ export const DocumentViewer: React.FC<Props> = ({
           id="preview-canvas-section"
           className="w-full bg-slate-200/70 border-t border-slate-300/80 min-h-screen py-8 px-4 flex flex-col items-center overflow-x-auto print:p-0 print:m-0 print:bg-white print:border-none"
         >
-          {/* Preview Canvas Header Label (Hidden on Print) */}
+          {/* Preview Canvas Header Label (Hidden on Print, No Duplicate Print Button) */}
           <div className="no-print mb-4 flex items-center justify-between gap-3 w-full max-w-4xl px-2">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -262,14 +290,9 @@ export const DocumentViewer: React.FC<Props> = ({
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="text-xs font-semibold text-blue-700 bg-white hover:bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-full shadow-2xs flex items-center gap-1.5 transition-colors cursor-pointer active:scale-95"
-            >
-              <Printer className="w-3.5 h-3.5 text-blue-600" />
-              <span>Cetak Sekarang (Ctrl+P)</span>
-            </button>
+            <span className="text-xs font-medium text-slate-500 bg-white/80 border border-slate-200 px-2.5 py-1 rounded-full shadow-2xs">
+              Gunakan tombol <strong>Cetak / Download PDF</strong> di toolbar atas
+            </span>
           </div>
 
           <div 
@@ -281,7 +304,7 @@ export const DocumentViewer: React.FC<Props> = ({
             <DocumentBundle
               transaksi={activeTransaksi}
               kopConfig={kopConfig}
-              pejabatList={pejabatList}
+              pejabatList={effectivePejabatList}
               minRows={minRows}
               paperSize={paperSize}
             />
@@ -297,7 +320,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 <DocNPB
                   transaksi={activeTransaksi}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   minRows={minRows}
                 />
               )}
@@ -306,7 +329,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 <DocSPB
                   transaksi={activeTransaksi}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   minRows={minRows}
                 />
               )}
@@ -315,7 +338,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 <DocSPPB
                   transaksi={activeTransaksi}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   minRows={minRows}
                 />
               )}
@@ -324,7 +347,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 <DocBAST
                   transaksi={activeTransaksi}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   minRows={minRows}
                 />
               )}
@@ -335,7 +358,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   selectedMonth={selectedMonth === -1 ? 11 : selectedMonth}
                   selectedYear={selectedYear}
                 />
@@ -345,7 +368,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 <DocBukuPenerimaan
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   selectedMonth={selectedMonth}
                   selectedYear={selectedYear}
                   minRows={minRows}
@@ -356,7 +379,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 <DocBukuPengeluaran
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   selectedMonth={selectedMonth}
                   selectedYear={selectedYear}
                   minRows={minRows}
@@ -369,7 +392,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   masterBarang={masterBarang}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   minRows={minRows}
                 />
               )}
@@ -380,7 +403,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   periodFilter={kartuPeriodFilter}
                   minRows={minRows}
                   isLast={true}
@@ -393,7 +416,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   periodFilter={kartuPeriodFilter}
                   minRows={minRows}
                   isLast={true}
@@ -409,7 +432,7 @@ export const DocumentViewer: React.FC<Props> = ({
             transaksiPengeluaranList={transaksiList}
             transaksiPenerimaanList={transaksiPenerimaanList}
             kopConfig={kopConfig}
-            pejabatList={pejabatList}
+            pejabatList={effectivePejabatList}
             targetYear={selectedYear}
             onOpenImportModal={() => setIsImportBOSModalOpen(true)}
           />
@@ -430,7 +453,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   periodFilter={kartuPeriodFilter}
                   minRows={minRows}
                   isLast={bIdx === masterBarang.length - 1}
@@ -455,7 +478,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
-                  pejabatList={pejabatList}
+                  pejabatList={effectivePejabatList}
                   periodFilter={kartuPeriodFilter}
                   minRows={minRows}
                   isLast={bIdx === masterBarang.length - 1}

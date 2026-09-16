@@ -123,18 +123,17 @@ export const DocBAST: React.FC<Props> = ({
         </p>
       </div>
 
-      {/* Table of Goods with Spasi Rapat & Full Width */}
+      {/* Table of Goods with Spasi Rapat & Full Width (Tanpa Kolom NUSP) */}
       <table className="doc-table w-full border-collapse border border-black mb-1.5">
         <thead>
           <tr className="bg-slate-100/75 text-center font-bold">
-            <th className="w-7">No.</th>
-            <th className="w-24">Kode Barang</th>
-            <th className="w-20">NUSP</th>
+            <th className="w-8">No.</th>
+            <th className="w-28">Kode Barang</th>
             <th className="text-left">Nama &amp; Spesifikasi Barang</th>
-            <th className="w-14">Satuan</th>
-            <th className="w-16">Jumlah</th>
-            <th className="w-20">Kondisi</th>
-            <th className="w-36 text-left">Keperluan / Keterangan</th>
+            <th className="w-16">Satuan</th>
+            <th className="w-20">Jumlah</th>
+            <th className="w-24">Kondisi</th>
+            <th className="w-40 text-left">Keperluan / Keterangan</th>
           </tr>
         </thead>
         <tbody>
@@ -142,8 +141,12 @@ export const DocBAST: React.FC<Props> = ({
             <tr key={item.id || index} className="align-top avoid-break">
               <td className="text-center font-medium">{index + 1}.</td>
               <td className="text-center font-mono text-[8pt]">{item.kodeBarang}</td>
-              <td className="text-center font-mono text-[8pt]">{item.nusp}</td>
-              <td className="font-medium">{item.namaBarang}</td>
+              <td className="font-medium">
+                <div>{item.namaBarang}</div>
+                {item.spesifikasi && (
+                  <div className="text-[7.5pt] text-slate-600 italic">{item.spesifikasi}</div>
+                )}
+              </td>
               <td className="text-center">{item.satuan}</td>
               <td className="text-center font-bold">{item.usulanJumlah}</td>
               <td className="text-center text-[8pt] font-semibold text-emerald-950">
@@ -153,13 +156,12 @@ export const DocBAST: React.FC<Props> = ({
             </tr>
           ))}
 
-          {/* Empty rows to preserve formal standard layout */}
+          {/* Empty rows to preserve formal standard layout (7 kolom proporsional) */}
           {Array.from({ length: totalEmptyRows }).map((_, i) => (
             <tr key={`empty-${i}`} className="h-5 avoid-break">
               <td className="text-center text-slate-300">
                 {transaksi.items.length + i + 1}.
               </td>
-              <td></td>
               <td></td>
               <td></td>
               <td></td>

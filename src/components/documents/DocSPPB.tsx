@@ -117,17 +117,16 @@ export const DocSPPB: React.FC<Props> = ({
         </p>
       </div>
 
-      {/* Disbursed Goods Table with Spasi Rapat & Full Width */}
+      {/* Disbursed Goods Table with Spasi Rapat & Full Width (Tanpa Kolom NUSP) */}
       <table className="doc-table w-full border-collapse border border-black mb-2">
         <thead>
           <tr className="bg-slate-100/75 text-center font-bold">
-            <th className="w-7">No.</th>
-            <th className="w-24">Kode Barang</th>
-            <th className="w-20">NUSP</th>
+            <th className="w-8">No.</th>
+            <th className="w-28">Kode Barang</th>
             <th className="text-left">Nama &amp; Spesifikasi Barang</th>
-            <th className="w-14">Satuan</th>
-            <th className="w-20">Disalurkan</th>
-            <th className="w-40 text-left">Keterangan</th>
+            <th className="w-16">Satuan</th>
+            <th className="w-24">Disalurkan</th>
+            <th className="w-44 text-left">Keterangan</th>
           </tr>
         </thead>
         <tbody>
@@ -135,7 +134,6 @@ export const DocSPPB: React.FC<Props> = ({
             <tr key={item.id || index} className="align-top avoid-break">
               <td className="text-center font-medium">{index + 1}.</td>
               <td className="text-center font-mono text-[8pt]">{item.kodeBarang}</td>
-              <td className="text-center font-mono text-[8pt]">{item.nusp}</td>
               <td>
                 <div className="font-medium">{item.namaBarang}</div>
                 {item.spesifikasi && (
@@ -150,13 +148,12 @@ export const DocSPPB: React.FC<Props> = ({
             </tr>
           ))}
 
-          {/* Blank rows */}
+          {/* Blank rows (6 kolom proporsional) */}
           {Array.from({ length: totalEmptyRows }).map((_, i) => (
             <tr key={`empty-${i}`} className="h-5 avoid-break">
               <td className="text-center text-slate-300">
                 {transaksi.items.length + i + 1}.
               </td>
-              <td></td>
               <td></td>
               <td></td>
               <td></td>
