@@ -79,7 +79,7 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
     if (drafts[b.id]) return drafts[b.id];
     return {
       selected: false,
-      usulanJumlah: b.stokSekarang > 0 ? (b.stokSekarang >= 5 ? 5 : 1) : 1,
+      usulanJumlah: 0,
       keperluan: globalKeperluan || defaultKeperluan
     };
   };
@@ -87,12 +87,13 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
   const handleToggleSelect = (b: Barang) => {
     if (b.stokSekarang <= 0) return; // Cannot select items with 0 stock
     const current = getDraft(b);
+    const willSelect = !current.selected;
     setDrafts((prev) => ({
       ...prev,
       [b.id]: {
         ...current,
-        selected: !current.selected,
-        usulanJumlah: current.usulanJumlah > 0 ? current.usulanJumlah : 1,
+        selected: willSelect,
+        usulanJumlah: willSelect ? (current.usulanJumlah > 0 ? current.usulanJumlah : 1) : 0,
         keperluan: current.keperluan || globalKeperluan || defaultKeperluan
       }
     }));
@@ -544,46 +545,48 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
                           )}
                         </td>
 
-                        {/* Kolom Baru: HARGA SATUAN (RP) */}
+                        {/* Kolom HARGA SATUAN (RP) - Readonly Terkunci Mengikuti Master Barang */}
                         <td className="p-2.5 text-right font-mono font-semibold text-slate-700 truncate">
-                          {formatRupiah(b.hargaSatuan || 0)}
+                          <span className="inline-flex items-center gap-1 text-slate-700 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200" title="Terkunci mengikuti harga acuan Master Barang">
+                            {formatRupiah(b.hargaSatuan || 0)}
+                          </span>
                         </td>
 
-                        {/* Input Jumlah Diminta */}
+                        {/* Input Jumlah Diminta - Disabled jika baris belum dicentang */}
                         <td className="p-2.5 text-center">
                           <div className="relative">
                             <input
                               type="number"
-                              min="1"
+                              min="0"
                               max={b.stokSekarang > 0 ? b.stokSekarang : 1}
-                              value={draft.usulanJumlah}
-                              disabled={!isAvailable}
+                              value={draft.selected ? draft.usulanJumlah : 0}
+                              disabled={!draft.selected || !isAvailable}
                               onChange={(e) => handleQtyChange(b, parseInt(e.target.value, 10))}
-                              className={`w-full text-center text-xs font-bold border rounded-md py-1 px-1 focus:outline-hidden ${
-                                isOverStock
+                              className={`w-full text-center text-xs font-bold border rounded-md py-1 px-1 focus:outline-hidden transition-all ${
+                                !draft.selected || !isAvailable
+                                  ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed select-none'
+                                  : isOverStock
                                   ? 'border-rose-500 bg-rose-100 text-rose-800 focus:ring-2 focus:ring-rose-500'
-                                  : draft.selected
-                                  ? 'border-blue-500 bg-white text-blue-900 focus:ring-2 focus:ring-blue-500'
-                                  : 'border-slate-300 bg-white text-slate-800 disabled:bg-slate-100 disabled:text-slate-400'
+                                  : 'border-blue-500 bg-white text-blue-900 focus:ring-2 focus:ring-blue-500'
                               }`}
                             />
                           </div>
-                          {isOverStock && (
+                          {draft.selected && isOverStock && (
                             <span className="block text-[9px] text-rose-600 font-semibold mt-0.5 leading-tight">
                               Melebihi stok ({b.stokSekarang})!
                             </span>
                           )}
                         </td>
 
-                        {/* Keperluan Khusus Item (Opsional & Ringkas) */}
+                        {/* Keperluan Khusus Item - Disabled jika baris belum dicentang */}
                         <td className="p-2.5">
                           <input
                             type="text"
-                            value={draft.keperluan}
-                            disabled={!isAvailable}
+                            value={draft.selected ? draft.keperluan : ''}
+                            disabled={!draft.selected || !isAvailable}
                             onChange={(e) => handleKeperluanChange(b, e.target.value)}
-                            placeholder={globalKeperluan || "Catatan khusus item..."}
-                            className="w-full text-xs border border-slate-300 rounded-md py-1 px-2 bg-white text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-blue-500 focus:outline-hidden disabled:bg-slate-100 disabled:text-slate-400"
+                            placeholder={draft.selected ? (globalKeperluan || "Catatan khusus item...") : "- (centang untuk mengisi) -"}
+                            className="w-full text-xs border border-slate-300 rounded-md py-1 px-2 bg-white text-slate-800 placeholder-slate-400 focus:ring-1 focus:ring-blue-500 focus:outline-hidden disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                           />
                         </td>
                       </tr>

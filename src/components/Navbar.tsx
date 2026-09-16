@@ -24,7 +24,7 @@ import {
   Download
 } from 'lucide-react';
 import React, { useState } from 'react';
-import { AppUser, UserRole } from '../types';
+import { AppUser, PaperSize, UserRole } from '../types';
 
 export type MainTab = 'dashboard' | 'generator' | 'barang' | 'pejabat';
 
@@ -49,6 +49,8 @@ interface Props {
   onOpenLoginModal?: () => void;
   onLogout?: () => void;
   onSwitchRole: (role: UserRole) => void;
+  paperSize?: PaperSize;
+  onSelectPaperSize?: (size: PaperSize) => void;
 }
 
 export const Navbar: React.FC<Props> = ({
@@ -71,7 +73,9 @@ export const Navbar: React.FC<Props> = ({
   onOpenAuditLog,
   onOpenLoginModal,
   onLogout,
-  onSwitchRole
+  onSwitchRole,
+  paperSize = 'A4',
+  onSelectPaperSize
 }) => {
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
 
@@ -212,26 +216,38 @@ export const Navbar: React.FC<Props> = ({
               </button>
             )}
 
-            {/* Operator & Admin Transaction Action Buttons */}
-            {!isPengguna && (
-              <>
+            {/* Toggle Format Kertas Cetak Dokumen (A4 / F4) */}
+            {onSelectPaperSize && (
+              <div 
+                className="flex items-center bg-slate-900 border border-slate-700/80 rounded-lg p-0.5 shadow-2xs"
+                title="Pilihan Format Ukuran Kertas Cetak Berkas Dokumen"
+              >
+                <span className="text-[10px] font-medium text-slate-400 px-1.5 hidden xl:inline">Kertas:</span>
                 <button
-                  onClick={onOpenNewPenerimaan}
-                  className="hidden xl:inline-flex items-center gap-1 px-2 py-1 bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-semibold rounded-md border border-emerald-500/40 shadow-xs transition-colors"
-                  title="Catat penerimaan belanja persediaan dana BOS / APBD"
+                  type="button"
+                  onClick={() => onSelectPaperSize('A4')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                    paperSize === 'A4'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Format Standar A4 (210 x 297 mm)"
                 >
-                  <PackagePlus className="w-3.5 h-3.5 text-emerald-200" />
-                  + Masuk
+                  A4
                 </button>
-
                 <button
-                  onClick={onOpenNewTransaksi}
-                  className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-md shadow-xs transition-all active:scale-98"
+                  type="button"
+                  onClick={() => onSelectPaperSize('F4')}
+                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
+                    paperSize === 'F4'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Format Standar F4 / Folio (215 x 330 mm)"
                 >
-                  <FileCheck2 className="w-3.5 h-3.5" />
-                  + Penyaluran
+                  F4
                 </button>
-              </>
+              </div>
             )}
 
             {/* Admin-Only Config & Maintenance Tools */}
@@ -242,7 +258,7 @@ export const Navbar: React.FC<Props> = ({
                   <button
                     onClick={onOpenUnifiedSettings}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 transition-colors shadow-2xs cursor-pointer"
-                    title="Buka Form Pengaturan Terpadu Instansi (Kop Surat, Format Penomoran, Master Pejabat &amp; Backup)"
+                    title="Buka Form Pengaturan Terpadu Instansi (Kop Surat, Format Penomoran, Master Pejabat, Backup &amp; Danger Zone)"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
                     <span className="hidden lg:inline text-xs font-semibold">Pengaturan</span>
@@ -298,18 +314,6 @@ export const Navbar: React.FC<Props> = ({
                   >
                     <History className="w-3.5 h-3.5 text-purple-400" />
                     <span className="hidden xl:inline">Audit</span>
-                  </button>
-                )}
-
-                {/* Reset Transaksi (Pembersihan Data) - Khusus Admin */}
-                {isAdmin && onOpenResetTransaksi && (
-                  <button
-                    onClick={onOpenResetTransaksi}
-                    className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-950/70 hover:bg-red-900/90 text-red-300 hover:text-red-100 border border-red-800/80 rounded-lg text-xs font-semibold transition-colors shadow-2xs"
-                    title="Fitur Keamanan: Kosongkan Seluruh Riwayat Transaksi (Khusus Admin)"
-                  >
-                    <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                    <span className="hidden md:inline">Kosongkan Transaksi</span>
                   </button>
                 )}
               </>

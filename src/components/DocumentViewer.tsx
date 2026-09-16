@@ -44,6 +44,8 @@ interface Props {
   initialDocType?: DocumentType;
   initialBarangId?: string;
   onImportBarang?: (items: Barang[], mode: 'append' | 'replace') => void;
+  paperSize?: PaperSize;
+  onSelectPaperSize?: (size: PaperSize) => void;
 }
 
 export const DocumentViewer: React.FC<Props> = ({
@@ -57,10 +59,19 @@ export const DocumentViewer: React.FC<Props> = ({
   onOpenKopSettings,
   initialDocType,
   initialBarangId,
-  onImportBarang
+  onImportBarang,
+  paperSize: propPaperSize,
+  onSelectPaperSize: propOnSelectPaperSize
 }) => {
   const [docType, setDocType] = useState<DocumentType>(initialDocType || 'spb');
-  const [paperSize, setPaperSize] = useState<PaperSize>('A4');
+  const [localPaperSize, setLocalPaperSize] = useState<PaperSize>(propPaperSize || 'A4');
+  const paperSize = propPaperSize ?? localPaperSize;
+  const setPaperSize = (size: PaperSize) => {
+    setLocalPaperSize(size);
+    if (propOnSelectPaperSize) {
+      propOnSelectPaperSize(size);
+    }
+  };
   const [minRows, setMinRows] = useState<number>(14);
   const [zoom, setZoom] = useState<number>(100);
   const [copies, setCopies] = useState<number>(1);

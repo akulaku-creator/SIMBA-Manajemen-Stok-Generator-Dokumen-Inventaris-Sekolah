@@ -4,6 +4,7 @@ import {
   Database, 
   Download, 
   Eye, 
+  EyeOff,
   FileCheck2, 
   Hash, 
   Image as ImageIcon, 
@@ -19,7 +20,17 @@ import {
   X,
   Clock,
   ShieldCheck,
-  CheckCircle2
+  CheckCircle2,
+  AlertTriangle,
+  AlertCircle,
+  UploadCloud,
+  FileArchive,
+  FileJson,
+  FileText,
+  KeyRound,
+  Lock,
+  RefreshCw,
+  ArrowRight
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
@@ -32,7 +43,13 @@ import {
   TransaksiPenerimaan, 
   TransaksiPengeluaran 
 } from '../types';
-import { exportFullDatabase, getLastBackupTime } from '../utils/backupHelper';
+import { logAuditEvent } from '../utils/auditLogger';
+import { 
+  BackupValidationResult,
+  exportFullDatabase, 
+  getLastBackupTime, 
+  validateBackupFile 
+} from '../utils/backupHelper';
 import { 
   calculateNextDocumentCounters, 
   deriveSchoolCode, 
@@ -57,7 +74,21 @@ interface Props {
     numberingConfig: NumberingPatternConfig;
     pejabatList: Pejabat[];
   }) => void;
+  onRestoreDatabase?: (
+    restoredData: {
+      masterBarang: Barang[];
+      transaksiList: TransaksiPengeluaran[];
+      penerimaanList: TransaksiPenerimaan[];
+      pejabatList: Pejabat[];
+      kategoriList?: KategoriBarangItem[];
+      kopConfig?: KopSuratConfig;
+      numberingConfig?: NumberingPatternConfig;
+      userList?: AppUser[];
+    },
+    mode: 'replace' | 'merge'
+  ) => void;
   onShowToast?: (message: string) => void;
+  onOpenResetTransaksi?: () => void;
 }
 
 export const UnifiedSettingsModal: React.FC<Props> = ({
@@ -73,19 +104,34 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   userList,
   currentUser,
   onSaveUnifiedSettings,
-  onShowToast
+  onRestoreDatabase,
+  onShowToast,
+  onOpenResetTransaksi
 }) => {
   // Navigation tabs within settings
-  const [activeSection, setActiveSection] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup'>('all');
+  const [activeSection, setActiveSection] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'danger'>('all');
 
   // Local Form States
   const [kopData, setKopData] = useState<KopSuratConfig>({ ...kopConfig });
   const [numberingData, setNumberingData] = useState<NumberingPatternConfig>({ ...numberingConfig });
   const [pejabatData, setPejabatData] = useState<Pejabat[]>([...pejabatList]);
 
-  // Backup timestamp status
+  // Backup timestamp status & loading
   const [lastBackup, setLastBackup] = useState<string | null>(getLastBackupTime());
   const [isBackupSuccess, setIsBackupSuccess] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Restore Database States
+  const [dragActive, setDragActive] = useState(false);
+  const [restoreFile, setRestoreFile] = useState<File | null>(null);
+  const [isValidatingFile, setIsValidatingFile] = useState(false);
+  const [validationResult, setValidationResult] = useState<BackupValidationResult | null>(null);
+  const [restoreMode, setRestoreMode] = useState<'replace' | 'merge'>('replace');
+  const [adminPinInput, setAdminPinInput] = useState('');
+  const [showAdminPin, setShowAdminPin] = useState(false);
+  const [restorePinError, setRestorePinError] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [restoreSuccessMsg, setRestoreSuccessMsg] = useState<string | null>(null);
 
   // Sync state whenever modal opens or external configs change
   useEffect(() => {
@@ -95,6 +141,13 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
       setPejabatData([...pejabatList]);
       setLastBackup(getLastBackupTime());
       setIsBackupSuccess(false);
+      setRestoreFile(null);
+      setValidationResult(null);
+      setAdminPinInput('');
+      setRestorePinError(null);
+      setRestoreSuccessMsg(null);
+      setIsRestoring(false);
+      setIsValidatingFile(false);
     }
   }, [isOpen, kopConfig, numberingConfig, pejabatList]);
 
@@ -209,10 +262,11 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
     e.target.value = '';
   };
 
-  // Trigger Full Backup
-  const handleExecuteBackup = () => {
+  // Trigger Full Backup (JSON or ZIP)
+  const handleExecuteBackup = async (format: 'json' | 'zip' = 'json') => {
     try {
-      const res = exportFullDatabase({
+      setIsExporting(true);
+      const res = await exportFullDatabase({
         masterBarang,
         transaksiList,
         penerimaanList,
@@ -221,19 +275,150 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
         kopConfig: kopData,
         numberingConfig: numberingData,
         userList,
-        currentUser
+        currentUser,
+        format
       });
 
       setLastBackup(res.formattedDate);
       setIsBackupSuccess(true);
       if (onShowToast) {
-        onShowToast(`Cadangan lengkap berhasil diunduh: ${res.filename}`);
+        onShowToast(`Cadangan lengkap (${format.toUpperCase()}) berhasil diunduh: ${res.filename}`);
       }
       setTimeout(() => setIsBackupSuccess(false), 5000);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Backup error:', err);
-      alert('Terjadi kesalahan saat memproses backup data.');
+      alert('Terjadi kesalahan saat memproses backup data: ' + (err?.message || 'Gagal membuat file cadangan.'));
+    } finally {
+      setIsExporting(false);
     }
+  };
+
+  // Restore Database Handlers
+  const handleProcessFile = async (file: File) => {
+    setRestoreFile(file);
+    setRestorePinError(null);
+    setRestoreSuccessMsg(null);
+    setIsValidatingFile(true);
+    try {
+      const result = await validateBackupFile(file);
+      setValidationResult(result);
+    } catch (err: any) {
+      setValidationResult({
+        isValid: false,
+        fileType: 'json',
+        errorMessage: 'Gagal memproses berkas: ' + (err?.message || 'File tidak valid.')
+      });
+    } finally {
+      setIsValidatingFile(false);
+    }
+  };
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleProcessFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      handleProcessFile(e.target.files[0]);
+    }
+    e.target.value = '';
+  };
+
+  const resetRestoreState = () => {
+    setRestoreFile(null);
+    setValidationResult(null);
+    setAdminPinInput('');
+    setRestorePinError(null);
+    setRestoreSuccessMsg(null);
+  };
+
+  const handleExecuteRestore = () => {
+    setRestorePinError(null);
+    setRestoreSuccessMsg(null);
+
+    if (currentUser.role !== 'admin') {
+      setRestorePinError('Akses Ditolak: Hanya pengguna Administrator yang berwenang memulihkan basis data.');
+      return;
+    }
+
+    if (!validationResult || !validationResult.isValid || !validationResult.payload) {
+      setRestorePinError('Format berkas cadangan belum valid atau belum dipilih.');
+      return;
+    }
+
+    // Verify Admin PIN / Password (default: 123456 or currentUser pin/password)
+    const validPin = currentUser.pin || '123456';
+    const validPassword = currentUser.password || 'admin';
+    const entered = adminPinInput.trim();
+
+    if (entered !== validPin && entered !== validPassword && entered !== '123456') {
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'RESTORE_DATABASE',
+        title: 'Gagal Otorisasi PIN Pemulihan Database',
+        details: `Percobaan pemulihan database ditolak: PIN/Password admin salah dimasukkan oleh @${currentUser.username}`,
+        status: 'FAILED'
+      });
+      setRestorePinError('PIN atau Kata Sandi Admin tidak sesuai. (Default PIN: 123456)');
+      return;
+    }
+
+    setIsRestoring(true);
+    setTimeout(() => {
+      if (onRestoreDatabase && validationResult.payload) {
+        onRestoreDatabase(
+          {
+            masterBarang: validationResult.payload.data.masterBarang,
+            transaksiList: validationResult.payload.data.transaksiPenyaluran,
+            penerimaanList: validationResult.payload.data.transaksiPenerimaan,
+            pejabatList: validationResult.payload.data.masterPejabat,
+            kategoriList: validationResult.payload.data.masterKategori,
+            kopConfig: validationResult.payload.data.kopConfig,
+            numberingConfig: validationResult.payload.data.numberingConfig,
+            userList: validationResult.payload.data.userList
+          },
+          restoreMode
+        );
+      }
+
+      if (restoreMode === 'replace' && validationResult.payload) {
+        if (validationResult.payload.data.kopConfig) {
+          setKopData(validationResult.payload.data.kopConfig);
+        }
+        if (validationResult.payload.data.numberingConfig) {
+          setNumberingData(validationResult.payload.data.numberingConfig);
+        }
+        if (validationResult.payload.data.masterPejabat) {
+          setPejabatData(validationResult.payload.data.masterPejabat);
+        }
+      }
+
+      setIsRestoring(false);
+      setRestoreSuccessMsg(
+        restoreMode === 'replace'
+          ? `Basis data berhasil ditimpa secara penuh (${validationResult.summary?.totalBarang || 0} barang, ${validationResult.summary?.totalPenyaluran || 0} transaksi disinkronkan).`
+          : `Data cadangan berhasil digabungkan (Merge Data) ke dalam sistem tanpa menghapus riwayat sebelumnya.`
+      );
+      setAdminPinInput('');
+    }, 600);
   };
 
   // Unified Save Button
@@ -340,7 +525,19 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
             }`}
           >
             <Database className="w-3.5 h-3.5 text-emerald-600" />
-            4. Backup &amp; Pemulihan
+            4. Backup &amp; Pemulihan Data
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('danger')}
+            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeSection === 'danger'
+                ? 'bg-rose-600 text-white shadow-2xs'
+                : 'text-rose-700 hover:bg-rose-100/70 bg-rose-50/60'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+            5. Danger Zone (Area Bahaya)
           </button>
         </div>
 
@@ -888,59 +1085,486 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* SECTION 4: BACKUP & PEMULIHAN SISTEM */}
+          {/* SECTION 4: BACKUP & PEMULIHAN DATA */}
           {/* ========================================================================= */}
           {(activeSection === 'all' || activeSection === 'backup') && (
-            <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
-              <div className="px-5 py-3.5 bg-emerald-50/60 border-b border-emerald-100 flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs">
-                    4
+            <div className="space-y-6">
+              {/* CARD 1: EKSPOR DATA (BACKUP DATABASE) */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                <div className="px-5 py-3.5 bg-emerald-50/60 border-b border-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                      4A
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-emerald-950 flex items-center gap-2">
+                        Pencadangan Basis Data Penuh (Full Data Backup)
+                        <span className="text-[10px] font-semibold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                          JSON / ZIP
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-emerald-800">
+                        Ekspor seluruh basis data aplikasi secara instan dalam satu bundel arsip untuk arsip legalitas &amp; audit.
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-emerald-950">Backup Data Keseluruhan (Full Data Backup)</h3>
-                    <p className="text-[11px] text-emerald-800">Ekspor seluruh basis data aplikasi secara instan dalam 1 klik untuk pengamanan berkas &amp; audit.</p>
+                  {lastBackup ? (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-2xs shrink-0 self-start sm:self-auto">
+                      <Clock className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Backup Terakhir: <strong className="text-slate-800 font-semibold">{lastBackup}</strong></span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-amber-700 bg-amber-50 px-3 py-1 rounded-full border border-amber-200 shrink-0 self-start sm:self-auto">
+                      <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Belum ada riwayat backup</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 space-y-4">
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-1.5 flex-1">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                        <Database className="w-3.5 h-3.5 text-emerald-600" />
+                        Cakupan Berkas Cadangan SIMBA
+                      </h4>
+                      <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
+                        File cadangan terenkapsulasi memuat seluruh struktur inti:
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
+                          📦 Master Barang: <strong className="text-slate-900 font-bold">{masterBarang.length} item</strong>
+                        </div>
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
+                          📥 Riwayat Penerimaan: <strong className="text-slate-900 font-bold">{penerimaanList.length} berkas</strong>
+                        </div>
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
+                          📤 Transaksi Penyaluran: <strong className="text-slate-900 font-bold">{transaksiList.length} berkas</strong>
+                        </div>
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
+                          👥 Master Pejabat: <strong className="text-slate-900 font-bold">{pejabatData.length} orang</strong>
+                        </div>
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
+                          📑 Konfigurasi Kop &amp; No. Surat
+                        </div>
+                        <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
+                          🛡️ Log Audit Keamanan
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Export Action Buttons: JSON and ZIP */}
+                    <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0 lg:w-56">
+                      <button
+                        type="button"
+                        disabled={isExporting}
+                        onClick={() => handleExecuteBackup('json')}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+                        title="Unduh file backup langsung dalam format JSON mentah"
+                      >
+                        <FileJson className="w-4 h-4 text-emerald-100" />
+                        <span>Unduh File JSON (.json)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isExporting}
+                        onClick={() => handleExecuteBackup('zip')}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+                        title="Unduh bundel terkompresi ZIP yang memuat file JSON dan petunjuk README"
+                      >
+                        <FileArchive className="w-4 h-4 text-blue-100" />
+                        <span>Unduh Bundel ZIP (.zip)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {isBackupSuccess && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-2 text-xs text-emerald-800 font-semibold animate-in fade-in">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Berkas cadangan berhasil diekspor dan diunduh ke komputer Anda. Penanda waktu backup telah diperbarui!</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CARD 2: IMPOR / PEMULIHAN BASIS DATA (RESTORE DATA) */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                <div className="px-5 py-3.5 bg-blue-50/70 border-b border-blue-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                      4B
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-blue-950 flex items-center gap-2">
+                        Impor / Pemulihan Basis Data (Restore Data)
+                        <span className="text-[10px] font-semibold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                          Verifikasi Skema &amp; Proteksi PIN
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-blue-800">
+                        Unggah berkas cadangan (.json / .zip) untuk memulihkan atau menggabungkan seluruh catatan aset inventaris SIMBA.
+                      </p>
+                    </div>
                   </div>
                 </div>
-                {lastBackup && (
-                  <div className="flex items-center gap-1.5 text-xs text-slate-600 bg-white px-3 py-1 rounded-full border border-slate-200">
-                    <Clock className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Backup Terakhir: <strong className="text-slate-800 font-semibold">{lastBackup}</strong></span>
+
+                <div className="p-5 space-y-5">
+                  {/* DRAG AND DROP / FILE INPUT ZONE */}
+                  {!restoreFile && (
+                    <div
+                      onDragEnter={handleDrag}
+                      onDragLeave={handleDrag}
+                      onDragOver={handleDrag}
+                      onDrop={handleDrop}
+                      className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
+                        dragActive
+                          ? 'border-blue-500 bg-blue-50/70 scale-[1.01]'
+                          : 'border-slate-300 hover:border-blue-400 bg-slate-50/60 hover:bg-blue-50/30'
+                      }`}
+                    >
+                      <input
+                        type="file"
+                        accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
+                        onChange={handleFileInputChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        title="Pilih berkas cadangan JSON atau ZIP"
+                      />
+                      <div className="space-y-3 pointer-events-none">
+                        <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 mx-auto flex items-center justify-center shadow-xs">
+                          <UploadCloud className="w-6 h-6" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">
+                            Seret &amp; lepas berkas cadangan ke sini, atau <span className="text-blue-600 underline">klik untuk memilih</span>
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Mendukung berkas arsip resmi SIMBA format <strong className="font-semibold text-slate-700">.JSON</strong> atau <strong className="font-semibold text-slate-700">.ZIP</strong>
+                          </p>
+                        </div>
+                        <div className="inline-flex items-center gap-2 text-[11px] font-medium text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Validasi skema otomatis sebelum penimpaan database</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VALIDATING LOADING SPINNER */}
+                  {isValidatingFile && (
+                    <div className="p-8 bg-slate-50 rounded-2xl border border-slate-200 text-center space-y-3">
+                      <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                      <p className="text-xs font-bold text-slate-800">Memvalidasi skema berkas cadangan SIMBA...</p>
+                      <p className="text-[11px] text-slate-500">Memeriksa struktur Master Barang, Transaksi Penyaluran, dan Pejabat.</p>
+                    </div>
+                  )}
+
+                  {/* VALIDATION FAILED ALERT */}
+                  {!isValidatingFile && validationResult && !validationResult.isValid && (
+                    <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl space-y-3 text-rose-900 animate-in fade-in">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                        <div className="space-y-1 flex-1">
+                          <h5 className="text-xs font-bold">Validasi Berkas Cadangan Gagal</h5>
+                          <p className="text-xs text-rose-700 leading-relaxed">
+                            {validationResult.errorMessage || 'Berkas cadangan tidak valid atau struktur tidak cocok dengan versi SIMBA.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end pt-1">
+                        <button
+                          type="button"
+                          onClick={resetRestoreState}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 text-xs font-bold rounded-lg cursor-pointer transition-colors"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          Pilih Berkas Lain
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VALIDATION SUCCESS: DISPLAY SUMMARY, OPTIONS, & PIN CONFIRMATION */}
+                  {!isValidatingFile && validationResult && validationResult.isValid && validationResult.summary && (
+                    <div className="space-y-4 animate-in fade-in">
+                      {/* Summary Banner */}
+                      <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                              <CheckCircle2 className="w-5 h-5" />
+                            </div>
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <h5 className="text-xs font-bold text-emerald-950">
+                                  Skema Berkas Valid &amp; Terverifikasi
+                                </h5>
+                                <span className="text-[10px] uppercase font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.2 rounded-full">
+                                  {validationResult.fileType.toUpperCase()}
+                                </span>
+                              </div>
+                              <p className="text-xs text-emerald-800 font-medium">
+                                Berkas: <span className="font-bold text-slate-800">{restoreFile?.name}</span>
+                              </p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={resetRestoreState}
+                            className="text-xs font-semibold text-slate-500 hover:text-slate-800 px-2.5 py-1 rounded-lg hover:bg-slate-200/60 transition-colors cursor-pointer"
+                          >
+                            Ganti Berkas
+                          </button>
+                        </div>
+
+                        {/* File Details Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 text-xs">
+                            <span className="text-[10px] text-slate-500 block">Asal Sekolah:</span>
+                            <span className="font-bold text-slate-800 line-clamp-1">{validationResult.summary.schoolName}</span>
+                          </div>
+                          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 text-xs">
+                            <span className="text-[10px] text-slate-500 block">Waktu Cadangan:</span>
+                            <span className="font-bold text-slate-800 text-[11px]">{validationResult.summary.exportedAt}</span>
+                          </div>
+                          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 text-xs">
+                            <span className="text-[10px] text-slate-500 block">Master Barang:</span>
+                            <span className="font-bold text-emerald-700">{validationResult.summary.totalBarang} Item</span>
+                          </div>
+                          <div className="bg-white/80 p-2 rounded-xl border border-emerald-100 text-xs">
+                            <span className="text-[10px] text-slate-500 block">Transaksi Penyaluran:</span>
+                            <span className="font-bold text-blue-700">{validationResult.summary.totalPenyaluran} Berkas</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* MODE PEMULIHAN (RESTORE OPTIONS) */}
+                      <div className="space-y-2.5">
+                        <label className="text-xs font-bold text-slate-800 uppercase tracking-wider block">
+                          Pilih Mode Pemulihan Data:
+                        </label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {/* Option 1: Replace All Data */}
+                          <div
+                            onClick={() => setRestoreMode('replace')}
+                            className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                              restoreMode === 'replace'
+                                ? 'border-rose-500 bg-rose-50/50 shadow-xs'
+                                : 'border-slate-200 hover:border-slate-300 bg-white'
+                            }`}
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                  <input
+                                    type="radio"
+                                    name="restoreMode"
+                                    checked={restoreMode === 'replace'}
+                                    onChange={() => setRestoreMode('replace')}
+                                    className="text-rose-600 focus:ring-rose-500 cursor-pointer"
+                                  />
+                                  Timpa Keseluruhan Data
+                                </span>
+                                <span className="text-[10px] font-bold bg-rose-100 text-rose-800 px-2 py-0.5 rounded-full">
+                                  Replace All Data
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-600 leading-relaxed">
+                                Mengosongkan data lama dan menggantinya dengan data dari file backup. Seluruh master barang dan riwayat transaksi akan persis sama dengan berkas cadangan.
+                              </p>
+                            </div>
+                            <div className="text-[11px] font-semibold text-rose-700 bg-rose-100/70 px-2.5 py-1 rounded-lg border border-rose-200/80">
+                              ⚠️ Catatan: Data lokal yang tidak ada di file cadangan akan terhapus.
+                            </div>
+                          </div>
+
+                          {/* Option 2: Merge Data */}
+                          <div
+                            onClick={() => setRestoreMode('merge')}
+                            className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between gap-3 ${
+                              restoreMode === 'merge'
+                                ? 'border-blue-600 bg-blue-50/50 shadow-xs'
+                                : 'border-slate-200 hover:border-slate-300 bg-white'
+                            }`}
+                          >
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                  <input
+                                    type="radio"
+                                    name="restoreMode"
+                                    checked={restoreMode === 'merge'}
+                                    onChange={() => setRestoreMode('merge')}
+                                    className="text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                  />
+                                  Gabungkan Data
+                                </span>
+                                <span className="text-[10px] font-bold bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                  Merge Data
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-600 leading-relaxed">
+                                Menambahkan data baru yang belum ada tanpa menghapus data riwayat transaksi lama. Data transaksi yang sudah ada di database saat ini tetap dipertahankan.
+                              </p>
+                            </div>
+                            <div className="text-[11px] font-semibold text-emerald-800 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-200/80">
+                              🛡️ Aman: Riwayat transaksi lama tidak akan ditimpa atau dihapus.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* PROTEKSI KONFIRMASI: PIN / PASSWORD ADMIN */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Lock className="w-4 h-4 text-slate-700" />
+                          <h5 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                            Proteksi Konfirmasi: Otorisasi Administrator
+                          </h5>
+                        </div>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Tindakan pemulihan database mengubah basis data inventaris sekolah. Masukkan PIN atau Kata Sandi Admin Anda untuk mengonfirmasi eksekusi ini. (Default PIN: <code className="bg-white px-1.5 py-0.5 rounded border border-slate-300 text-slate-800 font-mono font-bold">123456</code>)
+                        </p>
+
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                          <div className="relative flex-1">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                              <KeyRound className="w-4 h-4" />
+                            </div>
+                            <input
+                              type={showAdminPin ? 'text' : 'password'}
+                              value={adminPinInput}
+                              onChange={(e) => {
+                                setAdminPinInput(e.target.value);
+                                setRestorePinError(null);
+                              }}
+                              placeholder="Masukkan PIN / Sandi Admin..."
+                              className="w-full pl-9 pr-10 py-2.5 bg-white text-xs border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowAdminPin(!showAdminPin)}
+                              className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                              title={showAdminPin ? 'Sembunyikan' : 'Tampilkan'}
+                            >
+                              {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={resetRestoreState}
+                              className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl border border-slate-300 transition-colors cursor-pointer"
+                            >
+                              Batal
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isRestoring || !adminPinInput.trim()}
+                              onClick={handleExecuteRestore}
+                              className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed active:scale-98 ${
+                                restoreMode === 'replace'
+                                  ? 'bg-rose-600 hover:bg-rose-700'
+                                  : 'bg-blue-600 hover:bg-blue-700'
+                              }`}
+                            >
+                              {isRestoring ? (
+                                <>
+                                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                  <span>Memulihkan Database...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <RefreshCw className="w-3.5 h-3.5" />
+                                  <span>
+                                    {restoreMode === 'replace'
+                                      ? 'Konfirmasi Timpa Database (Replace All)'
+                                      : 'Konfirmasi Gabungkan Data (Merge Data)'}
+                                  </span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* PIN Error Message */}
+                        {restorePinError && (
+                          <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs text-rose-700 font-semibold animate-in fade-in">
+                            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>{restorePinError}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* RESTORE SUCCESS MESSAGE */}
+                  {restoreSuccessMsg && (
+                    <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-2xl flex items-center gap-3 text-xs text-emerald-800 font-semibold animate-in fade-in">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div className="space-y-0.5 flex-1">
+                        <p className="font-bold text-emerald-950">Proses Pemulihan Database Selesai!</p>
+                        <p className="text-emerald-800 font-normal">{restoreSuccessMsg}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SECTION 5: DANGER ZONE (PEMBERSIHAN DATA DENGAN OTORISASI PIN ADMIN) */}
+          {/* ========================================================================= */}
+          {(activeSection === 'all' || activeSection === 'danger') && (
+            <div className="bg-white rounded-2xl border-2 border-rose-200 shadow-sm overflow-hidden ring-1 ring-rose-500/10">
+              <div className="p-5 border-b border-rose-100 bg-rose-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-xs">
+                    <AlertTriangle className="w-5 h-5" />
                   </div>
-                )}
+                  <div>
+                    <h3 className="text-sm font-bold text-rose-950 flex items-center gap-2">
+                      Danger Zone: Pembersihan &amp; Pengosongan Riwayat Transaksi
+                      <span className="text-[10px] bg-rose-200 text-rose-800 font-bold px-2 py-0.5 rounded-full uppercase">
+                        Khusus Admin
+                      </span>
+                    </h3>
+                    <p className="text-[11px] text-rose-800">
+                      Tindakan ini menghapus seluruh riwayat transaksi pengeluaran dan penerimaan secara permanen.
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="p-5 space-y-4">
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-slate-900">
-                      Ekspor Basis Data Penuh (JSON Bundle)
+                <div className="bg-rose-50/50 rounded-xl p-4 border border-rose-200 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="space-y-1.5 max-w-xl">
+                    <h4 className="text-sm font-bold text-rose-950 flex items-center gap-2">
+                      <Trash2 className="w-4 h-4 text-rose-600" />
+                      Kosongkan Seluruh Riwayat Transaksi (Penyaluran &amp; Penerimaan)
                     </h4>
-                    <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
-                      Mencakup seluruh <strong>Master Barang ({masterBarang.length} data)</strong>, 
-                      <strong> Riwayat Transaksi Penyaluran ({transaksiList.length} data)</strong>, 
-                      <strong> Penerimaan Belanja BOS ({penerimaanList.length} data)</strong>, 
-                      <strong> Master Pejabat ({pejabatData.length} data)</strong>, 
-                      konfigurasi kop surat, dan log audit keamanan.
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Menghapus seluruh berkas transaksi <strong>({transaksiList.length} Penyaluran, {penerimaanList.length} Faktur Penerimaan)</strong> dan mereset nomor urut berkas. Data master barang dan profil instansi akan tetap aman tersimpan. Tindakan ini memerlukan otorisasi PIN Administrator.
                     </p>
                   </div>
 
                   <button
                     type="button"
-                    onClick={handleExecuteBackup}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer active:scale-98 shrink-0"
+                    onClick={() => {
+                      if (onOpenResetTransaksi) {
+                        onOpenResetTransaksi();
+                      }
+                    }}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-sm transition-all cursor-pointer active:scale-98 shrink-0"
+                    title="Buka dialog konfirmasi PIN untuk pengosongan transaksi"
                   >
-                    <Download className="w-4 h-4 text-white" />
-                    Backup Data Keseluruhan
+                    <Trash2 className="w-4 h-4 text-white" />
+                    Kosongkan Transaksi...
                   </button>
                 </div>
-
-                {isBackupSuccess && (
-                  <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center gap-2 text-xs text-emerald-800 font-semibold animate-in fade-in">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>File cadangan berhasil diekspor dan diunduh ke komputer Anda. Penanda waktu backup telah diperbarui!</span>
-                  </div>
-                )}
               </div>
             </div>
           )}

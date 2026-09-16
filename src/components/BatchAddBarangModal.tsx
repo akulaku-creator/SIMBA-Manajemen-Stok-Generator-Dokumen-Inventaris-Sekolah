@@ -438,24 +438,22 @@ export const BatchAddBarangModal: React.FC<Props> = ({
                           />
                         </td>
 
-                        {/* Input Harga Satuan with dot formatting */}
+                        {/* Kolom Harga Satuan - Terkunci Readonly Mengikuti Master Barang */}
                         <td className="p-2 text-right">
                           <div className="relative">
                             <input
                               type="text"
-                              inputMode="numeric"
+                              readOnly
                               disabled={!isChecked}
                               value={
                                 isChecked
-                                  ? formatThousands(draft.hargaSatuan)
+                                  ? formatThousands(b.hargaSatuan || draft.hargaSatuan)
                                   : '0'
                               }
-                              onChange={(e) => handlePriceChange(b, e.target.value)}
-                              onFocus={(e) => isChecked && e.target.select()}
-                              placeholder="0"
-                              className={`w-full py-1 px-2 text-right font-mono font-medium text-xs border rounded-md transition-all ${
+                              title="Harga satuan terkunci mengikuti acuan Master Barang"
+                              className={`w-full py-1 px-2 text-right font-mono font-semibold text-xs border rounded-md transition-all ${
                                 isChecked
-                                  ? 'border-emerald-400 bg-white text-slate-900 shadow-2xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden'
+                                  ? 'border-slate-300 bg-slate-100/90 text-slate-800 cursor-default select-none'
                                   : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed select-none'
                               }`}
                             />

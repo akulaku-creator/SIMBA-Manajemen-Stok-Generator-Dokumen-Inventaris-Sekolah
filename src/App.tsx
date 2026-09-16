@@ -41,6 +41,7 @@ import {
   KategoriBarangItem,
   KopSuratConfig, 
   NumberingPatternConfig, 
+  PaperSize,
   Pejabat, 
   TransaksiPenerimaan, 
   TransaksiPengeluaran, 
@@ -119,6 +120,7 @@ export default function App() {
   );
   const [generatorInitialDocType, setGeneratorInitialDocType] = useState<DocumentType>('spb');
   const [generatorInitialBarangId, setGeneratorInitialBarangId] = useState<string>('');
+  const [paperSize, setPaperSize] = useState<PaperSize>('A4');
   const [isNewTransaksiModalOpen, setIsNewTransaksiModalOpen] = useState(false);
   const [editingTransaksi, setEditingTransaksi] = useState<TransaksiPengeluaran | null>(null);
   const [isNewPenerimaanModalOpen, setIsNewPenerimaanModalOpen] = useState(false);
@@ -656,9 +658,9 @@ export default function App() {
   };
 
   // Full Database Backup Execution (Satu-Klik)
-  const handleExecuteFullBackup = () => {
+  const handleExecuteFullBackup = async () => {
     try {
-      const res = exportFullDatabase({
+      const res = await exportFullDatabase({
         masterBarang,
         transaksiList,
         penerimaanList,
@@ -687,6 +689,125 @@ export default function App() {
     setNumberingConfig(updated.numberingConfig);
     setPejabatList(updated.pejabatList);
     showToast('Seluruh konfigurasi instansi & pejabat berhasil disimpan serentak.');
+  };
+
+  // Restore Database Handler (Replace All or Merge)
+  const handleRestoreDatabase = (
+    restoredData: {
+      masterBarang: Barang[];
+      transaksiList: TransaksiPengeluaran[];
+      penerimaanList: TransaksiPenerimaan[];
+      pejabatList: Pejabat[];
+      kategoriList?: KategoriBarangItem[];
+      kopConfig?: KopSuratConfig;
+      numberingConfig?: NumberingPatternConfig;
+      userList?: AppUser[];
+    },
+    mode: 'replace' | 'merge'
+  ) => {
+    if (mode === 'replace') {
+      // REPLACE ALL DATA
+      setMasterBarang(restoredData.masterBarang);
+      setTransaksiList(restoredData.transaksiList);
+      setPenerimaanList(restoredData.penerimaanList);
+      setPejabatList(restoredData.pejabatList);
+      if (restoredData.kategoriList && restoredData.kategoriList.length > 0) {
+        setKategoriList(restoredData.kategoriList);
+      }
+      if (restoredData.kopConfig && restoredData.kopConfig.namaSekolah) {
+        setKopConfig(restoredData.kopConfig);
+      }
+      if (restoredData.numberingConfig) {
+        setNumberingConfig(restoredData.numberingConfig);
+      }
+      if (restoredData.userList && restoredData.userList.length > 0) {
+        setUserList(restoredData.userList);
+      }
+      if (restoredData.transaksiList.length > 0) {
+        setSelectedTransaksiId(restoredData.transaksiList[0].id);
+      }
+
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'RESTORE_DATABASE',
+        title: 'Pemulihan Database: Timpa Keseluruhan Data (Replace All)',
+        details: `Seluruh database berhasil ditimpa dari file backup (${restoredData.masterBarang.length} barang, ${restoredData.transaksiList.length} transaksi penyaluran, ${restoredData.penerimaanList.length} penerimaan).`,
+        status: 'SUCCESS'
+      });
+      showToast('Basis data berhasil dipulihkan secara penuh (Replace All Data)!');
+    } else {
+      // MERGE DATA: Tambahkan data baru tanpa menghapus data riwayat transaksi lama
+      setMasterBarang(prev => {
+        const map = new Map<string, Barang>();
+        prev.forEach(b => map.set(b.id || b.kodeBarang, b));
+        restoredData.masterBarang.forEach(b => {
+          const key = b.id || b.kodeBarang;
+          if (!map.has(key)) {
+            map.set(key, b);
+          }
+        });
+        return Array.from(map.values());
+      });
+
+      setTransaksiList(prev => {
+        const map = new Map<string, TransaksiPengeluaran>();
+        prev.forEach(t => map.set(t.id || t.noBAST, t));
+        restoredData.transaksiList.forEach(t => {
+          const key = t.id || t.noBAST;
+          if (!map.has(key)) {
+            map.set(key, t);
+          }
+        });
+        return Array.from(map.values()).sort((a, b) => b.nomorUrut - a.nomorUrut);
+      });
+
+      setPenerimaanList(prev => {
+        const map = new Map<string, TransaksiPenerimaan>();
+        prev.forEach(p => map.set(p.id || p.noBukti, p));
+        restoredData.penerimaanList.forEach(p => {
+          const key = p.id || p.noBukti;
+          if (!map.has(key)) {
+            map.set(key, p);
+          }
+        });
+        return Array.from(map.values()).sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
+      });
+
+      setPejabatList(prev => {
+        const map = new Map<string, Pejabat>();
+        prev.forEach(p => map.set(p.id || p.nip || p.nama, p));
+        restoredData.pejabatList.forEach(p => {
+          const key = p.id || p.nip || p.nama;
+          if (!map.has(key)) {
+            map.set(key, p);
+          }
+        });
+        return Array.from(map.values());
+      });
+
+      if (restoredData.kategoriList) {
+        setKategoriList(prev => {
+          const names = new Set(prev.map(k => k.nama.toLowerCase()));
+          const additions = restoredData.kategoriList!.filter(k => !names.has(k.nama.toLowerCase()));
+          return [...prev, ...additions];
+        });
+      }
+
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'RESTORE_DATABASE',
+        title: 'Pemulihan Database: Gabungkan Data (Merge Data)',
+        details: `Penggabungan data cadangan berhasil dilakukan tanpa menghapus riwayat transaksi yang ada.`,
+        status: 'SUCCESS'
+      });
+      showToast('Data cadangan berhasil digabungkan (Merge Data) ke dalam basis data!');
+    }
   };
 
   // If user is not authenticated, display the modern Login View directly
@@ -738,6 +859,8 @@ export default function App() {
         onSwitchRole={handleQuickSwitchRole}
         onOpenGoogleSheets={() => setIsGoogleSheetsOpen(true)}
         isGoogleSheetConnected={Boolean(googleSheetConfig?.spreadsheetId)}
+        paperSize={paperSize}
+        onSelectPaperSize={setPaperSize}
       />
 
       {/* Main Container */}
@@ -763,6 +886,7 @@ export default function App() {
                   transaksiList={transaksiList}
                   penerimaanList={penerimaanList}
                   barangList={masterBarang}
+                  pejabatList={pejabatList}
                   currentUser={currentUser}
                   onSelectTransaksiForPrint={handleSelectForPrint}
                   onOpenNewTransaksi={() => {
@@ -799,6 +923,8 @@ export default function App() {
                 initialDocType={generatorInitialDocType}
                 initialBarangId={generatorInitialBarangId}
                 onImportBarang={handleImportBarang}
+                paperSize={paperSize}
+                onSelectPaperSize={setPaperSize}
               />
             )}
 
@@ -912,7 +1038,12 @@ export default function App() {
         userList={userList}
         currentUser={currentUser}
         onSaveUnifiedSettings={handleSaveUnifiedSettings}
+        onRestoreDatabase={handleRestoreDatabase}
         onShowToast={showToast}
+        onOpenResetTransaksi={() => {
+          setIsUnifiedSettingsOpen(false);
+          setIsResetTransaksiOpen(true);
+        }}
       />
 
       {/* MODAL: Pengaturan Kop Surat & Logo Sekolah */}

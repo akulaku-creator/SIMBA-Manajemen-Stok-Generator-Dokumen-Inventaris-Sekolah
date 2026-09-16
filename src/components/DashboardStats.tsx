@@ -27,13 +27,14 @@ import {
   X
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
-import { AppUser, Barang, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
+import { AppUser, Barang, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
 import { formatRupiah, formatTanggalIndonesia } from '../utils/numberGenerator';
 
 interface Props {
   transaksiList: TransaksiPengeluaran[];
   penerimaanList: TransaksiPenerimaan[];
   barangList: Barang[];
+  pejabatList?: Pejabat[];
   currentUser: AppUser;
   onSelectTransaksiForPrint: (id: string) => void;
   onOpenNewTransaksi: () => void;
@@ -65,6 +66,7 @@ export const DashboardStats: React.FC<Props> = ({
   transaksiList,
   penerimaanList,
   barangList,
+  pejabatList = [],
   currentUser,
   onSelectTransaksiForPrint,
   onOpenNewTransaksi,
@@ -77,12 +79,52 @@ export const DashboardStats: React.FC<Props> = ({
 }) => {
   const isAdmin = currentUser.role === 'admin';
 
+  // Map Pejabat ID to Pejabat Info for Nama Pemohon resolution
+  const pemohonMap = useMemo(() => {
+    const map: Record<string, { nama: string; jabatan?: string }> = {};
+    if (pejabatList) {
+      pejabatList.forEach(p => {
+        map[p.id] = { nama: p.nama, jabatan: p.jabatan };
+      });
+    }
+    return map;
+  }, [pejabatList]);
+
   // Stat calculations
   const totalBarangCount = barangList.length;
-  const stokMenipis = barangList.filter(b => b.stokSekarang <= 10);
-  const totalNilaiBelanjaBOS = penerimaanList.reduce((acc, p) => acc + p.totalNilai, 0);
+
+  // 1. Akumulasi Total Nilai Penyaluran (Rp)
+  const totalNilaiPenyaluran = useMemo(() => {
+    return transaksiList.reduce((acc, t) => {
+      return acc + t.items.reduce((sub, it) => {
+        const qty = Number(it.usulanJumlah) || 0;
+        const price = Number(it.hargaSatuan) || 0;
+        return sub + (qty * price);
+      }, 0);
+    }, 0);
+  }, [transaksiList]);
+
+  // 2. Akumulasi Total Sisa Stok Gudang (Rp) Real-Time
+  const totalNilaiSisaStok = useMemo(() => {
+    return barangList.reduce((acc, b) => {
+      const stok = Number(b.stokSekarang) || 0;
+      const price = Number(b.hargaSatuan) || 0;
+      return acc + (stok * price);
+    }, 0);
+  }, [barangList]);
+
+  // 3. Logika Peringatan Gudang: Hanya menghitung barang dengan stok riil <= threshold batas aman (10 unit)
+  const SAFE_STOCK_THRESHOLD = 10;
+  const stokMenipis = useMemo(() => {
+    return barangList.filter(b => typeof b.stokSekarang === 'number' && b.stokSekarang <= SAFE_STOCK_THRESHOLD);
+  }, [barangList]);
+  const stokHabisCount = useMemo(() => {
+    return barangList.filter(b => typeof b.stokSekarang === 'number' && b.stokSekarang <= 0).length;
+  }, [barangList]);
+
+  const totalNilaiBelanjaBOS = penerimaanList.reduce((acc, p) => acc + (p.totalNilai || 0), 0);
   const totalItemDisalurkan = transaksiList.reduce(
-    (acc, t) => acc + t.items.reduce((sub, it) => sub + it.usulanJumlah, 0),
+    (acc, t) => acc + t.items.reduce((sub, it) => sub + (Number(it.usulanJumlah) || 0), 0),
     0
   );
 
@@ -136,11 +178,13 @@ export const DashboardStats: React.FC<Props> = ({
                         String(t.nomorUrut).includes(q);
         const matchUnit = (t.unitPemohon || '').toLowerCase().includes(q);
         const matchKeperluan = (t.keperluanUmum || '').toLowerCase().includes(q);
+        const pemohonNama = pemohonMap[t.pemohonId]?.nama || t.pemohonId || '';
+        const matchPemohon = pemohonNama.toLowerCase().includes(q);
         const matchBarang = t.items.some(it => 
           (it.namaBarang || '').toLowerCase().includes(q) ||
           (it.kodeBarang || '').toLowerCase().includes(q)
         );
-        if (!matchNo && !matchUnit && !matchKeperluan && !matchBarang) return false;
+        if (!matchNo && !matchUnit && !matchKeperluan && !matchPemohon && !matchBarang) return false;
       }
 
       // 2. Month filter
@@ -291,44 +335,46 @@ export const DashboardStats: React.FC<Props> = ({
 
       {/* 4 Metric Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Master Barang */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-slate-300 transition-all">
+        {/* Card 1: Total Sisa Stok Gudang (Rp) */}
+        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-blue-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Ragam Barang</span>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Sisa Stok Gudang</span>
             <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
               <Boxes className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2.5 flex items-baseline gap-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-900">{totalBarangCount}</span>
-            <span className="text-xs text-slate-500 font-medium">item NUSP</span>
+          <div className="mt-2.5">
+            <div className="text-xl font-bold tracking-tight text-blue-900 font-mono truncate">
+              {formatRupiah(totalNilaiSisaStok)}
+            </div>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Terkodifikasi kode barang dinas
+          <p className="text-[11px] text-slate-400 mt-1 truncate">
+            Akumulasi nilai real-time {totalBarangCount} ragam barang
           </p>
         </div>
 
-        {/* Card 2: Penyaluran Selesai */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-slate-300 transition-all">
+        {/* Card 2: Total Nilai Penyaluran (Rp) */}
+        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-indigo-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Transaksi Penyaluran</span>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Nilai Penyaluran</span>
             <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
               <FileText className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2.5 flex items-baseline gap-2">
-            <span className="text-2xl font-bold tracking-tight text-slate-900">{transaksiList.length}</span>
-            <span className="text-xs text-slate-500 font-medium">berkas selesai</span>
+          <div className="mt-2.5">
+            <div className="text-xl font-bold tracking-tight text-indigo-900 font-mono truncate">
+              {formatRupiah(totalNilaiPenyaluran)}
+            </div>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Total {totalItemDisalurkan} unit barang disalurkan
+          <p className="text-[11px] text-slate-400 mt-1 truncate">
+            {transaksiList.length} berkas ({totalItemDisalurkan} unit barang keluar)
           </p>
         </div>
 
-        {/* Card 3: Realisasi Belanja BOS */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-slate-300 transition-all">
+        {/* Card 3: Realisasi Belanja Penerimaan BOS (Rp) */}
+        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-emerald-300 transition-all">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Penerimaan BOS</span>
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Penerimaan Belanja BOS</span>
             <div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
               <FileSpreadsheet className="w-4 h-4" />
             </div>
@@ -338,29 +384,31 @@ export const DashboardStats: React.FC<Props> = ({
               {formatRupiah(totalNilaiBelanjaBOS)}
             </div>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            {penerimaanList.length} faktur pengadaan belanja
+          <p className="text-[11px] text-slate-400 mt-1 truncate">
+            {penerimaanList.length} faktur pengadaan belanja BOS / APBD
           </p>
         </div>
 
-        {/* Card 4: Stok Kritis Alert */}
-        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-slate-300 transition-all">
+        {/* Card 4: Peringatan Gudang (Stok Riil <= 10) */}
+        <div className="bg-white rounded-xl border border-slate-200/90 p-5 shadow-xs ring-1 ring-slate-900/5 hover:border-amber-300 transition-all">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Peringatan Gudang</span>
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
-              stokMenipis.length > 0 ? 'bg-amber-50 text-amber-600 border-amber-200/60' : 'bg-slate-50 text-slate-400 border-slate-200'
+              stokMenipis.length > 0 ? 'bg-amber-50 text-amber-600 border-amber-200/60' : 'bg-emerald-50 text-emerald-600 border-emerald-200'
             }`}>
               <AlertTriangle className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-2.5 flex items-baseline gap-2">
-            <span className={`text-2xl font-bold tracking-tight ${stokMenipis.length > 0 ? 'text-amber-600' : 'text-slate-900'}`}>
+            <span className={`text-2xl font-bold tracking-tight ${stokMenipis.length > 0 ? 'text-amber-600' : 'text-emerald-700'}`}>
               {stokMenipis.length}
             </span>
-            <span className="text-xs text-slate-500 font-medium">barang &le; 10 unit</span>
+            <span className="text-xs text-slate-500 font-medium">item &le; 10 unit</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            {stokMenipis.length > 0 ? 'Perlu pengadaan belanja BOS baru' : 'Stok persediaan mencukupi'}
+          <p className="text-[11px] text-slate-400 mt-1 truncate">
+            {stokMenipis.length > 0 
+              ? `${stokHabisCount > 0 ? `${stokHabisCount} habis (0 unit) • ` : ''}Perlu pengadaan belanja BOS` 
+              : 'Stok fisik seluruh item aman (> 10 unit)'}
           </p>
         </div>
       </div>
@@ -479,17 +527,18 @@ export const DashboardStats: React.FC<Props> = ({
               <tr>
                 <th className="py-2.5 px-3 w-10 text-center">No</th>
                 <th className="py-2.5 px-3 w-28">Tanggal</th>
-                <th className="py-2.5 px-3 w-56">Unit Pemohon &amp; Keperluan</th>
-                <th className="py-2.5 px-3">Rincian Barang Disalurkan</th>
-                <th className="py-2.5 px-3 w-60">Rantai Nomor Dokumen</th>
-                <th className="py-2.5 px-3 w-24 text-center">Status</th>
+                <th className="py-2.5 px-3 w-48">Unit Pemohon &amp; Keperluan</th>
+                <th className="py-2.5 px-3 w-44">Nama Pemohon</th>
+                <th className="py-2.5 px-3">Rincian Barang</th>
+                <th className="py-2.5 px-3 w-36 text-right">Total Nilai (Rp)</th>
+                <th className="py-2.5 px-3 w-28 text-center">Status</th>
                 <th className="py-2.5 px-3 w-28 text-center bg-slate-100/70 border-l border-slate-200">AKSI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {pagedTransaksi.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
+                  <td colSpan={8} className="p-8 text-center text-slate-400">
                     <div className="space-y-1.5 py-4">
                       <FileStack className="w-8 h-8 text-slate-300 mx-auto" />
                       <p className="font-semibold text-slate-700">Tidak ada transaksi penyaluran ditemukan.</p>
@@ -515,6 +564,10 @@ export const DashboardStats: React.FC<Props> = ({
                   const globalIdx = (pageTrx - 1) * pageSizeTrx + idx + 1;
                   const totalJenis = t.items.length;
                   const totalVol = t.items.reduce((acc, it) => acc + (Number(it.usulanJumlah) || 0), 0);
+                  const totalNilaiTrx = t.items.reduce(
+                    (acc, it) => acc + ((Number(it.usulanJumlah) || 0) * (Number(it.hargaSatuan) || 0)), 
+                    0
+                  );
 
                   return (
                     <tr 
@@ -532,10 +585,29 @@ export const DashboardStats: React.FC<Props> = ({
                         </div>
                         <div className="text-[11px] text-slate-500 line-clamp-1 italic">{t.keperluanUmum}</div>
                       </td>
+
+                      {/* Kolom NAMA PEMOHON (Tepat setelah Unit Pemohon & Keperluan) */}
                       <td className="py-2.5 px-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 flex-wrap">
+                        {(() => {
+                          const pemohon = pemohonMap[t.pemohonId];
+                          const namaTampil = pemohon?.nama || (t.pemohonId && !t.pemohonId.startsWith('p-') && !t.pemohonId.startsWith('pej-') ? t.pemohonId : '-') || '-';
+                          const jabatanTampil = pemohon?.jabatan;
+                          return (
+                            <div className="space-y-0.5">
+                              <div className="font-semibold text-slate-900 leading-tight">{namaTampil}</div>
+                              {jabatanTampil && (
+                                <div className="text-[10px] text-slate-500 line-clamp-1">{jabatanTampil}</div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Rincian Barang - Single-line ringkas dengan modal pop-up */}
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
                           <span className="text-xs font-semibold text-slate-800">
-                            {totalJenis} Jenis Barang <span className="text-slate-500 font-normal">(Total: {totalVol} Item)</span>
+                            {totalJenis} Jenis <span className="text-slate-500 font-normal">({totalVol} item)</span>
                           </span>
                           <button
                             type="button"
@@ -554,57 +626,68 @@ export const DashboardStats: React.FC<Props> = ({
                                 keperluan: it.keperluan || t.keperluanUmum
                               }))
                             })}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors cursor-pointer w-fit"
-                            title="Klik untuk melihat pop-over detail seluruh barang"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors cursor-pointer"
+                            title="Klik untuk melihat rincian barang"
                           >
                             <Eye className="w-3 h-3 text-blue-600" />
-                            Lihat {totalJenis} Item...
+                            Lihat Item...
                           </button>
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 font-mono text-[10px] text-slate-600 space-y-0.5">
-                        <div><span className="text-slate-400">NPB:</span> {t.noNPB}</div>
-                        <div><span className="text-slate-400">SPB:</span> {t.noSPB}</div>
-                        <div><span className="text-slate-400">SPPB:</span> {t.noSPPB}</div>
-                        <div><span className="text-blue-600 font-semibold">BAST:</span> {t.noBAST}</div>
+                      {/* Kolom TOTAL NILAI TRANSAKSI (RP) */}
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-800 text-xs whitespace-nowrap">
+                        {formatRupiah(totalNilaiTrx)}
                       </td>
+                      {/* Visual Status Badge: Draft=Kuning, Disetujui=Biru, Selesai=Hijau */}
                       <td className="py-2.5 px-3 text-center">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          Siap Cetak
-                        </span>
+                        {(!t.status || t.status === 'disalurkan') ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            Selesai
+                          </span>
+                        ) : t.status === 'disetujui' ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-300">
+                            <ShieldCheck className="w-3 h-3 text-blue-600" />
+                            Disetujui
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-300">
+                            <Clock className="w-3 h-3 text-amber-600" />
+                            Draft / Diajukan
+                          </span>
+                        )}
                       </td>
 
                       {/* KOLOM AKSI (EDIT, CETAK QUICK-ACTION, HAPUS) */}
                       <td className="py-2.5 px-3 text-center bg-slate-50/50 border-l border-slate-200">
                         <div className="flex items-center justify-center gap-1.5">
                           
-                          {/* Tombol Edit (Ikon Pensil) */}
+                          {/* Tombol Edit */}
                           <button
                             type="button"
                             onClick={() => onEditTransaksi(t)}
-                            className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-100/70 bg-white border border-slate-200 rounded-lg shadow-2xs transition-all active:scale-95"
+                            className="w-7 h-7 flex items-center justify-center text-slate-600 hover:text-blue-700 hover:bg-blue-50 bg-white border border-slate-200 rounded-lg shadow-2xs transition-all active:scale-95"
                             title="Edit / Koreksi Data Transaksi &amp; Sinkronkan Stok"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Tombol Cetak Quick-Action (Ikon Printer) */}
+                          {/* Tombol Cetak Quick-Action */}
                           <button
                             type="button"
                             onClick={() => onSelectTransaksiForPrint(t.id)}
-                            className="p-1.5 text-blue-700 hover:text-white hover:bg-blue-600 bg-blue-50 border border-blue-200 rounded-lg shadow-2xs transition-all active:scale-95"
+                            className="w-7 h-7 flex items-center justify-center text-blue-700 hover:text-white hover:bg-blue-600 bg-blue-50 border border-blue-200 rounded-lg shadow-2xs transition-all active:scale-95"
                             title="Cetak Berkas Bundel Dokumen (NPB, SPB, SPPB, BAST)"
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Tombol Hapus (Ikon Trash - RBAC Admin Only) */}
+                          {/* Tombol Hapus (RBAC Admin Only) */}
                           <button
                             type="button"
                             onClick={() => onDeleteTransaksi(t)}
                             disabled={!isAdmin}
-                            className={`p-1.5 rounded-lg border shadow-2xs transition-all ${
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg border shadow-2xs transition-all ${
                               isAdmin 
                                 ? 'text-rose-600 hover:text-white hover:bg-rose-600 bg-white border-rose-200 active:scale-95' 
                                 : 'text-slate-300 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60'
@@ -827,10 +910,10 @@ export const DashboardStats: React.FC<Props> = ({
               <tr>
                 <th className="py-2.5 px-3 w-10 text-center">No</th>
                 <th className="py-2.5 px-3 w-28">Tanggal</th>
-                <th className="py-2.5 px-3 w-44">No. Bukti / Faktur</th>
-                <th className="py-2.5 px-3 w-36">Sumber Dana</th>
+                <th className="py-2.5 px-3 w-40">No. Bukti / Faktur</th>
+                <th className="py-2.5 px-3 w-32">Sumber Dana</th>
                 <th className="py-2.5 px-3">Penyedia &amp; Rincian Barang</th>
-                <th className="py-2.5 px-3 w-32 text-right">Total Nilai Pembelian</th>
+                <th className="py-2.5 px-3 w-36 text-right">Total Nilai Transaksi (Rp)</th>
                 <th className="py-2.5 px-3 w-28 text-center bg-slate-100/70 border-l border-slate-200">AKSI</th>
               </tr>
             </thead>
@@ -883,9 +966,9 @@ export const DashboardStats: React.FC<Props> = ({
                         {p.keterangan && (
                           <div className="text-[11px] text-slate-500 line-clamp-1 italic">{p.keterangan}</div>
                         )}
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 mt-1 flex-wrap">
+                        <div className="flex items-center gap-2 whitespace-nowrap mt-1">
                           <span className="text-xs font-semibold text-slate-800">
-                            {totalRcvJenis} Jenis Barang <span className="text-slate-500 font-normal">(Total: {totalRcvVol} Item)</span>
+                            {totalRcvJenis} Jenis <span className="text-slate-500 font-normal">({totalRcvVol} item)</span>
                           </span>
                           <button
                             type="button"
@@ -903,15 +986,15 @@ export const DashboardStats: React.FC<Props> = ({
                                 subtotal: it.subtotal || ((Number(it.jumlahMasuk) || 0) * (it.hargaSatuan || 0))
                               }))
                             })}
-                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 transition-colors cursor-pointer w-fit"
-                            title="Klik untuk melihat pop-over detail seluruh barang yang diterima"
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 transition-colors cursor-pointer"
+                            title="Klik untuk melihat rincian barang yang diterima"
                           >
                             <Eye className="w-3 h-3 text-emerald-600" />
-                            Lihat {totalRcvJenis} Item...
+                            Lihat Item...
                           </button>
                         </div>
                       </td>
-                      <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
                         {formatRupiah(p.totalNilai)}
                       </td>
 
@@ -919,32 +1002,32 @@ export const DashboardStats: React.FC<Props> = ({
                       <td className="py-2.5 px-3 text-center bg-slate-50/50 border-l border-slate-200">
                         <div className="flex items-center justify-center gap-1.5">
                           
-                          {/* Tombol Edit (Ikon Pensil) */}
+                          {/* Tombol Edit */}
                           <button
                             type="button"
                             onClick={() => onEditPenerimaan(p)}
-                            className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-100/70 bg-white border border-slate-200 rounded-lg shadow-2xs transition-all active:scale-95"
+                            className="w-7 h-7 flex items-center justify-center text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 bg-white border border-slate-200 rounded-lg shadow-2xs transition-all active:scale-95"
                             title="Edit / Koreksi Faktur Penerimaan &amp; Sinkronkan Stok"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Tombol Cetak Quick-Action (Ikon Printer) */}
+                          {/* Tombol Cetak Quick-Action */}
                           <button
                             type="button"
                             onClick={() => onSelectPenerimaanForPrint && onSelectPenerimaanForPrint(p)}
-                            className="p-1.5 text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs transition-all active:scale-95"
+                            className="w-7 h-7 flex items-center justify-center text-emerald-700 hover:text-white hover:bg-emerald-600 bg-emerald-50 border border-emerald-200 rounded-lg shadow-2xs transition-all active:scale-95"
                             title="Pratinjau &amp; Cetak Bukti Penerimaan Rekap BOS"
                           >
                             <Printer className="w-3.5 h-3.5" />
                           </button>
 
-                          {/* Tombol Hapus (Ikon Trash - RBAC Admin Only) */}
+                          {/* Tombol Hapus (RBAC Admin Only) */}
                           <button
                             type="button"
                             onClick={() => onDeletePenerimaan(p)}
                             disabled={!isAdmin}
-                            className={`p-1.5 rounded-lg border shadow-2xs transition-all ${
+                            className={`w-7 h-7 flex items-center justify-center rounded-lg border shadow-2xs transition-all ${
                               isAdmin 
                                 ? 'text-rose-600 hover:text-white hover:bg-rose-600 bg-white border-rose-200 active:scale-95' 
                                 : 'text-slate-300 bg-slate-100 border-slate-200 cursor-not-allowed opacity-60'
