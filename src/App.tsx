@@ -22,7 +22,9 @@ import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { LoginView } from './components/LoginView';
 import { AuditLogModal } from './components/AuditLogModal';
 import { SecurityDeleteConfirmModal } from './components/SecurityDeleteConfirmModal';
+import { UnifiedSettingsModal } from './components/UnifiedSettingsModal';
 import { logAuditEvent } from './utils/auditLogger';
+import { exportFullDatabase, getLastBackupTime } from './utils/backupHelper';
 import { 
   DEFAULT_BARANG, 
   DEFAULT_KATEGORI_LIST,
@@ -95,8 +97,19 @@ export default function App() {
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    const session = localStorage.getItem('simba_auth_session');
-    return session !== 'false';
+    // 1. Check temporary browser session in sessionStorage
+    const sessionAuth = sessionStorage.getItem('simba_auth_session');
+    if (sessionAuth === 'true') {
+      return true;
+    }
+    // 2. Check persistent session in localStorage ONLY if "Ingat Saya di Perangkat Ini" was activated
+    const rememberMe = localStorage.getItem('simba_remember_me');
+    const localAuth = localStorage.getItem('simba_auth_session');
+    if (rememberMe === 'true' && localAuth === 'true') {
+      return true;
+    }
+    // 3. Default: Always force login page at launch (Auth Guard)
+    return false;
   });
 
   // UI Navigation & Modals State
@@ -121,6 +134,8 @@ export default function App() {
   });
   const [isKopSettingsOpen, setIsKopSettingsOpen] = useState(false);
   const [isNumberingSettingsOpen, setIsNumberingSettingsOpen] = useState(false);
+  const [isUnifiedSettingsOpen, setIsUnifiedSettingsOpen] = useState(false);
+  const [lastBackupTime, setLastBackupTime] = useState<string | null>(getLastBackupTime());
   const [isSchemaModalOpen, setIsSchemaModalOpen] = useState(false);
   const [isResetTransaksiOpen, setIsResetTransaksiOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
@@ -594,29 +609,84 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = (user: AppUser) => {
+  const handleLoginSuccess = (user: AppUser, rememberMe?: boolean) => {
     setCurrentUserId(user.id);
+    localStorage.setItem('simba_current_user_id', user.id);
     setIsAuthenticated(true);
     setIsLoginModalOpen(false);
-    localStorage.setItem('simba_auth_session', 'true');
-    localStorage.setItem('simba_current_user_id', user.id);
+    
+    // Manage temporary vs persistent session
+    sessionStorage.setItem('simba_auth_session', 'true');
+    if (rememberMe) {
+      localStorage.setItem('simba_auth_session', 'true');
+      localStorage.setItem('simba_remember_me', 'true');
+    } else {
+      localStorage.removeItem('simba_auth_session');
+      localStorage.removeItem('simba_remember_me');
+    }
+
+    // Role-Based Access Control (RBAC) initial landing route
+    if (user.role === 'pengguna') {
+      setActiveTab('npb_request');
+    } else {
+      setActiveTab('dashboard');
+    }
+
     showToast(`Selamat datang, ${user.nama} (${user.role.toUpperCase()})`);
   };
 
   const handleLogout = () => {
-    logAuditEvent({
-      userId: currentUser.id,
-      username: currentUser.username,
-      userName: currentUser.nama,
-      userRole: currentUser.role,
-      action: 'LOGOUT',
-      title: 'Sesi Pengguna Berakhir (Logout)',
-      details: `Pengguna ${currentUser.nama} (@${currentUser.username}) keluar dari aplikasi SIMBA.`,
-      status: 'SUCCESS'
-    });
+    if (currentUser) {
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'LOGOUT',
+        title: 'Sesi Pengguna Berakhir (Logout)',
+        details: `Pengguna ${currentUser.nama} (@${currentUser.username}) keluar dari aplikasi SIMBA.`,
+        status: 'SUCCESS'
+      });
+    }
+    sessionStorage.removeItem('simba_auth_session');
+    localStorage.removeItem('simba_auth_session');
+    localStorage.removeItem('simba_remember_me');
     setIsAuthenticated(false);
-    localStorage.setItem('simba_auth_session', 'false');
     showToast('Anda telah berhasil keluar dari sistem.');
+  };
+
+  // Full Database Backup Execution (Satu-Klik)
+  const handleExecuteFullBackup = () => {
+    try {
+      const res = exportFullDatabase({
+        masterBarang,
+        transaksiList,
+        penerimaanList,
+        pejabatList,
+        kategoriList,
+        kopConfig,
+        numberingConfig,
+        userList,
+        currentUser
+      });
+      setLastBackupTime(res.formattedDate);
+      showToast(`Cadangan lengkap basis data SIMBA berhasil diekspor: ${res.filename}`);
+    } catch (err) {
+      console.error('Backup error:', err);
+      alert('Terjadi kesalahan saat memproses backup data.');
+    }
+  };
+
+  // Unified Settings Save Handler
+  const handleSaveUnifiedSettings = (updated: {
+    kopConfig: KopSuratConfig;
+    numberingConfig: NumberingPatternConfig;
+    pejabatList: Pejabat[];
+  }) => {
+    setKopConfig(updated.kopConfig);
+    setNumberingConfig(updated.numberingConfig);
+    setPejabatList(updated.pejabatList);
+    showToast('Seluruh konfigurasi instansi & pejabat berhasil disimpan serentak.');
   };
 
   // If user is not authenticated, display the modern Login View directly
@@ -654,6 +724,9 @@ export default function App() {
         onOpenNewPenerimaan={() => setIsNewPenerimaanModalOpen(true)}
         onOpenKopSettings={() => setIsKopSettingsOpen(true)}
         onOpenNumberingSettings={() => setIsNumberingSettingsOpen(true)}
+        onOpenUnifiedSettings={() => setIsUnifiedSettingsOpen(true)}
+        onExecuteBackup={handleExecuteFullBackup}
+        lastBackupTime={lastBackupTime}
         onOpenSchemaModal={() => setIsSchemaModalOpen(true)}
         schoolName={kopConfig.namaSekolah}
         currentUser={currentUser}
@@ -824,6 +897,23 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* MODAL: Pengaturan Terpadu Instansi (One-Page Unified Settings) */}
+      <UnifiedSettingsModal
+        isOpen={isUnifiedSettingsOpen}
+        onClose={() => setIsUnifiedSettingsOpen(false)}
+        kopConfig={kopConfig}
+        numberingConfig={numberingConfig}
+        pejabatList={pejabatList}
+        masterBarang={masterBarang}
+        transaksiList={transaksiList}
+        penerimaanList={penerimaanList}
+        kategoriList={kategoriList}
+        userList={userList}
+        currentUser={currentUser}
+        onSaveUnifiedSettings={handleSaveUnifiedSettings}
+        onShowToast={showToast}
+      />
 
       {/* MODAL: Pengaturan Kop Surat & Logo Sekolah */}
       <KopSettingsModal

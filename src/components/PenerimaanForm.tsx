@@ -13,6 +13,7 @@ import {
   Info,
   Layers,
   Loader2,
+  Lock,
   PackageCheck,
   PackagePlus,
   Plus,
@@ -96,29 +97,13 @@ export const PenerimaanForm: React.FC<Props> = ({
 
   // Kode Rekening Belanja helpers
   const rekeningList = useMemo(() => getUniqueKodeRekening(masterBarang), [masterBarang]);
-  const defaultRekening = rekeningList[0]?.kode || masterBarang[0]?.kodeRekening || '5.1.02.01.01.0024';
-  const defaultBarangList = getBarangByRekening(masterBarang, defaultRekening);
-  const initialBarang = defaultBarangList[0] || masterBarang[0];
 
-  // Items State
+  // Items State - Wajib KOSONG AWAL (0 baris/tanpa dummy data) jika transaksi baru
   const [items, setItems] = useState<ItemPenerimaan[]>(() => {
     if (initialData && initialData.items && initialData.items.length > 0) {
       return initialData.items;
     }
-    return [
-      {
-        barangId: initialBarang?.id || '',
-        namaBarang: initialBarang?.namaBarang || '',
-        kodeBarang: initialBarang?.kodeBarang || '',
-        nusp: initialBarang?.nusp || '',
-        kodeRekening: initialBarang?.kodeRekening || defaultRekening,
-        namaRekening: initialBarang?.namaRekening || rekeningList[0]?.nama || 'Belanja Alat Tulis Kantor',
-        satuan: initialBarang?.satuan || 'Rim',
-        jumlahMasuk: 10,
-        hargaSatuan: initialBarang?.hargaSatuan || 48500,
-        subtotal: 10 * (initialBarang?.hargaSatuan || 48500)
-      }
-    ];
+    return [];
   });
 
   // Modal Dialog States
@@ -140,27 +125,19 @@ export const PenerimaanForm: React.FC<Props> = ({
 
   // 1. Handle select Kode Rekening (Step 1 Dependent Dropdown)
   const handleSelectRekening = (index: number, newKodeRekening: string) => {
-    const matchingBarang = getBarangByRekening(masterBarang, newKodeRekening);
     const updated = [...items];
     const rekeningInfo = rekeningList.find((r) => r.kode === newKodeRekening);
-    const fallbackNamaRekening = rekeningInfo?.nama || 'Belanja Persediaan';
-    const qty = updated[index].jumlahMasuk || 1;
+    const fallbackNamaRekening = rekeningInfo?.nama || '';
 
-    if (matchingBarang.length > 0) {
-      const currentMatch = matchingBarang.find((b) => b.id === updated[index].barangId);
-      const targetBarang = currentMatch || matchingBarang[0];
+    // If changing rekening, check if current barang belongs to new rekening; otherwise reset barang selection
+    const currentBarang = masterBarang.find((b) => b.id === updated[index].barangId);
+    const doesMatch = currentBarang && currentBarang.kodeRekening === newKodeRekening;
 
+    if (doesMatch && currentBarang) {
       updated[index] = {
         ...updated[index],
         kodeRekening: newKodeRekening,
-        namaRekening: targetBarang.namaRekening || fallbackNamaRekening,
-        barangId: targetBarang.id,
-        namaBarang: targetBarang.namaBarang,
-        kodeBarang: targetBarang.kodeBarang,
-        nusp: targetBarang.nusp,
-        satuan: targetBarang.satuan,
-        hargaSatuan: targetBarang.hargaSatuan,
-        subtotal: qty * targetBarang.hargaSatuan
+        namaRekening: rekeningInfo?.nama || currentBarang.namaRekening
       };
     } else {
       updated[index] = {
@@ -180,103 +157,93 @@ export const PenerimaanForm: React.FC<Props> = ({
   };
 
   // 2. Handle select Barang (Step 2 Dependent Dropdown)
+  // Saat Nama Barang dipilih dari dropdown, kolom SATUAN dan HARGA SATUAN (RP) terisi otomatis dari Master Barang dan langsung dikunci (readonly).
   const handleSelectBarang = (index: number, barangId: string) => {
+    const updated = [...items];
+    if (!barangId) {
+      updated[index] = {
+        ...updated[index],
+        barangId: '',
+        namaBarang: '',
+        kodeBarang: '',
+        nusp: '',
+        satuan: '-',
+        hargaSatuan: 0,
+        subtotal: 0
+      };
+      setItems(updated);
+      return;
+    }
+
     const selected = masterBarang.find((b) => b.id === barangId);
     if (!selected) return;
 
-    const updated = [...items];
-    const qty = updated[index].jumlahMasuk || 1;
+    const qty = updated[index].jumlahMasuk || 0;
+    const price = selected.hargaSatuan || 0;
+
     updated[index] = {
       ...updated[index],
       barangId: selected.id,
       namaBarang: selected.namaBarang,
       kodeBarang: selected.kodeBarang,
-      nusp: selected.nusp,
-      kodeRekening: selected.kodeRekening,
-      namaRekening: selected.namaRekening,
-      satuan: selected.satuan,
-      hargaSatuan: selected.hargaSatuan,
-      subtotal: qty * selected.hargaSatuan
+      nusp: selected.nusp || '',
+      kodeRekening: selected.kodeRekening || updated[index].kodeRekening,
+      namaRekening: selected.namaRekening || updated[index].namaRekening,
+      satuan: selected.satuan || 'Unit',
+      hargaSatuan: price,
+      subtotal: qty * price
     };
     setItems(updated);
+    setErrorMsg(null);
   };
 
-  // 3. Quick Add Single Row
+  // 3. Quick Add Single Row (+ Baris Baru)
+  // Memunculkan 1 baris kosong dengan status dropdown belum terpilih (-- Pilih Barang --) dan JML MASUK = 0
   const handleAddQuickRow = () => {
-    const lastItemRekening = items[items.length - 1]?.kodeRekening;
-    const targetRekening =
-      lastItemRekening || rekeningList[0]?.kode || masterBarang[0]?.kodeRekening || '5.1.02.01.01.0024';
-    const matchingBarang = getBarangByRekening(masterBarang, targetRekening);
-    const b = matchingBarang[0] || masterBarang[0];
-
     const newItem: ItemPenerimaan = {
-      barangId: b?.id || '',
-      namaBarang: b?.namaBarang || '',
-      kodeBarang: b?.kodeBarang || '',
-      nusp: b?.nusp || '',
-      kodeRekening: b?.kodeRekening || targetRekening,
-      namaRekening:
-        b?.namaRekening ||
-        rekeningList.find((r) => r.kode === targetRekening)?.nama ||
-        'Belanja Alat Tulis Kantor',
-      satuan: b?.satuan || 'Pcs',
-      jumlahMasuk: 1,
-      hargaSatuan: b?.hargaSatuan || 0,
-      subtotal: 1 * (b?.hargaSatuan || 0)
+      barangId: '',
+      namaBarang: '',
+      kodeBarang: '',
+      nusp: '',
+      kodeRekening: '',
+      namaRekening: '',
+      satuan: '-',
+      jumlahMasuk: 0,
+      hargaSatuan: 0,
+      subtotal: 0
     };
-    setItems([...items, newItem]);
+    setItems((prev) => [...prev, newItem]);
     setErrorMsg(null);
   };
 
   // 4. Remove Single Row
   const handleRemoveRow = (index: number) => {
-    if (items.length <= 1) {
-      setErrorMsg('Tabel harus memiliki minimal 1 baris barang masuk.');
-      return;
-    }
-    setItems(items.filter((_, i) => i !== index));
+    setItems((prev) => prev.filter((_, i) => i !== index));
     setErrorMsg(null);
   };
 
-  // 5. Quantity Change (Interactive)
-  const handleQuantityChange = (index: number, qty: number) => {
+  // 5. Quantity Change (Interactive real-time calculation)
+  const handleQuantityChange = (index: number, rawInput: string) => {
+    const cleanDigits = rawInput.replace(/\D/g, '');
+    const validQty = cleanDigits ? parseInt(cleanDigits, 10) : 0;
     const updated = [...items];
-    const validQty = Math.max(1, qty || 1);
+    const price = updated[index].hargaSatuan || 0;
     updated[index] = {
       ...updated[index],
-      jumlahMasuk: validQty,
-      subtotal: validQty * (updated[index].hargaSatuan || 0)
+      jumlahMasuk: Math.max(0, validQty),
+      subtotal: Math.max(0, validQty) * price
     };
     setItems(updated);
   };
 
-  // 6. Price Change with Auto Currency Mask (Interactive)
-  const handlePriceChange = (index: number, rawInput: string) => {
-    const numericPrice = parseThousands(rawInput);
-    const updated = [...items];
-    updated[index] = {
-      ...updated[index],
-      hargaSatuan: numericPrice,
-      subtotal: (updated[index].jumlahMasuk || 1) * numericPrice
-    };
-    setItems(updated);
-  };
-
-  // 7. Batch Append from Pop-up Sub-Modal
+  // 6. Batch Append from Pop-up Sub-Modal
   const handleAddBatch = (batchItems: ItemPenerimaan[]) => {
     if (batchItems.length === 0) return;
 
-    // If only 1 placeholder row exists with 0 price and default qty, replace it
-    const isSingleDefaultRow =
-      items.length === 1 &&
-      (!items[0].barangId || items[0].hargaSatuan === 0);
+    // Filter out rows that are unselected / empty placeholders (barangId is empty)
+    const validExistingItems = items.filter((it) => it.barangId && it.barangId.trim() !== '');
 
-    if (isSingleDefaultRow) {
-      setItems(batchItems);
-    } else {
-      // Append new items
-      setItems((prev) => [...prev, ...batchItems]);
-    }
+    setItems([...validExistingItems, ...batchItems]);
     setErrorMsg(null);
   };
 
@@ -298,7 +265,7 @@ export const PenerimaanForm: React.FC<Props> = ({
       return;
     }
     if (items.length === 0) {
-      setErrorMsg('Minimal 1 barang harus dimasukkan ke dalam daftar.');
+      setErrorMsg('Belum ada barang ditambahkan. Silakan klik "+ Baris Baru" atau "+ Tambah Banyak Barang" untuk memulai.');
       return;
     }
 
@@ -306,15 +273,15 @@ export const PenerimaanForm: React.FC<Props> = ({
     for (let i = 0; i < items.length; i++) {
       const it = items[i];
       if (!it.barangId) {
-        setErrorMsg(`Baris ke-${i + 1}: Silakan pilih komoditas barang yang valid.`);
+        setErrorMsg(`Baris ke-${i + 1}: Silakan pilih Nama Barang terlebih dahulu.`);
         return;
       }
       if (!it.jumlahMasuk || it.jumlahMasuk <= 0) {
-        setErrorMsg(`Baris ke-${i + 1} (${it.namaBarang || 'Barang'}): Jumlah masuk tidak boleh 0 atau kosong.`);
+        setErrorMsg(`Baris ke-${i + 1} (${it.namaBarang}): Jumlah masuk harus lebih dari 0.`);
         return;
       }
       if (it.hargaSatuan === undefined || it.hargaSatuan <= 0) {
-        setErrorMsg(`Baris ke-${i + 1} (${it.namaBarang || 'Barang'}): Harga satuan tidak boleh 0 atau kosong.`);
+        setErrorMsg(`Baris ke-${i + 1} (${it.namaBarang}): Harga satuan pada master barang tidak valid (Rp 0).`);
         return;
       }
     }
@@ -534,126 +501,197 @@ export const PenerimaanForm: React.FC<Props> = ({
             <thead className="bg-slate-100 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
               <tr>
                 <th style={{ width: '4%' }} className="p-2 text-center">No</th>
-                <th style={{ width: '26%' }} className="p-2">Kategori / Kode Rekening</th>
-                <th style={{ width: '26%' }} className="p-2">Nama Barang</th>
+                <th style={{ width: '25%' }} className="p-2">Kategori / Kode Rekening</th>
+                <th style={{ width: '27%' }} className="p-2">Nama Barang</th>
                 <th style={{ width: '8%' }} className="p-2 text-center">Satuan</th>
                 <th style={{ width: '8%' }} className="p-2 text-center">Jml Masuk</th>
-                <th style={{ width: '12%' }} className="p-2 text-right">Harga Satuan (Rp)</th>
+                <th style={{ width: '12%' }} className="p-2 text-right">
+                  <div className="flex items-center justify-end gap-1" title="Harga satuan terisi otomatis dari Master Barang & terkunci (Read-Only)">
+                    <span>Harga Satuan (Rp)</span>
+                    <Lock className="w-3 h-3 text-slate-400" />
+                  </div>
+                </th>
                 <th style={{ width: '12%' }} className="p-2 text-right">Subtotal (Rp)</th>
                 <th style={{ width: '4%' }} className="p-2 text-center">Aksi</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
-              {items.map((it, idx) => {
-                const currentRowRekening = it.kodeRekening || rekeningList[0]?.kode || '5.1.02.01.01.0024';
-                const filteredBarangList = getBarangByRekening(masterBarang, currentRowRekening);
-
-                return (
-                  <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                    
-                    {/* No (4%) */}
-                    <td className="p-2 text-center font-medium text-slate-500">
-                      {idx + 1}
-                    </td>
-
-                    {/* Kategori / Kode Rekening (26%) */}
-                    <td className="p-2">
-                      <select
-                        value={currentRowRekening}
-                        onChange={(e) => handleSelectRekening(idx, e.target.value)}
-                        className="w-full border border-emerald-300 bg-emerald-50/30 hover:bg-emerald-50/60 rounded-md px-2 py-1 text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 focus:outline-hidden truncate"
-                        title={it.namaRekening}
-                      >
-                        {rekeningList.map((rek) => (
-                          <option key={rek.kode} value={rek.kode}>
-                            {rek.displayName} ({rek.count})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="text-[10px] text-emerald-800 font-medium truncate mt-0.5" title={it.namaRekening}>
-                        {it.namaRekening}
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center bg-slate-50/50">
+                    <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-3 py-6">
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 border border-emerald-200/80 flex items-center justify-center shadow-2xs">
+                        <Boxes className="w-6 h-6" />
                       </div>
-                    </td>
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Belum Ada Barang Ditambahkan
+                        </h4>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Daftar barang masuk masih kosong. Silakan klik tombol{' '}
+                          <strong className="text-slate-700 font-semibold">+ Baris Baru</strong> untuk input manual atau{' '}
+                          <strong className="text-emerald-700 font-semibold">+ Tambah Banyak Barang (Pop-up)</strong> untuk memilih dari katalog persediaan.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2.5 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleAddQuickRow}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-98"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-slate-600" />
+                          + Baris Baru
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsBatchModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-2xs transition-all ring-1 ring-emerald-700/30 cursor-pointer active:scale-98"
+                        >
+                          <Boxes className="w-3.5 h-3.5 text-emerald-200" />
+                          + Tambah Banyak Barang (Pop-up)
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                items.map((it, idx) => {
+                  const filteredBarangList = it.kodeRekening
+                    ? getBarangByRekening(masterBarang, it.kodeRekening)
+                    : masterBarang;
 
-                    {/* Nama Barang (26%) */}
-                    <td className="p-2">
-                      <select
-                        value={it.barangId}
-                        onChange={(e) => handleSelectBarang(idx, e.target.value)}
-                        disabled={filteredBarangList.length === 0}
-                        className="w-full border border-slate-300 rounded-md px-2 py-1 text-xs bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-medium disabled:bg-slate-100 disabled:text-slate-400 truncate"
-                        title={it.namaBarang}
-                      >
-                        {filteredBarangList.length === 0 ? (
-                          <option value="">-- Tidak ada barang pada rekening ini --</option>
-                        ) : (
-                          filteredBarangList.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.namaBarang} ({b.kodeBarang})
+                  return (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                      
+                      {/* No (4%) */}
+                      <td className="p-2 text-center font-medium text-slate-500">
+                        {idx + 1}
+                      </td>
+
+                      {/* Kategori / Kode Rekening (25%) */}
+                      <td className="p-2">
+                        <select
+                          value={it.kodeRekening}
+                          onChange={(e) => handleSelectRekening(idx, e.target.value)}
+                          className={`w-full border rounded-md px-2 py-1 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden truncate ${
+                            it.kodeRekening
+                              ? 'border-emerald-300 bg-emerald-50/30 text-slate-800 font-semibold'
+                              : 'border-slate-300 bg-white text-slate-500'
+                          }`}
+                          title={it.namaRekening || 'Pilih Kategori / Kode Rekening'}
+                        >
+                          <option value="">-- Pilih Kategori / Rekening --</option>
+                          {rekeningList.map((rek) => (
+                            <option key={rek.kode} value={rek.kode}>
+                              {rek.displayName} ({rek.count})
                             </option>
-                          ))
+                          ))}
+                        </select>
+                        {it.namaRekening && (
+                          <div className="text-[10px] text-emerald-800 font-medium truncate mt-0.5" title={it.namaRekening}>
+                            {it.namaRekening}
+                          </div>
                         )}
-                      </select>
-                      <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 font-mono">
-                        <span className="truncate">{it.kodeBarang}</span>
-                        {it.nusp && (
-                          <span className="bg-slate-100 text-slate-600 px-1 rounded text-[9px] shrink-0">
-                            NUSP: {it.nusp}
+                      </td>
+
+                      {/* Nama Barang (27%) */}
+                      <td className="p-2">
+                        <select
+                          value={it.barangId}
+                          onChange={(e) => handleSelectBarang(idx, e.target.value)}
+                          disabled={filteredBarangList.length === 0}
+                          className={`w-full border rounded-md px-2 py-1 text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden truncate ${
+                            it.barangId
+                              ? 'border-slate-300 bg-white text-slate-900 font-semibold'
+                              : 'border-amber-300 bg-amber-50/40 text-slate-500'
+                          }`}
+                          title={it.namaBarang || 'Pilih Nama Barang'}
+                        >
+                          <option value="">-- Pilih Barang --</option>
+                          {filteredBarangList.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.namaBarang} ({b.satuan}) - {formatRupiah(b.hargaSatuan)}
+                            </option>
+                          ))}
+                        </select>
+                        {it.barangId && (
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 font-mono">
+                            <span className="truncate">{it.kodeBarang}</span>
+                            {it.nusp && (
+                              <span className="bg-slate-100 text-slate-600 px-1 rounded text-[9px] shrink-0">
+                                NUSP: {it.nusp}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Satuan (8%) - Read Only */}
+                      <td className="p-2 text-center font-medium text-slate-700">
+                        <span className="inline-block px-1.5 py-0.5 bg-slate-100 rounded text-slate-800 text-[11px]">
+                          {it.satuan || '-'}
+                        </span>
+                      </td>
+
+                      {/* Jml Masuk (8%) - Default 0 & Real-time update */}
+                      <td className="p-2 text-center">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={it.jumlahMasuk > 0 ? it.jumlahMasuk : (it.jumlahMasuk === 0 ? '0' : '')}
+                          onChange={(e) => handleQuantityChange(idx, e.target.value)}
+                          onFocus={(e) => e.target.select()}
+                          placeholder="0"
+                          className={`w-full border rounded-md text-center py-1 font-bold text-xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden transition-all ${
+                            it.jumlahMasuk > 0
+                              ? 'border-emerald-500 bg-white text-emerald-900'
+                              : 'border-slate-300 bg-slate-50 text-slate-500'
+                          }`}
+                        />
+                      </td>
+
+                      {/* Harga Satuan (Rp) (12%) - Locked & Read-only from Master Barang */}
+                      <td className="p-2 text-right">
+                        <div className="relative flex items-center">
+                          <input
+                            type="text"
+                            readOnly
+                            tabIndex={-1}
+                            value={it.hargaSatuan > 0 ? formatThousands(it.hargaSatuan) : '0'}
+                            title="Harga satuan terisi otomatis dari Master Barang dan langsung dikunci (Read-Only)"
+                            className="w-full border border-slate-200 bg-slate-100/90 text-slate-700 rounded-md text-right pl-6 pr-2 py-1 font-mono font-semibold text-xs cursor-not-allowed select-none focus:outline-hidden"
+                          />
+                          <span className="absolute left-2 text-[10px] text-slate-400 font-mono pointer-events-none flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5 text-slate-400" />
                           </span>
+                        </div>
+                      </td>
+
+                      {/* Subtotal (Rp) (12%) - Real-time calculation */}
+                      <td className="p-2 text-right font-mono font-bold text-xs">
+                        {it.subtotal > 0 ? (
+                          <span className="text-emerald-900">{formatThousands(it.subtotal)}</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">0</span>
                         )}
-                      </div>
-                    </td>
+                      </td>
 
-                    {/* Satuan (8%) */}
-                    <td className="p-2 text-center font-medium text-slate-700">
-                      <span className="inline-block px-1.5 py-0.5 bg-slate-100 rounded text-slate-800 text-[11px]">
-                        {it.satuan || '-'}
-                      </span>
-                    </td>
+                      {/* Aksi (4%) - Tombol Hapus */}
+                      <td className="p-2 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRow(idx)}
+                          className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                          title="Hapus baris ini"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
 
-                    {/* Jml Masuk (8%) */}
-                    <td className="p-2 text-center">
-                      <input
-                        type="number"
-                        min="1"
-                        value={it.jumlahMasuk}
-                        onChange={(e) => handleQuantityChange(idx, parseInt(e.target.value, 10) || 1)}
-                        className="w-full border border-slate-300 rounded-md text-center py-1 font-bold text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-hidden"
-                      />
-                    </td>
-
-                    {/* Harga Satuan (Rp) (12%) - With Auto Currency Mask */}
-                    <td className="p-2 text-right">
-                      <input
-                        type="text"
-                        value={formatThousands(it.hargaSatuan)}
-                        onChange={(e) => handlePriceChange(idx, e.target.value)}
-                        placeholder="0"
-                        className="w-full border border-slate-300 rounded-md text-right px-2 py-1 font-mono font-semibold text-xs focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:outline-hidden"
-                      />
-                    </td>
-
-                    {/* Subtotal (Rp) (12%) - Real-time calculation */}
-                    <td className="p-2 text-right font-mono font-bold text-slate-900 text-xs">
-                      {formatThousands(it.subtotal)}
-                    </td>
-
-                    {/* Aksi (4%) - Tombol Hapus */}
-                    <td className="p-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRow(idx)}
-                        disabled={items.length <= 1}
-                        className="p-1 text-slate-400 hover:text-rose-600 disabled:opacity-30 disabled:pointer-events-none rounded transition-colors"
-                        title="Hapus baris ini"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-
-                  </tr>
-                );
-              })}
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

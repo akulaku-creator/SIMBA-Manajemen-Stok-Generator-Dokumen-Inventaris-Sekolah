@@ -355,15 +355,182 @@ function hitungMutasiBHPPerBulan(targetYear, targetMonth, kodeRekeningFilter) {
   };
 }
 
-// 5. Web App Endpoint: Kemudahan Integrasi Frontend ke Google Apps Script
+// 5. Backend Authentication, Sesi Aktif, Rate Limiting & Backup Data
+function verifikasiLogin(identifier, password, clientInfo) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheetUser = ss.getSheetByName('Master_User');
+  if (!sheetUser) {
+    sheetUser = ss.insertSheet('Master_User');
+    sheetUser.appendRow(['ID_User', 'Username', 'NIP', 'Email', 'Nama', 'Password_Hash', 'Role', 'Failed_Attempts', 'Lockout_Until']);
+    // Seed default admin
+    sheetUser.appendRow(['user-admin-1', 'admin', '19830514 200801 2 007', 'admin@sekolah.sch.id', 'Ratna Indrawati, S.Kom.', '123456', 'admin', 0, '']);
+  }
+
+  const data = sheetUser.getDataRange().getValues();
+  const cleanId = String(identifier || '').trim().toLowerCase();
+  const cleanDigits = String(identifier || '').replace(/\s+/g, '');
+  const now = new Date().getTime();
+
+  for (let i = 1; i < data.length; i++) {
+    const rowUser = String(data[i][1]).toLowerCase();
+    const rowNip = String(data[i][2]).replace(/\s+/g, '');
+    const rowEmail = String(data[i][3]).toLowerCase();
+    const isMatch = (rowUser === cleanId || rowNip === cleanDigits || rowEmail === cleanId);
+
+    if (isMatch) {
+      const failedAttempts = Number(data[i][7]) || 0;
+      const lockoutUntil = Number(data[i][8]) || 0;
+
+      // Cek apakah akun sedang terkunci (Rate Limiting)
+      if (lockoutUntil && now < lockoutUntil) {
+        const remainingSeconds = Math.ceil((lockoutUntil - now) / 1000);
+        catatAuditLog(data[i][0], rowUser, 'LOGIN_LOCKED', 'Gagal Login - Akun Terkunci Sementara (5 Menit)');
+        return { 
+          success: false, 
+          status: 'LOCKED', 
+          message: 'Akun dikunci sementara karena 5 kali salah password.', 
+          remainingSeconds: remainingSeconds 
+        };
+      }
+
+      // Verifikasi Password / PIN
+      const storedPass = String(data[i][5]);
+      if (String(password) === storedPass) {
+        // Reset counter kegagalan
+        sheetUser.getRange(i + 1, 8).setValue(0);
+        sheetUser.getRange(i + 1, 9).setValue('');
+
+        // Generate token sesi aktif (24 Jam)
+        const sessionToken = Utilities.getUuid();
+        simpanSesiAktif(sessionToken, data[i][0], data[i][6]);
+        catatAuditLog(data[i][0], rowUser, 'LOGIN_SUCCESS', 'Pengguna berhasil masuk ke sistem SIMBA');
+
+        return {
+          success: true,
+          token: sessionToken,
+          user: {
+            id: data[i][0],
+            username: data[i][1],
+            nip: data[i][2],
+            nama: data[i][4],
+            role: data[i][6]
+          }
+        };
+      } else {
+        // Password salah -> Tambah counter kegagalan
+        const newFailed = failedAttempts + 1;
+        sheetUser.getRange(i + 1, 8).setValue(newFailed);
+        
+        if (newFailed >= 5) {
+          const lockTime = now + (5 * 60 * 1000); // 5 menit
+          sheetUser.getRange(i + 1, 9).setValue(lockTime);
+          catatAuditLog(data[i][0], rowUser, 'LOGIN_LOCKOUT_TRIGGERED', 'Akun terkunci otomatis setelah 5 kali gagal login');
+          return { success: false, status: 'LOCKED', message: '5 kali salah password. Akun diblokir selama 5 menit.', remainingSeconds: 300 };
+        } else {
+          catatAuditLog(data[i][0], rowUser, 'LOGIN_FAILED', 'Percobaan masuk gagal: Password tidak valid');
+          return { success: false, status: 'FAILED', message: 'Kata sandi atau PIN salah. Sisa kesempatan: ' + (5 - newFailed) };
+        }
+      }
+    }
+  }
+
+  return { success: false, status: 'NOT_FOUND', message: 'Username, NIP, atau Email tidak ditemukan.' };
+}
+
+// 6. Pengecekan Sesi Aktif
+function cekSesiAktif(token) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheetSession = ss.getSheetByName('Active_Sessions');
+  if (!sheetSession) return { active: false };
+
+  const data = sheetSession.getDataRange().getValues();
+  const now = new Date().getTime();
+
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][0] === token) {
+      const expiry = Number(data[i][3]) || 0;
+      if (now < expiry) {
+        return { active: true, userId: data[i][1], role: data[i][2] };
+      } else {
+        sheetSession.deleteRow(i + 1);
+        return { active: false, message: 'Sesi telah kedaluwarsa.' };
+      }
+    }
+  }
+  return { active: false, message: 'Sesi tidak valid.' };
+}
+
+function simpanSesiAktif(token, userId, role) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheetSession = ss.getSheetByName('Active_Sessions');
+  if (!sheetSession) {
+    sheetSession = ss.insertSheet('Active_Sessions');
+    sheetSession.appendRow(['Token', 'User_ID', 'Role', 'Expiry_Timestamp']);
+  }
+  const expiry = new Date().getTime() + (24 * 60 * 60 * 1000); // 24 Jam
+  sheetSession.appendRow([token, userId, role, expiry]);
+}
+
+// 7. Backup Data Keseluruhan (Full Data Backup)
+function backupDataKeseluruhan() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = ss.getSheets();
+  const fullBackup = {
+    app: 'SIMBA Pro - Backup Terpadu',
+    exportedAt: new Date().toISOString(),
+    spreadsheetId: ss.getId(),
+    tables: {}
+  };
+
+  sheets.forEach(sh => {
+    const sheetName = sh.getName();
+    if (sheetName !== 'Active_Sessions') {
+      fullBackup.tables[sheetName] = sh.getDataRange().getValues();
+    }
+  });
+
+  return {
+    success: true,
+    filename: 'BACKUP_SIMBA_' + Utilities.formatDate(new Date(), 'Asia/Jakarta', 'yyyyMMdd_HHmmss') + '.json',
+    backup: fullBackup
+  };
+}
+
+function catatAuditLog(userId, username, action, details) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName('Audit_Log');
+  if (!sheet) {
+    sheet = ss.insertSheet('Audit_Log');
+    sheet.appendRow(['Timestamp', 'User_ID', 'Username', 'Action', 'Details']);
+  }
+  sheet.appendRow([new Date(), userId, username, action, details]);
+}
+
+// 8. Web App Router (doPost)
 function doPost(e) {
   try {
     const postData = JSON.parse(e.postData.contents);
-    if (postData.action === 'simpan_penyaluran') {
-      const result = simpanTransaksiPenyaluran(postData.data);
-      return ContentService.createTextOutput(JSON.stringify(result))
-        .setMimeType(ContentService.MimeType.JSON);
+    let result = {};
+
+    switch (postData.action) {
+      case 'login':
+        result = verifikasiLogin(postData.identifier, postData.password, postData.clientInfo);
+        break;
+      case 'cek_sesi':
+        result = cekSesiAktif(postData.token);
+        break;
+      case 'simpan_penyaluran':
+        result = simpanTransaksiPenyaluran(postData.data);
+        break;
+      case 'backup_data':
+        result = backupDataKeseluruhan();
+        break;
+      default:
+        result = { status: 'error', message: 'Aksi tidak dikenal.' };
     }
+
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: err.message }))
       .setMimeType(ContentService.MimeType.JSON);

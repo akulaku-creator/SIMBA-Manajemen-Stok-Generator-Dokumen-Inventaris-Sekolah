@@ -9,6 +9,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Clock, 
+  Eye,
   FileSpreadsheet, 
   FileStack, 
   FileText, 
@@ -93,6 +94,23 @@ export const DashboardStats: React.FC<Props> = ({
   const [yearTrx, setYearTrx] = useState('all');
   const [pageTrx, setPageTrx] = useState(1);
   const [pageSizeTrx, setPageSizeTrx] = useState(5);
+
+  // Popover / Modal Item Detail State
+  const [viewingDetailItems, setViewingDetailItems] = useState<{
+    title: string;
+    subtitle: string;
+    type: 'penyaluran' | 'penerimaan';
+    items: Array<{
+      namaBarang: string;
+      kodeBarang?: string;
+      nusp?: string;
+      satuan: string;
+      jumlah: number;
+      hargaSatuan?: number;
+      subtotal?: number;
+      keperluan?: string;
+    }>;
+  } | null>(null);
 
   const availableYearsTrx = useMemo(() => {
     const years = new Set<string>();
@@ -459,13 +477,13 @@ export const DashboardStats: React.FC<Props> = ({
           <table className="w-full text-xs text-left border-collapse">
             <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] tracking-wider border-b border-slate-200">
               <tr>
-                <th className="p-3.5 w-10 text-center">No</th>
-                <th className="p-3.5 w-28">Tanggal</th>
-                <th className="p-3.5 w-56">Unit Pemohon &amp; Keperluan</th>
-                <th className="p-3.5">Rincian Barang Disalurkan</th>
-                <th className="p-3.5 w-60">Rantai Nomor Dokumen</th>
-                <th className="p-3.5 w-24 text-center">Status</th>
-                <th className="p-3.5 w-28 text-center bg-slate-100/70 border-l border-slate-200">AKSI</th>
+                <th className="py-2.5 px-3 w-10 text-center">No</th>
+                <th className="py-2.5 px-3 w-28">Tanggal</th>
+                <th className="py-2.5 px-3 w-56">Unit Pemohon &amp; Keperluan</th>
+                <th className="py-2.5 px-3">Rincian Barang Disalurkan</th>
+                <th className="py-2.5 px-3 w-60">Rantai Nomor Dokumen</th>
+                <th className="py-2.5 px-3 w-24 text-center">Status</th>
+                <th className="py-2.5 px-3 w-28 text-center bg-slate-100/70 border-l border-slate-200">AKSI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -495,41 +513,62 @@ export const DashboardStats: React.FC<Props> = ({
               ) : (
                 pagedTransaksi.map((t, idx) => {
                   const globalIdx = (pageTrx - 1) * pageSizeTrx + idx + 1;
+                  const totalJenis = t.items.length;
+                  const totalVol = t.items.reduce((acc, it) => acc + (Number(it.usulanJumlah) || 0), 0);
+
                   return (
                     <tr 
                       key={t.id} 
                       className="hover:bg-blue-50/40 transition-colors group"
                     >
-                      <td className="p-3.5 text-center text-slate-400 font-medium">{globalIdx}</td>
-                      <td className="p-3.5 font-medium text-slate-800">
+                      <td className="py-2.5 px-3 text-center text-slate-400 font-medium">{globalIdx}</td>
+                      <td className="py-2.5 px-3 font-medium text-slate-800">
                         <div>{formatTanggalIndonesia(t.tanggal)}</div>
                         <span className="text-[10px] text-slate-400 font-mono">Reg #{t.nomorUrut}</span>
                       </td>
-                      <td className="p-3.5">
+                      <td className="py-2.5 px-3">
                         <div className="font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">
                           {t.unitPemohon}
                         </div>
                         <div className="text-[11px] text-slate-500 line-clamp-1 italic">{t.keperluanUmum}</div>
                       </td>
-                      <td className="p-3.5">
-                        <div className="flex flex-wrap gap-1 max-w-md">
-                          {t.items.map((it, i) => (
-                            <span 
-                              key={i} 
-                              className="bg-slate-100 border border-slate-200 text-slate-700 px-2 py-0.5 rounded text-[10px] font-medium"
-                            >
-                              {it.namaBarang} ({it.usulanJumlah} {it.satuan})
-                            </span>
-                          ))}
+                      <td className="py-2.5 px-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-semibold text-slate-800">
+                            {totalJenis} Jenis Barang <span className="text-slate-500 font-normal">(Total: {totalVol} Item)</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setViewingDetailItems({
+                              title: `Rincian Barang Disalurkan (${t.unitPemohon})`,
+                              subtitle: `Tanggal: ${formatTanggalIndonesia(t.tanggal)} • BAST: ${t.noBAST} • Reg #${t.nomorUrut}`,
+                              type: 'penyaluran',
+                              items: t.items.map(it => ({
+                                namaBarang: it.namaBarang,
+                                kodeBarang: it.kodeBarang,
+                                nusp: it.nusp,
+                                satuan: it.satuan,
+                                jumlah: it.usulanJumlah,
+                                hargaSatuan: it.hargaSatuan,
+                                subtotal: (Number(it.usulanJumlah) || 0) * (it.hargaSatuan || 0),
+                                keperluan: it.keperluan || t.keperluanUmum
+                              }))
+                            })}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded border border-blue-200 transition-colors cursor-pointer w-fit"
+                            title="Klik untuk melihat pop-over detail seluruh barang"
+                          >
+                            <Eye className="w-3 h-3 text-blue-600" />
+                            Lihat {totalJenis} Item...
+                          </button>
                         </div>
                       </td>
-                      <td className="p-3.5 font-mono text-[10px] text-slate-600 space-y-0.5">
+                      <td className="py-2.5 px-3 font-mono text-[10px] text-slate-600 space-y-0.5">
                         <div><span className="text-slate-400">NPB:</span> {t.noNPB}</div>
                         <div><span className="text-slate-400">SPB:</span> {t.noSPB}</div>
                         <div><span className="text-slate-400">SPPB:</span> {t.noSPPB}</div>
                         <div><span className="text-blue-600 font-semibold">BAST:</span> {t.noBAST}</div>
                       </td>
-                      <td className="p-3.5 text-center">
+                      <td className="py-2.5 px-3 text-center">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                           <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                           Siap Cetak
@@ -537,7 +576,7 @@ export const DashboardStats: React.FC<Props> = ({
                       </td>
 
                       {/* KOLOM AKSI (EDIT, CETAK QUICK-ACTION, HAPUS) */}
-                      <td className="p-3.5 text-center bg-slate-50/50 border-l border-slate-200">
+                      <td className="py-2.5 px-3 text-center bg-slate-50/50 border-l border-slate-200">
                         <div className="flex items-center justify-center gap-1.5">
                           
                           {/* Tombol Edit (Ikon Pensil) */}
@@ -786,13 +825,13 @@ export const DashboardStats: React.FC<Props> = ({
           <table className="w-full text-xs text-left border-collapse">
             <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] tracking-wider border-b border-slate-200">
               <tr>
-                <th className="p-3.5 w-10 text-center">No</th>
-                <th className="p-3.5 w-28">Tanggal</th>
-                <th className="p-3.5 w-44">No. Bukti / Faktur</th>
-                <th className="p-3.5 w-36">Sumber Dana</th>
-                <th className="p-3.5">Penyedia &amp; Rincian Barang</th>
-                <th className="p-3.5 w-32 text-right">Total Nilai Pembelian</th>
-                <th className="p-3.5 w-28 text-center bg-slate-100/70 border-l border-slate-200">AKSI</th>
+                <th className="py-2.5 px-3 w-10 text-center">No</th>
+                <th className="py-2.5 px-3 w-28">Tanggal</th>
+                <th className="py-2.5 px-3 w-44">No. Bukti / Faktur</th>
+                <th className="py-2.5 px-3 w-36">Sumber Dana</th>
+                <th className="py-2.5 px-3">Penyedia &amp; Rincian Barang</th>
+                <th className="py-2.5 px-3 w-32 text-right">Total Nilai Pembelian</th>
+                <th className="py-2.5 px-3 w-28 text-center bg-slate-100/70 border-l border-slate-200">AKSI</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -822,40 +861,62 @@ export const DashboardStats: React.FC<Props> = ({
               ) : (
                 pagedPenerimaan.map((p, idx) => {
                   const globalIdx = (pageRcv - 1) * pageSizeRcv + idx + 1;
+                  const totalRcvJenis = p.items.length;
+                  const totalRcvVol = p.items.reduce((acc, it) => acc + (Number(it.jumlahMasuk) || 0), 0);
+
                   return (
                     <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-3.5 text-center text-slate-400 font-medium">{globalIdx}</td>
-                      <td className="p-3.5 text-slate-800 font-medium">
+                      <td className="py-2.5 px-3 text-center text-slate-400 font-medium">{globalIdx}</td>
+                      <td className="py-2.5 px-3 text-slate-800 font-medium">
                         {formatTanggalIndonesia(p.tanggal)}
                       </td>
-                      <td className="p-3.5 font-mono text-slate-800 font-semibold">
+                      <td className="py-2.5 px-3 font-mono text-slate-800 font-semibold">
                         {p.noBukti}
                       </td>
-                      <td className="p-3.5">
+                      <td className="py-2.5 px-3">
                         <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded font-semibold text-[11px]">
                           {p.sumberDana}
                         </span>
                       </td>
-                      <td className="p-3.5">
+                      <td className="py-2.5 px-3">
                         <div className="font-semibold text-slate-900">{p.penyedia}</div>
-                        <div className="text-[11px] text-slate-500 line-clamp-1">{p.keterangan}</div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          {p.items.map((it, i) => (
-                            <span 
-                              key={i}
-                              className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200"
-                            >
-                              {it.namaBarang} (+{it.jumlahMasuk} {it.satuan})
-                            </span>
-                          ))}
+                        {p.keterangan && (
+                          <div className="text-[11px] text-slate-500 line-clamp-1 italic">{p.keterangan}</div>
+                        )}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 mt-1 flex-wrap">
+                          <span className="text-xs font-semibold text-slate-800">
+                            {totalRcvJenis} Jenis Barang <span className="text-slate-500 font-normal">(Total: {totalRcvVol} Item)</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setViewingDetailItems({
+                              title: `Rincian Penerimaan Barang (${p.penyedia})`,
+                              subtitle: `No. Bukti: ${p.noBukti} • Tanggal: ${formatTanggalIndonesia(p.tanggal)} • Sumber: ${p.sumberDana}`,
+                              type: 'penerimaan',
+                              items: p.items.map(it => ({
+                                namaBarang: it.namaBarang,
+                                kodeBarang: it.kodeBarang,
+                                nusp: it.nusp,
+                                satuan: it.satuan,
+                                jumlah: it.jumlahMasuk,
+                                hargaSatuan: it.hargaSatuan,
+                                subtotal: it.subtotal || ((Number(it.jumlahMasuk) || 0) * (it.hargaSatuan || 0))
+                              }))
+                            })}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 transition-colors cursor-pointer w-fit"
+                            title="Klik untuk melihat pop-over detail seluruh barang yang diterima"
+                          >
+                            <Eye className="w-3 h-3 text-emerald-600" />
+                            Lihat {totalRcvJenis} Item...
+                          </button>
                         </div>
                       </td>
-                      <td className="p-3.5 text-right font-mono font-bold text-emerald-700">
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
                         {formatRupiah(p.totalNilai)}
                       </td>
 
                       {/* KOLOM AKSI (EDIT, CETAK/LIHAT, HAPUS) */}
-                      <td className="p-3.5 text-center bg-slate-50/50 border-l border-slate-200">
+                      <td className="py-2.5 px-3 text-center bg-slate-50/50 border-l border-slate-200">
                         <div className="flex items-center justify-center gap-1.5">
                           
                           {/* Tombol Edit (Ikon Pensil) */}
@@ -972,6 +1033,96 @@ export const DashboardStats: React.FC<Props> = ({
         </div>
 
       </div>
+
+      {/* Pop-over / Modal Detail Rincian Barang */}
+      {viewingDetailItems && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="min-w-0 pr-2">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2 truncate">
+                  <Boxes className={`w-4 h-4 shrink-0 ${viewingDetailItems.type === 'penyaluran' ? 'text-blue-600' : 'text-emerald-600'}`} />
+                  <span className="truncate">{viewingDetailItems.title}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5 truncate">{viewingDetailItems.subtitle}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingDetailItems(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 rounded-lg transition-colors cursor-pointer shrink-0"
+                title="Tutup (ESC)"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1">
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
+                <table className="w-full text-xs text-left">
+                  <thead className="bg-slate-100 text-slate-700 font-semibold text-[11px] border-b border-slate-200 uppercase tracking-wider">
+                    <tr>
+                      <th className="py-2 px-3 text-center w-10">No</th>
+                      <th className="py-2 px-3">Nama Barang</th>
+                      <th className="py-2 px-3 text-center w-24">Jumlah</th>
+                      <th className="py-2 px-3 text-right w-28">Harga Satuan</th>
+                      <th className="py-2 px-3 text-right w-32">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {viewingDetailItems.items.map((it, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50/70">
+                        <td className="py-2 px-3 text-center text-slate-400">{idx + 1}</td>
+                        <td className="py-2 px-3">
+                          <div className="font-semibold text-slate-900">{it.namaBarang}</div>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            {it.kodeBarang ? `Kode: ${it.kodeBarang}` : ''} {it.nusp ? `• NUSP: ${it.nusp}` : ''}
+                          </div>
+                          {it.keperluan && (
+                            <div className="text-[10px] text-blue-600 italic mt-0.5">Keperluan: {it.keperluan}</div>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-center font-bold text-slate-800">
+                          {it.jumlah} {it.satuan}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono text-slate-600">
+                          {it.hargaSatuan ? formatRupiah(it.hargaSatuan) : '-'}
+                        </td>
+                        <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                          {it.subtotal ? formatRupiah(it.subtotal) : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
+              <span className="text-slate-600">
+                Total: <strong className="text-slate-900">{viewingDetailItems.items.length} jenis barang</strong> &bull;{' '}
+                <strong className="text-slate-900">
+                  {viewingDetailItems.items.reduce((s, it) => s + it.jumlah, 0)} item
+                </strong>
+                {viewingDetailItems.items.some(it => it.subtotal) && (
+                  <>
+                    {' '}&bull;{' '}
+                    <strong className="text-emerald-700 font-mono">
+                      {formatRupiah(viewingDetailItems.items.reduce((s, it) => s + (it.subtotal || 0), 0))}
+                    </strong>
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setViewingDetailItems(null)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition-colors cursor-pointer active:scale-98"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

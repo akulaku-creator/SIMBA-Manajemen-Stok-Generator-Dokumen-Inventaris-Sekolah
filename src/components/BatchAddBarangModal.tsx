@@ -2,15 +2,13 @@ import {
   Boxes,
   Check,
   CheckSquare,
-  Coins,
-  Filter,
   Package,
   PlusCircle,
   Search,
   Square,
   X
 } from 'lucide-react';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Barang, ItemPenerimaan } from '../types';
 import { formatRupiah } from '../utils/numberGenerator';
 import { getUniqueKodeRekening } from '../utils/rekeningHelper';
@@ -28,6 +26,14 @@ interface ItemDraft {
   hargaSatuan: number;
 }
 
+// Utility: format number into dot-separated thousands string (e.g. 15000000 -> 15.000.000)
+function formatThousands(value: number | string): string {
+  if (value === '' || value === undefined || value === null) return '0';
+  const digits = String(value).replace(/\D/g, '');
+  if (!digits) return '0';
+  return new Intl.NumberFormat('id-ID').format(parseInt(digits, 10));
+}
+
 export const BatchAddBarangModal: React.FC<Props> = ({
   isOpen,
   onClose,
@@ -39,6 +45,9 @@ export const BatchAddBarangModal: React.FC<Props> = ({
 
   // Draft state for each barang by ID
   const [drafts, setDrafts] = useState<Record<string, ItemDraft>>({});
+
+  // Refs to focus quantity input when row is checked
+  const qtyInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   // List of unique rekening for filtering
   const rekeningList = useMemo(() => getUniqueKodeRekening(masterBarang), [masterBarang]);
@@ -60,37 +69,54 @@ export const BatchAddBarangModal: React.FC<Props> = ({
     });
   }, [masterBarang, search, selectedRekening]);
 
-  // Helper for item draft
+  // Helper for item draft: Default bawaan seluruh baris JML MASUK = 0
   const getDraft = (b: Barang): ItemDraft => {
     if (drafts[b.id]) return drafts[b.id];
     return {
       selected: false,
-      jumlahMasuk: 1,
+      jumlahMasuk: 0,
       hargaSatuan: b.hargaSatuan || 0
     };
   };
 
+  // Interactive Auto-Toggle logic:
+  // - Saat dicentang: aktifkan input, set jumlahMasuk = 1, fokus ke input JML MASUK
+  // - Saat uncheck: kembalikan jumlahMasuk = 0, nonaktifkan input, kalkulasi ulang subtotal
   const handleToggleSelect = (b: Barang) => {
     const current = getDraft(b);
+    const willSelect = !current.selected;
+
     setDrafts((prev) => ({
       ...prev,
       [b.id]: {
-        ...current,
-        selected: !current.selected,
-        jumlahMasuk: current.jumlahMasuk > 0 ? current.jumlahMasuk : 1,
+        selected: willSelect,
+        jumlahMasuk: willSelect ? (current.jumlahMasuk > 0 ? current.jumlahMasuk : 1) : 0,
         hargaSatuan: current.hargaSatuan > 0 ? current.hargaSatuan : b.hargaSatuan || 0
       }
     }));
+
+    if (willSelect) {
+      setTimeout(() => {
+        const inputEl = qtyInputRefs.current[b.id];
+        if (inputEl) {
+          inputEl.focus();
+          inputEl.select();
+        }
+      }, 50);
+    }
   };
 
-  const handleQtyChange = (b: Barang, qty: number) => {
+  const handleQtyChange = (b: Barang, rawVal: string) => {
+    const cleanDigits = rawVal.replace(/\D/g, '');
+    const num = cleanDigits ? parseInt(cleanDigits, 10) : 0;
     const current = getDraft(b);
+
     setDrafts((prev) => ({
       ...prev,
       [b.id]: {
         ...current,
-        jumlahMasuk: Math.max(1, qty),
-        selected: true // Auto select if user inputs quantity
+        jumlahMasuk: Math.max(0, num),
+        selected: true // Row is active
       }
     }));
   };
@@ -99,6 +125,7 @@ export const BatchAddBarangModal: React.FC<Props> = ({
     const cleanDigits = rawStr.replace(/\D/g, '');
     const num = cleanDigits ? parseInt(cleanDigits, 10) : 0;
     const current = getDraft(b);
+
     setDrafts((prev) => ({
       ...prev,
       [b.id]: {
@@ -109,7 +136,8 @@ export const BatchAddBarangModal: React.FC<Props> = ({
     }));
   };
 
-  // Selected count & total calculation
+  // Selected count & total calculation:
+  // Hitung Total Dipilih HANYA untuk baris yang memiliki nilai JML MASUK > 0 DAN berstatus dicentang
   const selectedBarangItems = useMemo(() => {
     const result: { barang: Barang; draft: ItemDraft }[] = [];
     masterBarang.forEach((b) => {
@@ -122,6 +150,7 @@ export const BatchAddBarangModal: React.FC<Props> = ({
   }, [masterBarang, drafts]);
 
   const selectedCount = selectedBarangItems.length;
+
   const grandTotalPreview = useMemo(() => {
     return selectedBarangItems.reduce(
       (acc, item) => acc + item.draft.jumlahMasuk * item.draft.hargaSatuan,
@@ -134,7 +163,6 @@ export const BatchAddBarangModal: React.FC<Props> = ({
     filteredBarang.forEach((b) => {
       const cur = getDraft(b);
       nextDrafts[b.id] = {
-        ...cur,
         selected: true,
         jumlahMasuk: cur.jumlahMasuk > 0 ? cur.jumlahMasuk : 1,
         hargaSatuan: cur.hargaSatuan > 0 ? cur.hargaSatuan : b.hargaSatuan || 0
@@ -144,7 +172,16 @@ export const BatchAddBarangModal: React.FC<Props> = ({
   };
 
   const handleClearSelection = () => {
-    setDrafts({});
+    const nextDrafts = { ...drafts };
+    filteredBarang.forEach((b) => {
+      const cur = getDraft(b);
+      nextDrafts[b.id] = {
+        selected: false,
+        jumlahMasuk: 0,
+        hargaSatuan: cur.hargaSatuan || b.hargaSatuan || 0
+      };
+    });
+    setDrafts(nextDrafts);
   };
 
   const handleConfirmBatch = () => {
@@ -289,7 +326,27 @@ export const BatchAddBarangModal: React.FC<Props> = ({
               >
                 <thead className="bg-slate-100/90 text-slate-700 uppercase font-semibold text-[11px] border-b border-slate-200">
                   <tr>
-                    <th style={{ width: '5%' }} className="p-2.5 text-center">Pilih</th>
+                    <th style={{ width: '5%' }} className="p-2.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const allSelected = filteredBarang.length > 0 && filteredBarang.every((b) => getDraft(b).selected);
+                          if (allSelected) {
+                            handleClearSelection();
+                          } else {
+                            handleSelectAllFiltered();
+                          }
+                        }}
+                        className="p-1 rounded text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                        title="Pilih / Batalkan semua baris yang tampil"
+                      >
+                        {filteredBarang.length > 0 && filteredBarang.every((b) => getDraft(b).selected) ? (
+                          <CheckSquare className="w-4 h-4 text-emerald-600" />
+                        ) : (
+                          <Square className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+                        )}
+                      </button>
+                    </th>
                     <th style={{ width: '22%' }} className="p-2.5">Kategori / Rekening</th>
                     <th style={{ width: '28%' }} className="p-2.5">Nama &amp; Kode Barang</th>
                     <th style={{ width: '9%' }} className="p-2.5 text-center">Satuan / Stok</th>
@@ -301,13 +358,14 @@ export const BatchAddBarangModal: React.FC<Props> = ({
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {filteredBarang.map((b) => {
                     const draft = getDraft(b);
-                    const subtotal = draft.jumlahMasuk * draft.hargaSatuan;
+                    const isChecked = draft.selected;
+                    const subtotal = isChecked ? draft.jumlahMasuk * draft.hargaSatuan : 0;
 
                     return (
                       <tr
                         key={b.id}
                         className={`transition-colors ${
-                          draft.selected ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'hover:bg-slate-50'
+                          isChecked ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'bg-slate-50/30 hover:bg-slate-100/50 opacity-80'
                         }`}
                       >
                         {/* Checkbox */}
@@ -315,9 +373,10 @@ export const BatchAddBarangModal: React.FC<Props> = ({
                           <button
                             type="button"
                             onClick={() => handleToggleSelect(b)}
-                            className="p-1 rounded text-slate-400 hover:text-emerald-600 transition-colors"
+                            className="p-1 rounded text-slate-400 hover:text-emerald-600 transition-colors cursor-pointer"
+                            title={isChecked ? 'Lepas centang barang ini' : 'Centang dan masukkan kuantitas barang'}
                           >
-                            {draft.selected ? (
+                            {isChecked ? (
                               <CheckSquare className="w-4 h-4 text-emerald-600" />
                             ) : (
                               <Square className="w-4 h-4 text-slate-300 hover:text-slate-400" />
@@ -327,7 +386,7 @@ export const BatchAddBarangModal: React.FC<Props> = ({
 
                         {/* Rekening */}
                         <td className="p-2.5 truncate" title={`${b.kodeRekening} - ${b.namaRekening}`}>
-                          <div className="font-semibold text-slate-800 text-[11px] truncate">
+                          <div className={`font-semibold text-[11px] truncate ${isChecked ? 'text-slate-800' : 'text-slate-500'}`}>
                             {b.namaRekening}
                           </div>
                           <div className="font-mono text-[10px] text-slate-400 truncate">
@@ -337,7 +396,7 @@ export const BatchAddBarangModal: React.FC<Props> = ({
 
                         {/* Nama Barang & NUSP */}
                         <td className="p-2.5">
-                          <div className="font-semibold text-slate-900 leading-tight">
+                          <div className={`font-semibold leading-tight ${isChecked ? 'text-slate-900' : 'text-slate-600'}`}>
                             {b.namaBarang}
                           </div>
                           <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 font-mono">
@@ -352,7 +411,7 @@ export const BatchAddBarangModal: React.FC<Props> = ({
 
                         {/* Satuan & Stok Saat Ini */}
                         <td className="p-2.5 text-center">
-                          <span className="font-medium text-slate-700">{b.satuan}</span>
+                          <span className={`font-medium ${isChecked ? 'text-slate-700' : 'text-slate-400'}`}>{b.satuan}</span>
                           <div className="text-[10px] text-slate-400">
                             Stok: {b.stokSekarang}
                           </div>
@@ -361,39 +420,59 @@ export const BatchAddBarangModal: React.FC<Props> = ({
                         {/* Input Jumlah Masuk */}
                         <td className="p-2 text-center">
                           <input
-                            type="number"
-                            min="1"
-                            value={draft.jumlahMasuk}
-                            onChange={(e) => handleQtyChange(b, parseInt(e.target.value, 10) || 1)}
-                            className={`w-full py-1 text-center font-bold text-xs border rounded-md focus:ring-2 focus:ring-emerald-500 focus:outline-hidden ${
-                              draft.selected
-                                ? 'border-emerald-400 bg-white text-emerald-900 shadow-2xs'
-                                : 'border-slate-200 bg-slate-50 text-slate-600'
+                            ref={(el) => {
+                              qtyInputRefs.current[b.id] = el;
+                            }}
+                            type="text"
+                            inputMode="numeric"
+                            disabled={!isChecked}
+                            value={isChecked ? (draft.jumlahMasuk > 0 ? draft.jumlahMasuk : '0') : '0'}
+                            onChange={(e) => handleQtyChange(b, e.target.value)}
+                            onFocus={(e) => isChecked && e.target.select()}
+                            placeholder="0"
+                            className={`w-full py-1 text-center font-bold text-xs border rounded-md transition-all ${
+                              isChecked
+                                ? 'border-emerald-500 bg-white text-emerald-900 shadow-2xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden'
+                                : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed select-none'
                             }`}
                           />
                         </td>
 
                         {/* Input Harga Satuan with dot formatting */}
                         <td className="p-2 text-right">
-                          <input
-                            type="text"
-                            value={
-                              draft.hargaSatuan > 0
-                                ? new Intl.NumberFormat('id-ID').format(draft.hargaSatuan)
-                                : '0'
-                            }
-                            onChange={(e) => handlePriceChange(b, e.target.value)}
-                            className={`w-full py-1 px-2 text-right font-mono font-medium text-xs border rounded-md focus:ring-2 focus:ring-emerald-500 focus:outline-hidden ${
-                              draft.selected
-                                ? 'border-emerald-400 bg-white text-slate-900 shadow-2xs'
-                                : 'border-slate-200 bg-slate-50 text-slate-600'
-                            }`}
-                          />
+                          <div className="relative">
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              disabled={!isChecked}
+                              value={
+                                isChecked
+                                  ? formatThousands(draft.hargaSatuan)
+                                  : '0'
+                              }
+                              onChange={(e) => handlePriceChange(b, e.target.value)}
+                              onFocus={(e) => isChecked && e.target.select()}
+                              placeholder="0"
+                              className={`w-full py-1 px-2 text-right font-mono font-medium text-xs border rounded-md transition-all ${
+                                isChecked
+                                  ? 'border-emerald-400 bg-white text-slate-900 shadow-2xs focus:ring-2 focus:ring-emerald-500 focus:outline-hidden'
+                                  : 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed select-none'
+                              }`}
+                            />
+                          </div>
                         </td>
 
                         {/* Subtotal */}
-                        <td className="p-2.5 text-right font-mono font-bold text-slate-800 text-[11px]">
-                          {formatRupiah(subtotal).replace('Rp', '').trim()}
+                        <td className="p-2.5 text-right font-mono font-bold text-[11px]">
+                          {isChecked && subtotal > 0 ? (
+                            <span className="text-emerald-800">
+                              {formatThousands(subtotal)}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400 font-normal">
+                              0
+                            </span>
+                          )}
                         </td>
                       </tr>
                     );

@@ -180,15 +180,12 @@ export const TransactionForm: React.FC<Props> = ({
   // Rekening Belanja Helpers
   const rekeningList = useMemo(() => getUniqueKodeRekening(masterBarang), [masterBarang]);
   const defaultInitialRekening = rekeningList[0]?.kode || masterBarang[0]?.kodeRekening || '5.1.02.01.01.0024';
-  const defaultMatchingBarang = getBarangByRekening(masterBarang, defaultInitialRekening);
-  const defaultInitialBarang = defaultMatchingBarang[0] || masterBarang[0];
 
-  // 4. ITEMS STATE
+  // 4. ITEMS STATE - Default Empty State (0 baris saat modal dibuka baru)
   const [items, setItems] = useState<PengajuanItem[]>(() => {
     if (initialData && initialData.items && initialData.items.length > 0) {
       return initialData.items.map(it => {
         const mb = masterBarang.find(b => b.id === it.barangId);
-        // Dalam mode edit, stok efektif yang tersedia mencakup kuantitas yang sedang dipegang pada transaksi ini
         const effectiveStock = (mb?.stokSekarang ?? 0) + it.usulanJumlah;
         return {
           ...it,
@@ -196,23 +193,8 @@ export const TransactionForm: React.FC<Props> = ({
         };
       });
     }
-    return [
-      {
-        id: `item-${Date.now()}-1`,
-        barangId: defaultInitialBarang?.id || '',
-        kodeBarang: defaultInitialBarang?.kodeBarang || '',
-        nusp: defaultInitialBarang?.nusp || '',
-        kodeRekening: defaultInitialBarang?.kodeRekening || defaultInitialRekening,
-        namaRekening: defaultInitialBarang?.namaRekening || rekeningList[0]?.nama || 'Belanja Alat Tulis Kantor',
-        namaBarang: defaultInitialBarang?.namaBarang || '',
-        spesifikasi: defaultInitialBarang?.spesifikasi || '',
-        satuan: defaultInitialBarang?.satuan || 'Pcs',
-        sisaBarang: defaultInitialBarang?.stokSekarang || 0,
-        usulanJumlah: defaultInitialBarang?.stokSekarang && defaultInitialBarang.stokSekarang >= 5 ? 5 : 1,
-        hargaSatuan: defaultInitialBarang?.hargaSatuan || 0,
-        keperluan: keperluanUmum
-      }
-    ];
+    // Wajib dalam kondisi kosong (0 baris/tanpa dummy data)
+    return [];
   });
 
   // Modal Dialog States
@@ -229,7 +211,7 @@ export const TransactionForm: React.FC<Props> = ({
   const overStockItems = useMemo(() => {
     return items
       .map((it, idx) => ({ ...it, index: idx }))
-      .filter(it => it.usulanJumlah > it.sisaBarang);
+      .filter(it => it.barangId && it.usulanJumlah > it.sisaBarang);
   }, [items]);
 
   const hasOverStock = overStockItems.length > 0;
@@ -285,7 +267,7 @@ export const TransactionForm: React.FC<Props> = ({
         satuan: '-',
         sisaBarang: 0,
         hargaSatuan: 0,
-        usulanJumlah: 1
+        usulanJumlah: 0
       };
     }
     setItems(updated);
@@ -294,7 +276,22 @@ export const TransactionForm: React.FC<Props> = ({
 
   const handleSelectBarang = (index: number, barangId: string) => {
     const selected = masterBarang.find(b => b.id === barangId);
-    if (!selected) return;
+    if (!selected) {
+      const updated = [...items];
+      updated[index] = {
+        ...updated[index],
+        barangId: '',
+        namaBarang: '',
+        kodeBarang: '',
+        nusp: '',
+        satuan: '-',
+        sisaBarang: 0,
+        hargaSatuan: 0,
+        usulanJumlah: 0
+      };
+      setItems(updated);
+      return;
+    }
 
     const updated = [...items];
     updated[index] = {
@@ -330,27 +327,22 @@ export const TransactionForm: React.FC<Props> = ({
 
   // Quick Add Row (+ Baris Baru)
   const handleAddQuickRow = () => {
-    const lastItemRekening = items[items.length - 1]?.kodeRekening;
-    const targetRekening = lastItemRekening || rekeningList[0]?.kode || masterBarang[0]?.kodeRekening || '5.1.02.01.01.0024';
-    const matchingBarang = getBarangByRekening(masterBarang, targetRekening);
-    const defaultBarang = matchingBarang.find(b => b.stokSekarang > 0) || matchingBarang[0] || masterBarang[0];
-
     const newItem: PengajuanItem = {
       id: `item-${Date.now()}-${items.length + 1}`,
-      barangId: defaultBarang?.id || '',
-      kodeBarang: defaultBarang?.kodeBarang || '',
-      nusp: defaultBarang?.nusp || '',
-      kodeRekening: defaultBarang?.kodeRekening || targetRekening,
-      namaRekening: defaultBarang?.namaRekening || rekeningList.find(r => r.kode === targetRekening)?.nama || 'Belanja Alat Tulis Kantor',
-      namaBarang: defaultBarang?.namaBarang || '',
-      spesifikasi: defaultBarang?.spesifikasi || '',
-      satuan: defaultBarang?.satuan || 'Pcs',
-      sisaBarang: defaultBarang?.stokSekarang || 0,
-      usulanJumlah: defaultBarang?.stokSekarang && defaultBarang.stokSekarang >= 1 ? 1 : 1,
-      hargaSatuan: defaultBarang?.hargaSatuan || 0,
+      barangId: '',
+      kodeBarang: '',
+      nusp: '',
+      kodeRekening: '',
+      namaRekening: '',
+      namaBarang: '',
+      spesifikasi: '',
+      satuan: '-',
+      sisaBarang: 0,
+      usulanJumlah: 0,
+      hargaSatuan: 0,
       keperluan: keperluanUmum
     };
-    setItems([...items, newItem]);
+    setItems(prev => [...prev, newItem]);
     setErrorMsg(null);
   };
 
@@ -358,25 +350,14 @@ export const TransactionForm: React.FC<Props> = ({
   const handleAddBatch = (batchItems: PengajuanItem[]) => {
     if (!batchItems || batchItems.length === 0) return;
 
-    // Filter out initial empty row if not edited
-    let currentItems = [...items];
-    if (
-      currentItems.length === 1 &&
-      (!currentItems[0].namaBarang || currentItems[0].sisaBarang === 0)
-    ) {
-      currentItems = [];
-    }
-
-    setItems([...currentItems, ...batchItems]);
+    // Filter out rows that are unselected placeholders
+    const validExistingItems = items.filter(it => it.barangId && it.barangId.trim() !== '');
+    setItems([...validExistingItems, ...batchItems]);
     setErrorMsg(null);
   };
 
   // Remove Row
   const handleRemoveRow = (index: number) => {
-    if (items.length <= 1) {
-      setErrorMsg('Pengajuan minimal harus memiliki 1 item barang persediaan.');
-      return;
-    }
     const updated = items.filter((_, i) => i !== index);
     setItems(updated);
     setErrorMsg(null);
@@ -780,156 +761,201 @@ export const TransactionForm: React.FC<Props> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 bg-white">
-              {items.map((it, idx) => {
-                const currentRowRekening = it.kodeRekening || rekeningList[0]?.kode || '5.1.02.01.01.0024';
-                const filteredBarangList = getBarangByRekening(masterBarang, currentRowRekening);
-                const isOverStock = it.usulanJumlah > it.sisaBarang;
-                const isStokEmpty = it.sisaBarang <= 0;
-                const rowSubtotal = (Number(it.usulanJumlah) || 0) * (it.hargaSatuan || 0);
-
-                return (
-                  <tr
-                    key={it.id || idx}
-                    className={`transition-colors ${
-                      isOverStock
-                        ? 'bg-rose-50/70 hover:bg-rose-50'
-                        : 'hover:bg-slate-50/80'
-                    }`}
-                  >
-                    {/* No (4%) */}
-                    <td className="p-2 text-center font-medium text-slate-500">
-                      {idx + 1}
-                    </td>
-
-                    {/* Kategori / Kode Rekening (24%) */}
-                    <td className="p-2 overflow-hidden">
-                      <select
-                        value={currentRowRekening}
-                        onChange={(e) => handleSelectRekening(idx, e.target.value)}
-                        className="w-full border border-blue-300 bg-blue-50/40 hover:bg-blue-50/80 rounded-md px-1.5 py-1 text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden truncate"
-                        title={it.namaRekening}
-                      >
-                        {rekeningList.map((rek) => (
-                          <option key={rek.kode} value={rek.kode}>
-                            {rek.displayName} ({rek.count})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="text-[10px] text-blue-700 font-medium truncate mt-0.5" title={it.namaRekening}>
-                        {it.namaRekening}
+              {items.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="p-8 text-center bg-slate-50/50">
+                    <div className="flex flex-col items-center justify-center max-w-md mx-auto space-y-3 py-6">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 border border-blue-200/80 flex items-center justify-center shadow-2xs">
+                        <Boxes className="w-6 h-6" />
                       </div>
-                    </td>
+                      <div className="space-y-1">
+                        <h4 className="text-sm font-bold text-slate-800">
+                          Belum Ada Barang Ditambahkan
+                        </h4>
+                        <p className="text-xs text-slate-500 leading-relaxed">
+                          Belum ada barang ditambahkan. Klik <strong className="text-slate-700 font-semibold">+ Baris Baru</strong> atau <strong className="text-blue-700 font-semibold">+ Tambah Banyak Barang (Pop-up)</strong> untuk memulai.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2.5 pt-2">
+                        <button
+                          type="button"
+                          onClick={handleAddQuickRow}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg shadow-2xs transition-all cursor-pointer active:scale-98"
+                        >
+                          <Plus className="w-3.5 h-3.5 text-slate-600" />
+                          + Baris Baru
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsBatchModalOpen(true)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-2xs transition-all ring-1 ring-blue-700/30 cursor-pointer active:scale-98"
+                        >
+                          <Boxes className="w-3.5 h-3.5 text-blue-200" />
+                          + Tambah Banyak Barang (Pop-up)
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                items.map((it, idx) => {
+                  const currentRowRekening = it.kodeRekening || rekeningList[0]?.kode || '5.1.02.01.01.0024';
+                  const filteredBarangList = getBarangByRekening(masterBarang, currentRowRekening);
+                  const isOverStock = it.barangId ? it.usulanJumlah > it.sisaBarang : false;
+                  const isStokEmpty = it.barangId ? it.sisaBarang <= 0 : false;
+                  const rowSubtotal = (Number(it.usulanJumlah) || 0) * (it.hargaSatuan || 0);
 
-                    {/* Nama Barang & Kode/NUSP (24%) */}
-                    <td className="p-2 overflow-hidden">
-                      <select
-                        value={it.barangId}
-                        onChange={(e) => handleSelectBarang(idx, e.target.value)}
-                        disabled={filteredBarangList.length === 0}
-                        className="w-full border border-slate-300 rounded-md px-1.5 py-1 text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium disabled:bg-slate-100 disabled:text-slate-400 truncate"
-                        title={it.namaBarang}
-                      >
-                        {filteredBarangList.length === 0 ? (
-                          <option value="">-- Tidak ada barang --</option>
-                        ) : (
-                          filteredBarangList.map((b) => (
-                            <option key={b.id} value={b.id}>
-                              {b.namaBarang} (Stok: {b.stokSekarang} {b.satuan})
+                  return (
+                    <tr
+                      key={it.id || idx}
+                      className={`transition-colors ${
+                        isOverStock
+                          ? 'bg-rose-50/70 hover:bg-rose-50'
+                          : 'hover:bg-slate-50/80'
+                      }`}
+                    >
+                      {/* No (4%) */}
+                      <td className="p-2 text-center font-medium text-slate-500">
+                        {idx + 1}
+                      </td>
+
+                      {/* Kategori / Kode Rekening (24%) */}
+                      <td className="p-2 overflow-hidden">
+                        <select
+                          value={currentRowRekening}
+                          onChange={(e) => handleSelectRekening(idx, e.target.value)}
+                          className="w-full border border-blue-300 bg-blue-50/40 hover:bg-blue-50/80 rounded-md px-1.5 py-1 text-xs text-slate-800 font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-hidden truncate"
+                          title={it.namaRekening}
+                        >
+                          {rekeningList.map((rek) => (
+                            <option key={rek.kode} value={rek.kode}>
+                              {rek.displayName} ({rek.count})
                             </option>
-                          ))
-                        )}
-                      </select>
-                      <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 truncate">
-                        <span className="font-mono text-slate-600">Kode: {it.kodeBarang || '-'}</span>
-                        <span>&bull;</span>
-                        <span className="font-mono text-slate-400">NUSP: {it.nusp || '-'}</span>
-                      </div>
-                      {it.keperluan && it.keperluan !== keperluanUmum && (
-                        <div className="text-[9px] text-indigo-600 font-medium truncate mt-0.5" title={it.keperluan}>
-                          Keperluan: {it.keperluan}
+                          ))}
+                        </select>
+                        <div className="text-[10px] text-blue-700 font-medium truncate mt-0.5" title={it.namaRekening}>
+                          {it.namaRekening || 'Pilih Rekening'}
                         </div>
-                      )}
-                    </td>
+                      </td>
 
-                    {/* Satuan (7%) */}
-                    <td className="p-2 text-center text-slate-700 font-medium overflow-hidden">
-                      <span className="truncate block">{it.satuan}</span>
-                    </td>
-
-                    {/* Sisa Stok (8% - Indikator warna: Merah jika 0, Hijau jika tersedia) */}
-                    <td className="p-2 text-center overflow-hidden">
-                      {isStokEmpty ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                          0
-                        </span>
-                      ) : it.sisaBarang <= 5 ? (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                          {it.sisaBarang}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          {it.sisaBarang}
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Jml Diminta (8%) */}
-                    <td className="p-2 text-center overflow-hidden">
-                      <input
-                        type="number"
-                        min="1"
-                        max={it.sisaBarang > 0 ? it.sisaBarang : 1}
-                        value={it.usulanJumlah}
-                        onChange={(e) => handleItemFieldChange(idx, 'usulanJumlah', parseInt(e.target.value, 10) || 0)}
-                        className={`w-full text-center border rounded-md py-1 px-1 font-bold text-xs ${
-                          isOverStock
-                            ? 'border-rose-500 bg-rose-100 text-rose-800 ring-1 ring-rose-500 focus:outline-hidden'
-                            : 'border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden'
-                        }`}
-                        title={isOverStock ? `Melebihi sisa stok gudang (${it.sisaBarang})!` : 'Jumlah yang diminta'}
-                      />
-                      {isOverStock && (
-                        <span className="block text-[8px] text-rose-600 font-bold mt-0.5 leading-none truncate">
-                          &gt; Stok ({it.sisaBarang})
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Harga Satuan (Rp) (10%) */}
-                    <td className="p-2 text-right font-mono text-[11px] text-slate-700 overflow-hidden truncate">
-                      {formatRupiah(it.hargaSatuan)}
-                    </td>
-
-                    {/* Subtotal (Rp) (11% - hasil kalkulasi Jml x Harga) */}
-                    <td className="p-2 text-right font-mono font-bold text-slate-900 overflow-hidden truncate">
-                      {formatRupiah(rowSubtotal)}
-                    </td>
-
-                    {/* Aksi (4% - Tombol Hapus / Edit) */}
-                    <td className="p-2 text-center overflow-hidden">
-                      <div className="flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditKeperluan(idx)}
-                          className="text-slate-400 hover:text-blue-600 p-1 rounded-md hover:bg-blue-50 transition-colors"
-                          title="Edit keperluan khusus baris ini"
+                      {/* Nama Barang & Kode/NUSP (24%) */}
+                      <td className="p-2 overflow-hidden">
+                        <select
+                          value={it.barangId}
+                          onChange={(e) => handleSelectBarang(idx, e.target.value)}
+                          disabled={filteredBarangList.length === 0}
+                          className={`w-full border rounded-md px-1.5 py-1 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-medium disabled:bg-slate-100 disabled:text-slate-400 truncate ${
+                            !it.barangId ? 'border-amber-400 bg-amber-50/50 text-amber-900 font-semibold' : 'border-slate-300 bg-white text-slate-900'
+                          }`}
+                          title={it.namaBarang || '-- Pilih Barang --'}
                         >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveRow(idx)}
-                          disabled={items.length <= 1}
-                          className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors disabled:opacity-30 disabled:pointer-events-none"
-                          title="Hapus baris barang ini"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          {!it.barangId && (
+                            <option value="">-- Pilih Barang --</option>
+                          )}
+                          {filteredBarangList.length === 0 ? (
+                            <option value="">-- Tidak ada barang --</option>
+                          ) : (
+                            filteredBarangList.map((b) => (
+                              <option key={b.id} value={b.id}>
+                                {b.namaBarang} (Stok: {b.stokSekarang} {b.satuan})
+                              </option>
+                            ))
+                          )}
+                        </select>
+                        <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 truncate">
+                          <span className="font-mono text-slate-600">Kode: {it.kodeBarang || '-'}</span>
+                          <span>&bull;</span>
+                          <span className="font-mono text-slate-400">NUSP: {it.nusp || '-'}</span>
+                        </div>
+                        {it.keperluan && it.keperluan !== keperluanUmum && (
+                          <div className="text-[9px] text-indigo-600 font-medium truncate mt-0.5" title={it.keperluan}>
+                            Keperluan: {it.keperluan}
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Satuan (7%) */}
+                      <td className="p-2 text-center text-slate-700 font-medium overflow-hidden">
+                        <span className="truncate block">{it.satuan}</span>
+                      </td>
+
+                      {/* Sisa Stok (8% - Indikator warna: Merah jika 0, Hijau jika tersedia) */}
+                      <td className="p-2 text-center overflow-hidden">
+                        {!it.barangId ? (
+                          <span className="text-slate-400 font-mono text-[11px]">-</span>
+                        ) : isStokEmpty ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                            0
+                          </span>
+                        ) : it.sisaBarang <= 5 ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                            {it.sisaBarang}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            {it.sisaBarang}
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Jml Diminta (8%) */}
+                      <td className="p-2 text-center overflow-hidden">
+                        <input
+                          type="number"
+                          min="1"
+                          max={it.sisaBarang > 0 ? it.sisaBarang : 1}
+                          disabled={!it.barangId}
+                          value={it.usulanJumlah}
+                          onChange={(e) => handleItemFieldChange(idx, 'usulanJumlah', parseInt(e.target.value, 10) || 0)}
+                          className={`w-full text-center border rounded-md py-1 px-1 font-bold text-xs disabled:bg-slate-100 disabled:text-slate-400 ${
+                            isOverStock
+                              ? 'border-rose-500 bg-rose-100 text-rose-800 ring-1 ring-rose-500 focus:outline-hidden'
+                              : 'border-slate-300 bg-white text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden'
+                          }`}
+                          title={isOverStock ? `Melebihi sisa stok gudang (${it.sisaBarang})!` : 'Jumlah yang diminta'}
+                        />
+                        {isOverStock && (
+                          <span className="block text-[8px] text-rose-600 font-bold mt-0.5 leading-none truncate">
+                            &gt; Stok ({it.sisaBarang})
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Harga Satuan (Rp) (10%) */}
+                      <td className="p-2 text-right font-mono text-[11px] text-slate-700 overflow-hidden truncate">
+                        {formatRupiah(it.hargaSatuan)}
+                      </td>
+
+                      {/* Subtotal (Rp) (11% - hasil kalkulasi Jml x Harga) */}
+                      <td className="p-2 text-right font-mono font-bold text-slate-900 overflow-hidden truncate">
+                        {formatRupiah(rowSubtotal)}
+                      </td>
+
+                      {/* Aksi (4% - Tombol Hapus / Edit) */}
+                      <td className="p-2 text-center overflow-hidden">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditKeperluan(idx)}
+                            className="text-slate-400 hover:text-blue-600 p-1 rounded-md hover:bg-blue-50 transition-colors"
+                            title="Edit keperluan khusus baris ini"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRow(idx)}
+                            className="text-slate-400 hover:text-rose-600 p-1 rounded-md hover:bg-rose-50 transition-colors"
+                            title="Hapus baris barang ini"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -938,7 +964,7 @@ export const TransactionForm: React.FC<Props> = ({
         <div className="mt-2.5 bg-slate-50 border border-slate-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-700">
           <div className="flex items-center gap-4 flex-wrap">
             <span>
-              Total Ragam: <strong className="text-slate-900 font-bold">{totalItemCount} jenis barang</strong>
+              Total Item: <strong className="text-slate-900 font-bold">{totalItemCount} barang</strong>
             </span>
             <span>&bull;</span>
             <span>
