@@ -21,7 +21,8 @@ import {
   UserCog, 
   Users,
   Database,
-  Download
+  Download,
+  Github
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { AppUser, PaperSize, UserRole } from '../types';
@@ -35,7 +36,7 @@ interface Props {
   onOpenNewPenerimaan: () => void;
   onOpenKopSettings: () => void;
   onOpenNumberingSettings: () => void;
-  onOpenUnifiedSettings?: () => void;
+  onOpenUnifiedSettings?: (tab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger') => void;
   onExecuteBackup?: () => void;
   lastBackupTime?: string | null;
   onOpenSchemaModal: () => void;
@@ -256,9 +257,10 @@ export const Navbar: React.FC<Props> = ({
                 {/* Tombol Pemusatan Form Pengaturan Instansi */}
                 {onOpenUnifiedSettings ? (
                   <button
-                    onClick={onOpenUnifiedSettings}
+                    type="button"
+                    onClick={() => onOpenUnifiedSettings('all')}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 transition-colors shadow-2xs cursor-pointer"
-                    title="Buka Form Pengaturan Terpadu Instansi (Kop Surat, Format Penomoran, Master Pejabat, Backup &amp; Danger Zone)"
+                    title="Buka Form Pengaturan Terpadu Instansi (Kop Surat, Format Penomoran, Master Pejabat, Backup & Danger Zone)"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
                     <span className="hidden lg:inline text-xs font-semibold">Pengaturan</span>
@@ -431,17 +433,30 @@ export const Navbar: React.FC<Props> = ({
                   {isAdmin && (
                     <div className="pt-1 border-t border-slate-800 space-y-0.5">
                       {onOpenUnifiedSettings && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsRoleDropdownOpen(false);
-                            onOpenUnifiedSettings();
-                          }}
-                          className="w-full text-left px-3 py-1.5 text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 font-medium"
-                        >
-                          <SlidersHorizontal className="w-4 h-4 text-blue-400" />
-                          <span>Pengaturan Terpadu Instansi</span>
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsRoleDropdownOpen(false);
+                              onOpenUnifiedSettings('all');
+                            }}
+                            className="w-full text-left px-3 py-1.5 text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <SlidersHorizontal className="w-4 h-4 text-blue-400" />
+                            <span>Pengaturan Terpadu Instansi</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsRoleDropdownOpen(false);
+                              onOpenUnifiedSettings('github');
+                            }}
+                            className="w-full text-left px-3 py-1.5 text-slate-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <Github className="w-4 h-4 text-slate-400" />
+                            <span>Sinkronisasi GitHub / Developer</span>
+                          </button>
+                        </>
                       )}
 
                       {onExecuteBackup && (

@@ -137,6 +137,7 @@ export default function App() {
   const [isKopSettingsOpen, setIsKopSettingsOpen] = useState(false);
   const [isNumberingSettingsOpen, setIsNumberingSettingsOpen] = useState(false);
   const [isUnifiedSettingsOpen, setIsUnifiedSettingsOpen] = useState(false);
+  const [unifiedSettingsTab, setUnifiedSettingsTab] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger'>('all');
   const [lastBackupTime, setLastBackupTime] = useState<string | null>(getLastBackupTime());
   const [isSchemaModalOpen, setIsSchemaModalOpen] = useState(false);
   const [isResetTransaksiOpen, setIsResetTransaksiOpen] = useState(false);
@@ -845,7 +846,16 @@ export default function App() {
         onOpenNewPenerimaan={() => setIsNewPenerimaanModalOpen(true)}
         onOpenKopSettings={() => setIsKopSettingsOpen(true)}
         onOpenNumberingSettings={() => setIsNumberingSettingsOpen(true)}
-        onOpenUnifiedSettings={() => setIsUnifiedSettingsOpen(true)}
+        onOpenUnifiedSettings={(tab) => {
+          const validTabs: Array<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger'> = [
+            'all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger'
+          ];
+          const targetTab = typeof tab === 'string' && (validTabs as string[]).includes(tab)
+            ? (tab as 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger')
+            : 'all';
+          setUnifiedSettingsTab(targetTab);
+          setIsUnifiedSettingsOpen(true);
+        }}
         onExecuteBackup={handleExecuteFullBackup}
         lastBackupTime={lastBackupTime}
         onOpenSchemaModal={() => setIsSchemaModalOpen(true)}
@@ -1028,6 +1038,7 @@ export default function App() {
       <UnifiedSettingsModal
         isOpen={isUnifiedSettingsOpen}
         onClose={() => setIsUnifiedSettingsOpen(false)}
+        initialTab={unifiedSettingsTab}
         kopConfig={kopConfig}
         numberingConfig={numberingConfig}
         pejabatList={pejabatList}

@@ -89,7 +89,7 @@ export const ALL_DOCUMENTS_CATALOG: DocumentItemConfig[] = [
     id: 'bast',
     category: 'operasional',
     code: 'DOC-BAST',
-    title: '4. Berita Acara Serah Terima (BAST Transaksi)',
+    title: '4. Berita Acara Serah Terima (BAST Penyaluran)',
     description: 'Bukti serah terima fisik barang persediaan kepada penerima/pemohon dengan tanda tangan bermaterai/sah.',
     orientation: 'Portrait',
     paperSize: 'A4 Portrait',

@@ -30,12 +30,18 @@ import {
   KeyRound,
   Lock,
   RefreshCw,
-  ArrowRight
+  ArrowRight,
+  Github,
+  GitBranch,
+  Code2,
+  ExternalLink,
+  Send
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
   AppUser, 
   Barang, 
+  GitHubSyncConfig,
   KategoriBarangItem, 
   KopSuratConfig, 
   NumberingPatternConfig, 
@@ -46,10 +52,20 @@ import {
 import { logAuditEvent } from '../utils/auditLogger';
 import { 
   BackupValidationResult,
+  createBackupPayload,
   exportFullDatabase, 
   getLastBackupTime, 
   validateBackupFile 
 } from '../utils/backupHelper';
+import { 
+  DEFAULT_GITHUB_CONFIG,
+  getStoredGitHubConfig,
+  GitHubPushResult,
+  GitHubTestResult,
+  pushUpdateToGitHub,
+  saveStoredGitHubConfig,
+  testGitHubConnection 
+} from '../utils/githubSyncHelper';
 import { 
   calculateNextDocumentCounters, 
   deriveSchoolCode, 
@@ -60,6 +76,7 @@ import { KopSuratView } from './KopSuratView';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  initialTab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger';
   kopConfig: KopSuratConfig;
   numberingConfig: NumberingPatternConfig;
   pejabatList: Pejabat[];
@@ -91,9 +108,20 @@ interface Props {
   onOpenResetTransaksi?: () => void;
 }
 
+const VALID_SETTING_SECTIONS = ['all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger'] as const;
+type SettingSection = typeof VALID_SETTING_SECTIONS[number];
+
+function resolveSettingTab(tab: unknown): SettingSection {
+  if (typeof tab === 'string' && (VALID_SETTING_SECTIONS as readonly string[]).includes(tab)) {
+    return tab as SettingSection;
+  }
+  return 'all';
+}
+
 export const UnifiedSettingsModal: React.FC<Props> = ({
   isOpen,
   onClose,
+  initialTab,
   kopConfig,
   numberingConfig,
   pejabatList,
@@ -109,7 +137,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   onOpenResetTransaksi
 }) => {
   // Navigation tabs within settings
-  const [activeSection, setActiveSection] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'danger'>('all');
+  const [activeSection, setActiveSection] = useState<SettingSection>(() => resolveSettingTab(initialTab));
 
   // Local Form States
   const [kopData, setKopData] = useState<KopSuratConfig>({ ...kopConfig });
@@ -133,9 +161,21 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreSuccessMsg, setRestoreSuccessMsg] = useState<string | null>(null);
 
+  // GitHub Sync States
+  const [githubConfig, setGithubConfig] = useState<GitHubSyncConfig>(getStoredGitHubConfig());
+  const [showGithubToken, setShowGithubToken] = useState(false);
+  const [isTestingGitHub, setIsTestingGitHub] = useState(false);
+  const [gitHubTestResult, setGitHubTestResult] = useState<GitHubTestResult | null>(null);
+  const [isPushingGitHub, setIsPushingGitHub] = useState(false);
+  const [gitHubPushResult, setGitHubPushResult] = useState<GitHubPushResult | null>(null);
+  const [customCommitMessage, setCustomCommitMessage] = useState('');
+
   // Sync state whenever modal opens or external configs change
   useEffect(() => {
     if (isOpen) {
+      if (initialTab) {
+        setActiveSection(resolveSettingTab(initialTab));
+      }
       setKopData({ ...kopConfig });
       setNumberingData({ ...numberingConfig });
       setPejabatData([...pejabatList]);
@@ -148,8 +188,16 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
       setRestoreSuccessMsg(null);
       setIsRestoring(false);
       setIsValidatingFile(false);
+
+      // GitHub fresh sync
+      setGithubConfig(getStoredGitHubConfig());
+      setGitHubTestResult(null);
+      setGitHubPushResult(null);
+      setIsTestingGitHub(false);
+      setIsPushingGitHub(false);
+      setCustomCommitMessage('');
     }
-  }, [isOpen, kopConfig, numberingConfig, pejabatList]);
+  }, [isOpen, initialTab, kopConfig, numberingConfig, pejabatList]);
 
   // Derived Document Counters for Live Preview
   const detectedCounters = useMemo(() => {
@@ -421,15 +469,131 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
     }, 600);
   };
 
+  // Handler Simpan & Uji Koneksi GitHub
+  const handleSaveAndTestGitHub = async () => {
+    setIsTestingGitHub(true);
+    setGitHubTestResult(null);
+    setGitHubPushResult(null);
+    
+    // Save to localStorage immediately
+    saveStoredGitHubConfig(githubConfig);
+
+    try {
+      const result = await testGitHubConnection(githubConfig);
+      setGitHubTestResult(result);
+      if (result.success) {
+        if (onShowToast) {
+          onShowToast(`GitHub: Koneksi terverifikasi ke ${result.repoDetails?.fullName || githubConfig.repoName}!`);
+        }
+      } else {
+        if (onShowToast) {
+          onShowToast(`GitHub: ${result.message}`);
+        }
+      }
+    } catch (err: any) {
+      setGitHubTestResult({
+        success: false,
+        message: err.message || 'Gagal menguji koneksi GitHub.'
+      });
+      if (onShowToast) {
+        onShowToast(`GitHub Error: ${err.message || 'Gagal terhubung.'}`);
+      }
+    } finally {
+      setIsTestingGitHub(false);
+    }
+  };
+
+  // Handler Auto-Push Update Versi ke GitHub (1-Click Release)
+  const handlePushToGitHub = async (customMsg?: string) => {
+    if (!githubConfig.personalAccessToken || !githubConfig.repoOwner || !githubConfig.repoName) {
+      setActiveSection('github');
+      if (onShowToast) {
+        onShowToast('Silakan lengkapi Personal Access Token (PAT), Owner, dan Repo GitHub terlebih dahulu.');
+      }
+      return;
+    }
+
+    setIsPushingGitHub(true);
+    setGitHubPushResult(null);
+
+    try {
+      // 1. Prepare full payload data
+      const { payload } = createBackupPayload({
+        masterBarang,
+        transaksiList,
+        penerimaanList,
+        pejabatList: pejabatData,
+        kategoriList,
+        kopConfig: kopData,
+        numberingConfig: numberingData,
+        userList,
+        currentUser
+      });
+
+      // 2. Push to GitHub
+      const res = await pushUpdateToGitHub(githubConfig, payload, customMsg || customCommitMessage);
+      setGitHubPushResult(res);
+
+      // Update state config with new lastSyncedAt & lastCommitSha
+      setGithubConfig(prev => ({
+        ...prev,
+        lastSyncedAt: res.timestamp,
+        lastCommitSha: res.commitSha,
+        lastCommitUrl: res.commitUrl
+      }));
+
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'SYNC_GITHUB',
+        title: 'Auto-Push Update Versi ke GitHub',
+        details: `Berhasil sinkronisasi basis data ke GitHub (${githubConfig.repoOwner}/${githubConfig.repoName} [${githubConfig.branch}] - Commit: ${res.commitSha || 'OK'}).`,
+        status: 'SUCCESS'
+      });
+
+      if (onShowToast) {
+        onShowToast(`Berhasil push update ke GitHub! Commit: #${res.commitSha || 'OK'}`);
+      }
+    } catch (err: any) {
+      console.error('GitHub Push Error:', err);
+      const errMsg = err?.message || 'Gagal melakukan sinkronisasi ke GitHub.';
+      setGitHubPushResult({
+        success: false,
+        message: errMsg,
+        timestamp: new Date().toLocaleTimeString('id-ID')
+      });
+
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'SYNC_GITHUB',
+        title: 'Gagal Auto-Push Update ke GitHub',
+        details: `Gagal memperbarui berkas repositori GitHub: ${errMsg}`,
+        status: 'FAILED'
+      });
+
+      if (onShowToast) {
+        onShowToast(`Gagal push ke GitHub: ${errMsg}`);
+      }
+    } finally {
+      setIsPushingGitHub(false);
+    }
+  };
+
   // Unified Save Button
   const handleSaveAll = () => {
+    saveStoredGitHubConfig(githubConfig);
     onSaveUnifiedSettings({
       kopConfig: kopData,
       numberingConfig: numberingData,
       pejabatList: pejabatData
     });
     if (onShowToast) {
-      onShowToast('Seluruh konfigurasi instansi & penandatangan berhasil disimpan serentak!');
+      onShowToast('Seluruh konfigurasi instansi, penandatangan & GitHub berhasil disimpan serentak!');
     }
     onClose();
   };
@@ -529,6 +693,18 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           </button>
           <button
             type="button"
+            onClick={() => setActiveSection('github')}
+            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeSection === 'github'
+                ? 'bg-slate-900 text-white shadow-2xs'
+                : 'text-slate-800 hover:bg-slate-200/80 bg-slate-100/70'
+            }`}
+          >
+            <Github className="w-3.5 h-3.5 text-slate-800" />
+            5. GitHub / Developer
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveSection('danger')}
             className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
               activeSection === 'danger'
@@ -537,7 +713,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
             }`}
           >
             <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-            5. Danger Zone (Area Bahaya)
+            6. Danger Zone (Area Bahaya)
           </button>
         </div>
 
@@ -875,10 +1051,10 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                     </div>
                   </div>
 
-                  {/* BAST */}
+                  {/* BAST Penyaluran */}
                   <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
                     <div className="md:col-span-3">
-                      <span className="font-bold text-slate-900 block">4. Berita Acara (BAST)</span>
+                      <span className="font-bold text-slate-900 block">4. Berita Acara Serah Terima (BAST Penyaluran)</span>
                       <span className="text-[10px] text-slate-500">Tanda terima serah fisik barang</span>
                     </div>
                     <div className="md:col-span-5">
@@ -1188,12 +1364,142 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                 </div>
               </div>
 
+              {/* CARD 4B: SINKRONISASI CLOUD GITHUB (1-CLICK RELEASE) */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-white/10 text-white flex items-center justify-center font-bold text-xs border border-white/20">
+                      4B
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        Sinkronisasi Basis Data ke GitHub (1-Click Release)
+                        <span className="text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                          REST API Auto-Push
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-300">
+                        Perbarui berkas repositori GitHub secara langsung dari web tanpa perlu Git CLI atau terminal.
+                      </p>
+                    </div>
+                  </div>
+                  {githubConfig.lastSyncedAt ? (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-300 bg-white/10 px-3 py-1 rounded-full border border-white/10 shrink-0 self-start sm:self-auto">
+                      <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Release Terakhir: <strong className="text-white font-semibold">{githubConfig.lastSyncedAt}</strong></span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-400 bg-white/5 px-3 py-1 rounded-full border border-white/10 shrink-0 self-start sm:self-auto">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
+                      <span>Belum pernah push ke GitHub</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 space-y-4">
+                  <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                          Target Repositori:
+                        </span>
+                        {githubConfig.repoOwner && githubConfig.repoName ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-white border border-slate-300 text-xs font-mono font-bold text-blue-700">
+                            <GitBranch className="w-3.5 h-3.5 text-slate-500" />
+                            {githubConfig.repoOwner}/{githubConfig.repoName} ({githubConfig.branch || 'main'})
+                          </span>
+                        ) : (
+                          <span className="text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200">
+                            Belum Dikonfigurasi (Token / Repo)
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
+                        Mengekspor struktur lengkap SIMBA ({masterBarang.length} master barang, {transaksiList.length} transaksi penyaluran, {penerimaanList.length} penerimaan) ke path <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 text-slate-800 font-mono text-[11px]">{githubConfig.filePath || 'data/simba-database.json'}</code> di branch <strong className="font-semibold text-slate-800">{githubConfig.branch || 'main'}</strong>.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row lg:flex-col gap-2 shrink-0 lg:w-64">
+                      <button
+                        type="button"
+                        disabled={isPushingGitHub}
+                        onClick={() => handlePushToGitHub()}
+                        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+                        title="Eksekusi REST API: ambil SHA terakhir, encode Base64, dan kirim PUT commit ke GitHub"
+                      >
+                        {isPushingGitHub ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            <span>Memproses Push ke GitHub...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Github className="w-4 h-4 text-white" />
+                            <span>Push &amp; Update Versi ke GitHub</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection('github')}
+                        className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-300 transition-colors cursor-pointer"
+                      >
+                        <Code2 className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Pengaturan GitHub API →</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Push Result Banner */}
+                  {gitHubPushResult && (
+                    <div className={`p-3.5 rounded-xl border flex items-start gap-3 text-xs animate-in fade-in ${
+                      gitHubPushResult.success 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-900' 
+                        : 'bg-rose-50 border-rose-300 text-rose-900'
+                    }`}>
+                      {gitHubPushResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-1 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="font-bold">
+                            {gitHubPushResult.success ? 'Berhasil Sinkronisasi Versi ke GitHub!' : 'Sinkronisasi GitHub Gagal'}
+                          </p>
+                          {gitHubPushResult.commitSha && (
+                            <span className="font-mono text-[10px] bg-emerald-200/80 text-emerald-950 px-2 py-0.5 rounded font-bold">
+                              SHA: #{gitHubPushResult.commitSha}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] leading-relaxed">{gitHubPushResult.message}</p>
+                        {gitHubPushResult.commitUrl && (
+                          <div className="pt-1">
+                            <a
+                              href={gitHubPushResult.commitUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 hover:text-blue-900 underline"
+                            >
+                              <span>Lihat Perubahan Commit di GitHub</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* CARD 2: IMPOR / PEMULIHAN BASIS DATA (RESTORE DATA) */}
               <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
                 <div className="px-5 py-3.5 bg-blue-50/70 border-b border-blue-100 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <div className="w-7 h-7 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                      4B
+                      4C
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-blue-950 flex items-center gap-2">
@@ -1516,7 +1822,415 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           )}
 
           {/* ========================================================================= */}
-          {/* SECTION 5: DANGER ZONE (PEMBERSIHAN DATA DENGAN OTORISASI PIN ADMIN) */}
+          {/* SECTION 5: GITHUB / DEVELOPER SINKRONISASI API */}
+          {/* ========================================================================= */}
+          {(activeSection === 'all' || activeSection === 'github') && (
+            <div className="space-y-6">
+              {/* CARD 1: FORMULIR KONFIGURASI GITHUB API */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                <div className="px-5 py-3.5 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-white/10 text-white flex items-center justify-center font-bold text-xs border border-white/20">
+                      <Github className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        Konfigurasi GitHub REST API &amp; Developer
+                        <span className="text-[10px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 px-2 py-0.5 rounded-full">
+                          Personal Access Token
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-300">
+                        Atur kredensial GitHub untuk sinkronisasi otomatis, backup repository, dan 1-Click Release dari antarmuka web SIMBA.
+                      </p>
+                    </div>
+                  </div>
+                  {githubConfig.lastSyncedAt && (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-300 bg-white/10 px-3 py-1 rounded-full border border-white/10 shrink-0 self-start sm:self-auto">
+                      <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Sinkron Terakhir: <strong className="text-white font-semibold">{githubConfig.lastSyncedAt}</strong></span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 space-y-5">
+                  {/* Informational Guide */}
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start gap-3 text-xs text-slate-600">
+                    <Code2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <p className="font-semibold text-slate-800">
+                        Panduan Integrasi GitHub REST API SIMBA
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-slate-600">
+                        Gunakan Personal Access Token (PAT) dari akun GitHub Anda yang memiliki izin cakupan (scope) <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-slate-800 font-bold">repo</code> (Read &amp; Write) untuk repositori privat, atau minimal izin menulis berkas. Kredensial disimpan secara aman di peramban lokal (localStorage) perangkat ini.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Personal Access Token (PAT) with Show/Hide */}
+                    <div className="md:col-span-2 space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+                          Personal Access Token (PAT) GitHub
+                          <span className="text-rose-500">*</span>
+                        </label>
+                        <a
+                          href="https://github.com/settings/tokens"
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="text-[11px] text-blue-600 hover:text-blue-800 font-medium inline-flex items-center gap-1"
+                        >
+                          <span>Buat Token di GitHub</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showGithubToken ? 'text' : 'password'}
+                          value={githubConfig.personalAccessToken}
+                          onChange={e => setGithubConfig(prev => ({ ...prev, personalAccessToken: e.target.value }))}
+                          placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxx atau github_pat_xxxx"
+                          className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 pr-24 font-mono text-xs text-slate-900 bg-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowGithubToken(!showGithubToken)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 text-xs font-medium text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                          title={showGithubToken ? 'Sembunyikan Token' : 'Tampilkan Token'}
+                        >
+                          {showGithubToken ? (
+                            <>
+                              <EyeOff className="w-3.5 h-3.5" />
+                              <span>Hide</span>
+                            </>
+                          ) : (
+                            <>
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Show</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Token memerlukan scope <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">repo</code> (Full control of private repositories) untuk repositori privat, atau minimal akses <code className="bg-slate-100 px-1 py-0.5 rounded font-mono text-slate-700 font-semibold">contents:write</code>.
+                      </p>
+                    </div>
+
+                    {/* Repository Owner / Username */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-blue-600" />
+                        Repository Owner / Username
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={githubConfig.repoOwner}
+                        onChange={e => setGithubConfig(prev => ({ ...prev, repoOwner: e.target.value }))}
+                        placeholder="contoh: rifqihamdan"
+                        className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 bg-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        Nama akun pengguna atau organisasi pemilik repositori di GitHub (contoh: <code className="font-mono text-slate-700 font-semibold">rifqihamdan</code>).
+                      </p>
+                    </div>
+
+                    {/* Repository Name */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <Github className="w-3.5 h-3.5 text-blue-600" />
+                        Repository Name
+                        <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={githubConfig.repoName}
+                        onChange={e => setGithubConfig(prev => ({ ...prev, repoName: e.target.value }))}
+                        placeholder="contoh: simba-app"
+                        className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 bg-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        Nama repositori target di GitHub (contoh: <code className="font-mono text-slate-700 font-semibold">simba-app</code>).
+                      </p>
+                    </div>
+
+                    {/* Branch Utama */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                          <GitBranch className="w-3.5 h-3.5 text-blue-600" />
+                          Branch Utama
+                          <span className="text-rose-500">*</span>
+                        </label>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setGithubConfig(prev => ({ ...prev, branch: 'main' }))}
+                            className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                              githubConfig.branch === 'main' ? 'bg-blue-600 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            main
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setGithubConfig(prev => ({ ...prev, branch: 'master' }))}
+                            className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
+                              githubConfig.branch === 'master' ? 'bg-blue-600 text-white font-bold' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            }`}
+                          >
+                            master
+                          </button>
+                        </div>
+                      </div>
+                      <input
+                        type="text"
+                        value={githubConfig.branch}
+                        onChange={e => setGithubConfig(prev => ({ ...prev, branch: e.target.value }))}
+                        placeholder="main atau master"
+                        className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 font-mono text-xs text-slate-900 bg-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        Branch target untuk penyimpanan berkas versi terbaru (default: main).
+                      </p>
+                    </div>
+
+                    {/* Path File Target */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                        <FileJson className="w-3.5 h-3.5 text-blue-600" />
+                        Jalur Berkas Target (Path in Repo)
+                      </label>
+                      <input
+                        type="text"
+                        value={githubConfig.filePath || 'data/simba-database.json'}
+                        onChange={e => setGithubConfig(prev => ({ ...prev, filePath: e.target.value }))}
+                        placeholder="data/simba-database.json"
+                        className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 font-mono text-xs text-slate-900 bg-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      />
+                      <p className="text-[11px] text-slate-500">
+                        Lokasi file JSON dalam struktur repositori GitHub (default: <code className="font-mono text-slate-700">data/simba-database.json</code>).
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Tombol Simpan & Uji Koneksi */}
+                  <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-slate-100">
+                    <div className="text-xs text-slate-500">
+                      Pastikan token dan nama repositori sesuai sebelum menguji koneksi.
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isTestingGitHub}
+                      onClick={handleSaveAndTestGitHub}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+                    >
+                      {isTestingGitHub ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Menguji Koneksi GitHub...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-4 h-4" />
+                          <span>Simpan &amp; Uji Koneksi GitHub</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Connection Test Result Feedback Banner */}
+                  {gitHubTestResult && (
+                    <div className={`p-4 rounded-xl border flex items-start gap-3.5 text-xs animate-in fade-in ${
+                      gitHubTestResult.success 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950' 
+                        : 'bg-rose-50 border-rose-300 text-rose-950'
+                    }`}>
+                      {gitHubTestResult.success ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="font-bold text-sm">
+                            {gitHubTestResult.success ? 'Koneksi GitHub Berhasil Terhubung!' : 'Uji Koneksi GitHub Gagal'}
+                          </h4>
+                          {gitHubTestResult.repoDetails && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900 uppercase">
+                              {gitHubTestResult.repoDetails.isPrivate ? 'Private Repo' : 'Public Repo'}
+                            </span>
+                          )}
+                        </div>
+                        <p className="leading-relaxed">{gitHubTestResult.message}</p>
+                        {gitHubTestResult.repoDetails && (
+                          <div className="mt-2 pt-2 border-t border-emerald-200/80 flex flex-wrap items-center gap-3 text-[11px] text-emerald-900 font-mono">
+                            <span>Default Branch: <strong>{gitHubTestResult.repoDetails.defaultBranch}</strong></span>
+                            <span>•</span>
+                            <span>Izin Push: <strong>{gitHubTestResult.repoDetails.permissions?.push !== false ? 'Ya (Diizinkan)' : 'Tidak'}</strong></span>
+                            <span>•</span>
+                            <a
+                              href={`https://github.com/${githubConfig.repoOwner}/${githubConfig.repoName}`}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="text-blue-700 hover:text-blue-900 font-bold underline inline-flex items-center gap-1"
+                            >
+                              <span>Buka Repositori ↗</span>
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CARD 2: FITUR AUTO-PUSH UPDATE VERSI (1-CLICK RELEASE) */}
+              <div className="bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden">
+                <div className="px-5 py-3.5 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold text-xs border border-emerald-500/30">
+                      <Send className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        Fitur Auto-Push Update Versi (1-Click Release)
+                        <span className="text-[10px] font-bold bg-emerald-500 text-white px-2 py-0.5 rounded-full">
+                          Otomatisasi REST API
+                        </span>
+                      </h3>
+                      <p className="text-[11px] text-slate-300">
+                        Kirim pembaruan kode &amp; basis data SIMBA langsung ke cabang utama GitHub dalam sekali klik.
+                      </p>
+                    </div>
+                  </div>
+                  {githubConfig.lastCommitSha && (
+                    <div className="inline-flex items-center gap-1.5 text-xs text-slate-300 bg-white/10 px-3 py-1 rounded-full border border-white/10 shrink-0 self-start sm:self-auto font-mono">
+                      <span>Commit Terakhir: <strong className="text-emerald-400 font-bold">#{githubConfig.lastCommitSha}</strong></span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 space-y-4">
+                  {/* Penjelasan Alur Eksekusi JavaScript REST API */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      Mekanisme Kerja Alur Eksekusi JavaScript (REST API)
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1 text-[11px] text-slate-600">
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                        <span className="font-bold text-blue-700 block">1. Cek SHA Berkas</span>
+                        <p className="text-slate-500">Mengambil SHA file/commit terakhir di target (<code className="font-mono text-[10px]">GET /contents</code>).</p>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                        <span className="font-bold text-blue-700 block">2. Encode UTF-8 Base64</span>
+                        <p className="text-slate-500">Mengonversi seluruh basis data SIMBA terbaru ke format Base64 yang aman.</p>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                        <span className="font-bold text-blue-700 block">3. PUT Update File</span>
+                        <p className="text-slate-500">Mengirim request commit otomatis ke GitHub API (<code className="font-mono text-[10px]">PUT /contents</code>).</p>
+                      </div>
+                      <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                        <span className="font-bold text-emerald-700 block">4. Notifikasi Toast</span>
+                        <p className="text-slate-500">Menampilkan status sukses/error seketika tanpa perlu memuat ulang (reload) halaman.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Commit Message Input */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <GitBranch className="w-3.5 h-3.5 text-slate-600" />
+                        Pesan Commit (Commit Message)
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-normal">Opsional (Default otomatis jika kosong)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customCommitMessage}
+                      onChange={e => setCustomCommitMessage(e.target.value)}
+                      placeholder="feat(auto-update): sync SIMBA v2.6 Pro data from web"
+                      className="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 font-mono text-xs text-slate-900 bg-white placeholder-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  {/* Action Push Button Row */}
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+                    <div className="text-xs text-slate-500">
+                      Target: <span className="font-mono font-bold text-slate-800">{githubConfig.repoOwner || '?'}/{githubConfig.repoName || '?'}</span> pada branch <span className="font-mono font-bold text-blue-700">{githubConfig.branch || 'main'}</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isPushingGitHub}
+                      onClick={() => handlePushToGitHub()}
+                      className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer disabled:opacity-50 active:scale-98"
+                    >
+                      {isPushingGitHub ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          <span>Sedang Memproses Release ke GitHub...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Github className="w-4 h-4 text-white" />
+                          <span>Push &amp; Update Versi ke GitHub</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Push Result Banner in Developer Tab */}
+                  {gitHubPushResult && (
+                    <div className={`p-4 rounded-xl border flex items-start gap-3.5 text-xs animate-in fade-in ${
+                      gitHubPushResult.success 
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-950' 
+                        : 'bg-rose-50 border-rose-300 text-rose-950'
+                    }`}>
+                      {gitHubPushResult.success ? (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <h4 className="font-bold text-sm">
+                            {gitHubPushResult.success ? 'Berhasil Push & Update Versi ke GitHub!' : 'Gagal Push Update ke GitHub'}
+                          </h4>
+                          {gitHubPushResult.commitSha && (
+                            <span className="font-mono text-xs bg-emerald-200 text-emerald-950 px-2.5 py-0.5 rounded-full font-bold">
+                              Commit #{gitHubPushResult.commitSha}
+                            </span>
+                          )}
+                        </div>
+                        <p className="leading-relaxed">{gitHubPushResult.message}</p>
+                        {gitHubPushResult.commitUrl && (
+                          <div className="pt-1">
+                            <a
+                              href={gitHubPushResult.commitUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-emerald-100/60 border border-emerald-300 rounded-lg text-xs font-bold text-emerald-900 transition-colors shadow-2xs"
+                            >
+                              <span>Lihat Riwayat Commit di GitHub</span>
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SECTION 6: DANGER ZONE (PEMBERSIHAN DATA DENGAN OTORISASI PIN ADMIN) */}
           {/* ========================================================================= */}
           {(activeSection === 'all' || activeSection === 'danger') && (
             <div className="bg-white rounded-2xl border-2 border-rose-200 shadow-sm overflow-hidden ring-1 ring-rose-500/10">

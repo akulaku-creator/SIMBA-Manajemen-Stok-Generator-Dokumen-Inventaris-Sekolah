@@ -414,11 +414,11 @@ export const NumberingSettingsModal: React.FC<Props> = ({
               </div>
             </div>
 
-            {/* BAST Transaksi */}
+            {/* BAST Penyaluran */}
             <div className="p-3 bg-white border border-slate-200 rounded-xl space-y-2 hover:border-slate-300 transition-colors">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-800">
-                  4. Berita Acara Serah Terima (BAST Transaksi)
+                  4. Berita Acara Serah Terima (BAST Penyaluran)
                 </label>
                 <div className="flex gap-1">
                   {variables.slice(0, 5).map(v => (

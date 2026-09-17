@@ -250,3 +250,14 @@ export interface GoogleSheetSyncConfig {
   lastSyncedAt?: string;
   autoSyncOnChange?: boolean;
 }
+
+export interface GitHubSyncConfig {
+  personalAccessToken: string;
+  repoOwner: string;
+  repoName: string;
+  branch: string;
+  filePath?: string;
+  lastSyncedAt?: string;
+  lastCommitSha?: string;
+  lastCommitUrl?: string;
+}

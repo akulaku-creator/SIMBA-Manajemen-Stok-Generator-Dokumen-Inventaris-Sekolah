@@ -67,7 +67,7 @@ export const setLastBackupTime = (formattedTime: string): void => {
   localStorage.setItem(BACKUP_TIME_KEY, formattedTime);
 };
 
-const createBackupPayload = (params: {
+export const createBackupPayload = (params: {
   masterBarang: Barang[];
   transaksiList: TransaksiPengeluaran[];
   penerimaanList: TransaksiPenerimaan[];
