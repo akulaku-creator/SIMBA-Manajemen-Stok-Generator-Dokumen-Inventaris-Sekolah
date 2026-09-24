@@ -15,7 +15,8 @@ import React, { useMemo, useState } from 'react';
 import { Barang, KopSuratConfig, Pejabat, TAHUN_ANGGARAN_OPTIONS, TransaksiPenerimaan, TransaksiPengeluaran } from '../../types';
 import { downloadBOSExcelFile } from '../../utils/excelBosGenerator';
 import { calculateMutasiBOSData, NAMA_BULAN } from '../../utils/mutasiBosEngine';
-import { formatRupiah, formatTanggalIndonesia } from '../../utils/numberGenerator';
+import { formatRupiah, formatTanggalIndonesia, renderMutasiCell, renderSaldoAwalCell } from '../../utils/numberGenerator';
+import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 
 interface Props {
   masterBarang: Barang[];
@@ -44,19 +45,8 @@ export const DocMutasiBOS: React.FC<Props> = ({
   const [zoomLevel, setZoomLevel] = useState<number>(100);
 
   // Pejabat for Signatures
-  const kepsek = pejabatList.find(p => p.id === 'pejabat-kepsek') || pejabatList[0] || {
-    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
-    nip: '19680512 199303 1 005',
-    pangkatGolongan: 'Pembina Utama Muda / IV c',
-    jabatan: 'Kepala Sekolah'
-  };
-
-  const pengurusBarang = pejabatList.find(p => p.id === 'pejabat-pengurus-barang') || pejabatList[2] || {
-    nama: 'Rina Kartikasari, S.AP.',
-    nip: '19890820 201402 2 003',
-    pangkatGolongan: 'Penata Muda / III a',
-    jabatan: 'Pengurus Barang Pembantu'
-  };
+  const kepsek = resolveKepalaSekolah(pejabatList);
+  const pengurusBarang = resolvePengurusBarang(pejabatList);
 
   // Calculate mutation data
   const calculation = useMemo(() => {
@@ -425,71 +415,96 @@ export const DocMutasiBOS: React.FC<Props> = ({
                               {barang.namaBarang}
                             </td>
 
-                            {/* Col 5: Saldo Awal Volume */}
-                            <td className="border-r border-slate-200 px-2 py-1 text-right font-mono font-medium">
-                              {barang.saldoAwalVolume.toLocaleString('id-ID')}
-                            </td>
-
-                            {/* Col 6: Satuan */}
-                            <td className="border-r border-slate-200 px-1 py-1 text-center text-slate-600">
-                              {barang.satuan}
-                            </td>
-
-                            {/* Col 7: Harga Satuan */}
-                            <td className="border-r border-slate-200 px-2 py-1 text-right font-mono text-slate-700">
-                              {formatRupiah(barang.hargaSatuan)}
-                            </td>
-
-                            {/* Col 8: Saldo Awal Jumlah (Rp) */}
-                            <td className="border-r border-slate-200 px-2 py-1 text-right font-mono font-bold text-slate-900 bg-slate-50/50">
-                              {formatRupiah(barang.saldoAwalJumlahRp)}
-                            </td>
+                            {/* Col 5-8: Saldo Awal (Vol, Satuan, Harga, Jumlah) via renderSaldoAwalCell */}
+                            {(() => {
+                              const saldoAwal = renderSaldoAwalCell(
+                                barang.saldoAwalVolume,
+                                barang.satuan,
+                                barang.hargaSatuan,
+                                barang.saldoAwalJumlahRp
+                              );
+                              return (
+                                <>
+                                  <td className="border-r border-slate-200 px-2 py-1 text-right font-mono font-medium">
+                                    {saldoAwal.displayVolume}
+                                  </td>
+                                  <td className="border-r border-slate-200 px-1 py-1 text-center text-slate-600">
+                                    {saldoAwal.displaySatuan}
+                                  </td>
+                                  <td className="border-r border-slate-200 px-2 py-1 text-right font-mono text-slate-700">
+                                    {saldoAwal.displayHarga}
+                                  </td>
+                                  <td className="border-r border-slate-200 px-2 py-1 text-right font-mono font-bold text-slate-900 bg-slate-50/50">
+                                    {saldoAwal.displayJumlah}
+                                  </td>
+                                </>
+                              );
+                            })()}
 
                             {/* Monthly Movement Columns */}
                             {visibleMonthIndices.map(m => {
                               const detail = barang.mutasiBulanan[m];
+                              const penambahan = renderMutasiCell(
+                                detail.masukVolume,
+                                detail.masukSatuan,
+                                detail.masukHargaSatuan,
+                                detail.masukJumlahRp
+                              );
+                              const pengurangan = renderMutasiCell(
+                                detail.keluarVolume,
+                                detail.keluarSatuan,
+                                detail.keluarHargaSatuan,
+                                detail.keluarJumlahRp
+                              );
+                              const saldoAkhir = renderMutasiCell(
+                                detail.saldoAkhirVolume,
+                                detail.saldoAkhirSatuan,
+                                detail.saldoAkhirHargaSatuan,
+                                detail.saldoAkhirJumlahRp
+                              );
+
                               return (
                                 <React.Fragment key={`${barang.id}-${m}`}>
                                   {/* PENAMBAHAN / MASUK */}
                                   <td className="border-r border-slate-200 px-1 py-1 text-right font-mono text-emerald-700">
-                                    {detail.masukVolume > 0 ? detail.masukVolume.toLocaleString('id-ID') : '-'}
+                                    {penambahan.displayVolume}
                                   </td>
                                   <td className="border-r border-slate-200 px-1 py-1 text-center text-slate-500">
-                                    {detail.masukVolume > 0 ? detail.masukSatuan : '-'}
+                                    {penambahan.displaySatuan}
                                   </td>
                                   <td className="border-r border-slate-200 px-1 py-1 text-right font-mono text-slate-600">
-                                    {detail.masukVolume > 0 ? formatRupiah(detail.masukHargaSatuan) : '-'}
+                                    {penambahan.displayHarga}
                                   </td>
                                   <td className="border-r border-slate-200 px-2 py-1 text-right font-mono font-semibold text-emerald-800 bg-emerald-50/30">
-                                    {detail.masukJumlahRp > 0 ? formatRupiah(detail.masukJumlahRp) : '-'}
+                                    {penambahan.displayJumlah}
                                   </td>
 
                                   {/* PENGURANGAN / KELUAR */}
                                   <td className="border-r border-slate-200 px-1 py-1 text-right font-mono text-rose-700">
-                                    {detail.keluarVolume > 0 ? detail.keluarVolume.toLocaleString('id-ID') : '-'}
+                                    {pengurangan.displayVolume}
                                   </td>
                                   <td className="border-r border-slate-200 px-1 py-1 text-center text-slate-500">
-                                    {detail.keluarVolume > 0 ? detail.keluarSatuan : '-'}
+                                    {pengurangan.displaySatuan}
                                   </td>
                                   <td className="border-r border-slate-200 px-1 py-1 text-right font-mono text-slate-600">
-                                    {detail.keluarVolume > 0 ? formatRupiah(detail.keluarHargaSatuan) : '-'}
+                                    {pengurangan.displayHarga}
                                   </td>
                                   <td className="border-r border-slate-200 px-2 py-1 text-right font-mono font-semibold text-rose-800 bg-rose-50/30">
-                                    {detail.keluarJumlahRp > 0 ? formatRupiah(detail.keluarJumlahRp) : '-'}
+                                    {pengurangan.displayJumlah}
                                   </td>
 
                                   {/* SALDO AKHIR */}
                                   <td className="border-r border-slate-200 px-1 py-1 text-right font-mono font-bold text-slate-900">
-                                    {detail.saldoAkhirVolume.toLocaleString('id-ID')}
+                                    {saldoAkhir.displayVolume}
                                   </td>
                                   <td className="border-r border-slate-200 px-1 py-1 text-center text-slate-500">
-                                    {detail.saldoAkhirSatuan}
+                                    {saldoAkhir.displaySatuan}
                                   </td>
                                   <td className="border-r border-slate-200 px-1 py-1 text-right font-mono text-slate-600">
-                                    {formatRupiah(detail.saldoAkhirHargaSatuan)}
+                                    {saldoAkhir.displayHarga}
                                   </td>
                                   <td className="border-r border-slate-200 px-2 py-1 text-right font-mono font-bold text-blue-900 bg-blue-50/40">
-                                    {formatRupiah(detail.saldoAkhirJumlahRp)}
+                                    {saldoAkhir.displayJumlah}
                                   </td>
                                 </React.Fragment>
                               );
@@ -510,7 +525,7 @@ export const DocMutasiBOS: React.FC<Props> = ({
                         </td>
                         <td colSpan={3} className="border-r border-slate-300"></td>
                         <td className="border-r border-slate-300 px-2 py-1.5 text-right font-mono font-extrabold text-slate-900 bg-slate-300/60">
-                          {formatRupiah(group.subtotalSaldoAwalRp)}
+                          {group.subtotalSaldoAwalRp > 0 ? formatRupiah(group.subtotalSaldoAwalRp) : ''}
                         </td>
 
                         {/* Monthly Subtotals */}
@@ -520,17 +535,17 @@ export const DocMutasiBOS: React.FC<Props> = ({
                             <React.Fragment key={`subtotal-${group.kodeRekening}-${m}`}>
                               <td colSpan={3} className="border-r border-slate-300"></td>
                               <td className="border-r border-slate-300 px-2 py-1.5 text-right font-mono font-bold text-emerald-900 bg-emerald-100/60">
-                                {formatRupiah(subM.totalMasukRp)}
+                                {subM.totalMasukRp > 0 ? formatRupiah(subM.totalMasukRp) : ''}
                               </td>
 
                               <td colSpan={3} className="border-r border-slate-300"></td>
                               <td className="border-r border-slate-300 px-2 py-1.5 text-right font-mono font-bold text-rose-900 bg-rose-100/60">
-                                {formatRupiah(subM.totalKeluarRp)}
+                                {subM.totalKeluarRp > 0 ? formatRupiah(subM.totalKeluarRp) : ''}
                               </td>
 
                               <td colSpan={3} className="border-r border-slate-300"></td>
                               <td className="border-r border-slate-300 px-2 py-1.5 text-right font-mono font-extrabold text-blue-950 bg-blue-100/60">
-                                {formatRupiah(subM.totalSaldoAkhirRp)}
+                                {subM.totalSaldoAkhirRp > 0 ? formatRupiah(subM.totalSaldoAkhirRp) : ''}
                               </td>
                             </React.Fragment>
                           );
@@ -549,7 +564,7 @@ export const DocMutasiBOS: React.FC<Props> = ({
                 </td>
                 <td colSpan={3} className="border-r border-slate-400"></td>
                 <td className="border-r border-slate-400 px-2 py-2 text-right font-mono font-black text-slate-950 bg-slate-400/50">
-                  {formatRupiah(calculation.grandTotal.saldoAwalRp)}
+                  {calculation.grandTotal.saldoAwalRp > 0 ? formatRupiah(calculation.grandTotal.saldoAwalRp) : ''}
                 </td>
 
                 {visibleMonthIndices.map(m => {
@@ -558,17 +573,17 @@ export const DocMutasiBOS: React.FC<Props> = ({
                     <React.Fragment key={`gt-${m}`}>
                       <td colSpan={3} className="border-r border-slate-400"></td>
                       <td className="border-r border-slate-400 px-2 py-2 text-right font-mono font-black text-emerald-950 bg-emerald-200/70">
-                        {formatRupiah(gtM.masukRp)}
+                        {gtM.masukRp > 0 ? formatRupiah(gtM.masukRp) : ''}
                       </td>
 
                       <td colSpan={3} className="border-r border-slate-400"></td>
                       <td className="border-r border-slate-400 px-2 py-2 text-right font-mono font-black text-rose-950 bg-rose-200/70">
-                        {formatRupiah(gtM.keluarRp)}
+                        {gtM.keluarRp > 0 ? formatRupiah(gtM.keluarRp) : ''}
                       </td>
 
                       <td colSpan={3} className="border-r border-slate-400"></td>
                       <td className="border-r border-slate-400 px-2 py-2 text-right font-mono font-black text-blue-950 bg-blue-200/80">
-                        {formatRupiah(gtM.saldoAkhirRp)}
+                        {gtM.saldoAkhirRp > 0 ? formatRupiah(gtM.saldoAkhirRp) : ''}
                       </td>
                     </React.Fragment>
                   );

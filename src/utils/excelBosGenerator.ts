@@ -31,6 +31,12 @@ const MEDIUM_BORDER: Partial<ExcelJS.Borders> = {
 };
 
 /**
+ * Format angka custom Excel yang otomatis menyembunyikan angka nol (0),
+ * sehingga tampilan bersih/kosong tanpa merusak kalkulasi formula.
+ */
+const EXCEL_CLEAN_NUM_FMT = '#,##0;-#,##0;""';
+
+/**
  * Generate standard Dinas-compatible Excel workbook containing:
  * - Sheet "BOS" (Multi-month landscape mutation table with formulas)
  * - Sheet "REKAP PER KODERING" (Monthly expenditure summary with formulas)
@@ -339,18 +345,18 @@ export async function generateBOSExcelWorkbook(
       // Col E: Saldo Awal Volume
       const cE = wsBOS.getCell(`E${itemRow}`);
       cE.value = barang.saldoAwalVolume;
-      cE.numFmt = '#,##0';
+      cE.numFmt = EXCEL_CLEAN_NUM_FMT;
       cE.alignment = { horizontal: 'right', vertical: 'middle' };
 
-      // Col F: Satuan
+      // Col F: Satuan (Khusus Saldo Awal: Tetap tampil sebagai master identitas barang)
       const cF = wsBOS.getCell(`F${itemRow}`);
-      cF.value = barang.satuan;
+      cF.value = barang.satuan || '';
       cF.alignment = { horizontal: 'center', vertical: 'middle' };
 
-      // Col G: Harga Satuan
+      // Col G: Harga Satuan (Khusus Saldo Awal: Tetap tampil sebagai master identitas barang)
       const cG = wsBOS.getCell(`G${itemRow}`);
-      cG.value = barang.hargaSatuan;
-      cG.numFmt = '#,##0';
+      cG.value = barang.hargaSatuan || 0;
+      cG.numFmt = EXCEL_CLEAN_NUM_FMT;
       cG.alignment = { horizontal: 'right', vertical: 'middle' };
 
       // Col H: Saldo Awal Jumlah (Rp) - EXCEL FORMULA: =E{row}*G{row}
@@ -359,7 +365,7 @@ export async function generateBOSExcelWorkbook(
         formula: `E${itemRow}*G${itemRow}`,
         result: barang.saldoAwalJumlahRp
       };
-      cH.numFmt = '#,##0';
+      cH.numFmt = EXCEL_CLEAN_NUM_FMT;
       cH.alignment = { horizontal: 'right', vertical: 'middle' };
 
       // Mutasi Bulanan
@@ -375,16 +381,16 @@ export async function generateBOSExcelWorkbook(
 
         const cMVol = wsBOS.getCell(`${colMasukVol}${itemRow}`);
         cMVol.value = detail.masukVolume;
-        cMVol.numFmt = '#,##0';
+        cMVol.numFmt = EXCEL_CLEAN_NUM_FMT;
         cMVol.alignment = { horizontal: 'right', vertical: 'middle' };
 
         const cMSat = wsBOS.getCell(`${colMasukSat}${itemRow}`);
-        cMSat.value = detail.masukSatuan;
+        cMSat.value = detail.masukVolume > 0 ? detail.masukSatuan : '';
         cMSat.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const cMHrg = wsBOS.getCell(`${colMasukHrg}${itemRow}`);
-        cMHrg.value = detail.masukHargaSatuan;
-        cMHrg.numFmt = '#,##0';
+        cMHrg.value = detail.masukVolume > 0 ? detail.masukHargaSatuan : 0;
+        cMHrg.numFmt = EXCEL_CLEAN_NUM_FMT;
         cMHrg.alignment = { horizontal: 'right', vertical: 'middle' };
 
         // Masuk Jumlah Formula: ={Vol}*{Hrg}
@@ -393,7 +399,7 @@ export async function generateBOSExcelWorkbook(
           formula: `${colMasukVol}${itemRow}*${colMasukHrg}${itemRow}`,
           result: detail.masukJumlahRp
         };
-        cMJml.numFmt = '#,##0';
+        cMJml.numFmt = EXCEL_CLEAN_NUM_FMT;
         cMJml.alignment = { horizontal: 'right', vertical: 'middle' };
 
         // --- KELUAR (4 cols: Vol, Satuan, Harga, Jumlah) ---
@@ -404,16 +410,16 @@ export async function generateBOSExcelWorkbook(
 
         const cKVol = wsBOS.getCell(`${colKeluarVol}${itemRow}`);
         cKVol.value = detail.keluarVolume;
-        cKVol.numFmt = '#,##0';
+        cKVol.numFmt = EXCEL_CLEAN_NUM_FMT;
         cKVol.alignment = { horizontal: 'right', vertical: 'middle' };
 
         const cKSat = wsBOS.getCell(`${colKeluarSat}${itemRow}`);
-        cKSat.value = detail.keluarSatuan;
+        cKSat.value = detail.keluarVolume > 0 ? detail.keluarSatuan : '';
         cKSat.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const cKHrg = wsBOS.getCell(`${colKeluarHrg}${itemRow}`);
-        cKHrg.value = detail.keluarHargaSatuan;
-        cKHrg.numFmt = '#,##0';
+        cKHrg.value = detail.keluarVolume > 0 ? detail.keluarHargaSatuan : 0;
+        cKHrg.numFmt = EXCEL_CLEAN_NUM_FMT;
         cKHrg.alignment = { horizontal: 'right', vertical: 'middle' };
 
         // Keluar Jumlah Formula: ={Vol}*{Hrg}
@@ -422,7 +428,7 @@ export async function generateBOSExcelWorkbook(
           formula: `${colKeluarVol}${itemRow}*${colKeluarHrg}${itemRow}`,
           result: detail.keluarJumlahRp
         };
-        cKJml.numFmt = '#,##0';
+        cKJml.numFmt = EXCEL_CLEAN_NUM_FMT;
         cKJml.alignment = { horizontal: 'right', vertical: 'middle' };
 
         // --- SALDO AKHIR (4 cols: Vol, Satuan, Harga, Jumlah) ---
@@ -440,16 +446,16 @@ export async function generateBOSExcelWorkbook(
           formula: `${prevVolCol}${itemRow}+${colMasukVol}${itemRow}-${colKeluarVol}${itemRow}`,
           result: detail.saldoAkhirVolume
         };
-        cSAVol.numFmt = '#,##0';
+        cSAVol.numFmt = EXCEL_CLEAN_NUM_FMT;
         cSAVol.alignment = { horizontal: 'right', vertical: 'middle' };
 
         const cSASat = wsBOS.getCell(`${colSaldoAkhirSat}${itemRow}`);
-        cSASat.value = detail.saldoAkhirSatuan;
+        cSASat.value = detail.saldoAkhirVolume > 0 ? detail.saldoAkhirSatuan : '';
         cSASat.alignment = { horizontal: 'center', vertical: 'middle' };
 
         const cSAHrg = wsBOS.getCell(`${colSaldoAkhirHrg}${itemRow}`);
-        cSAHrg.value = detail.saldoAkhirHargaSatuan;
-        cSAHrg.numFmt = '#,##0';
+        cSAHrg.value = detail.saldoAkhirVolume > 0 ? detail.saldoAkhirHargaSatuan : 0;
+        cSAHrg.numFmt = EXCEL_CLEAN_NUM_FMT;
         cSAHrg.alignment = { horizontal: 'right', vertical: 'middle' };
 
         // Saldo Akhir Jumlah Formula: ={SaldoAkhirVol}*{SaldoAkhirHrg}
@@ -458,7 +464,7 @@ export async function generateBOSExcelWorkbook(
           formula: `${colSaldoAkhirVol}${itemRow}*${colSaldoAkhirHrg}${itemRow}`,
           result: detail.saldoAkhirJumlahRp
         };
-        cSAJml.numFmt = '#,##0';
+        cSAJml.numFmt = EXCEL_CLEAN_NUM_FMT;
         cSAJml.alignment = { horizontal: 'right', vertical: 'middle' };
       }
 
@@ -503,7 +509,7 @@ export async function generateBOSExcelWorkbook(
       formula: `SUM(H${groupStartItemRow}:H${groupEndItemRow})`,
       result: group.subtotalSaldoAwalRp
     };
-    subH.numFmt = '#,##0';
+    subH.numFmt = EXCEL_CLEAN_NUM_FMT;
     subH.font = { name: 'Arial', size: 9, bold: true };
     subH.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -527,7 +533,7 @@ export async function generateBOSExcelWorkbook(
         formula: `SUM(${colMasukJml}${groupStartItemRow}:${colMasukJml}${groupEndItemRow})`,
         result: group.subtotalBulanan[m].totalMasukRp
       };
-      subMasukCell.numFmt = '#,##0';
+      subMasukCell.numFmt = EXCEL_CLEAN_NUM_FMT;
       subMasukCell.font = { name: 'Arial', size: 9, bold: true };
       subMasukCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -537,7 +543,7 @@ export async function generateBOSExcelWorkbook(
         formula: `SUM(${colKeluarJml}${groupStartItemRow}:${colKeluarJml}${groupEndItemRow})`,
         result: group.subtotalBulanan[m].totalKeluarRp
       };
-      subKeluarCell.numFmt = '#,##0';
+      subKeluarCell.numFmt = EXCEL_CLEAN_NUM_FMT;
       subKeluarCell.font = { name: 'Arial', size: 9, bold: true };
       subKeluarCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -547,7 +553,7 @@ export async function generateBOSExcelWorkbook(
         formula: `SUM(${colSaldoAkhirJml}${groupStartItemRow}:${colSaldoAkhirJml}${groupEndItemRow})`,
         result: group.subtotalBulanan[m].totalSaldoAkhirRp
       };
-      subSACell.numFmt = '#,##0';
+      subSACell.numFmt = EXCEL_CLEAN_NUM_FMT;
       subSACell.font = { name: 'Arial', size: 9, bold: true };
       subSACell.alignment = { horizontal: 'right', vertical: 'middle' };
     }
@@ -582,7 +588,7 @@ export async function generateBOSExcelWorkbook(
     formula: `SUM(${subtotalHCells})`,
     result: calculation.grandTotal.saldoAwalRp
   };
-  gtH.numFmt = '#,##0';
+  gtH.numFmt = EXCEL_CLEAN_NUM_FMT;
   gtH.font = { name: 'Arial', size: 10, bold: true };
   gtH.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -599,7 +605,7 @@ export async function generateBOSExcelWorkbook(
       formula: `SUM(${sumMasukCells})`,
       result: calculation.grandTotal.bulanan[m].masukRp
     };
-    gtMasuk.numFmt = '#,##0';
+    gtMasuk.numFmt = EXCEL_CLEAN_NUM_FMT;
     gtMasuk.font = { name: 'Arial', size: 10, bold: true };
     gtMasuk.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -609,7 +615,7 @@ export async function generateBOSExcelWorkbook(
       formula: `SUM(${sumKeluarCells})`,
       result: calculation.grandTotal.bulanan[m].keluarRp
     };
-    gtKeluar.numFmt = '#,##0';
+    gtKeluar.numFmt = EXCEL_CLEAN_NUM_FMT;
     gtKeluar.font = { name: 'Arial', size: 10, bold: true };
     gtKeluar.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -619,7 +625,7 @@ export async function generateBOSExcelWorkbook(
       formula: `SUM(${sumSACells})`,
       result: calculation.grandTotal.bulanan[m].saldoAkhirRp
     };
-    gtSA.numFmt = '#,##0';
+    gtSA.numFmt = EXCEL_CLEAN_NUM_FMT;
     gtSA.font = { name: 'Arial', size: 10, bold: true };
     gtSA.alignment = { horizontal: 'right', vertical: 'middle' };
   }
@@ -802,7 +808,7 @@ export async function generateBOSExcelWorkbook(
     // SALDO AWAL (Nominal Rp)
     const cD = wsRekap.getCell(`D${rw}`);
     cD.value = row.saldoAwalRp;
-    cD.numFmt = '#,##0';
+    cD.numFmt = EXCEL_CLEAN_NUM_FMT;
     cD.alignment = { horizontal: 'right', vertical: 'middle' };
 
     // Monthly values with formula:
@@ -815,12 +821,12 @@ export async function generateBOSExcelWorkbook(
 
       const mMasukCell = wsRekap.getCell(`${colMasuk}${rw}`);
       mMasukCell.value = row.bulanan[m].masukRp;
-      mMasukCell.numFmt = '#,##0';
+      mMasukCell.numFmt = EXCEL_CLEAN_NUM_FMT;
       mMasukCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
       const mKeluarCell = wsRekap.getCell(`${colKeluar}${rw}`);
       mKeluarCell.value = row.bulanan[m].keluarRp;
-      mKeluarCell.numFmt = '#,##0';
+      mKeluarCell.numFmt = EXCEL_CLEAN_NUM_FMT;
       mKeluarCell.alignment = { horizontal: 'right', vertical: 'middle' };
 
       // Previous balance column
@@ -830,7 +836,7 @@ export async function generateBOSExcelWorkbook(
         formula: `(${prevBalCol}${rw}+${colMasuk}${rw})-${colKeluar}${rw}`,
         result: row.bulanan[m].saldoAkhirRp
       };
-      mSACell.numFmt = '#,##0';
+      mSACell.numFmt = EXCEL_CLEAN_NUM_FMT;
       mSACell.alignment = { horizontal: 'right', vertical: 'middle' };
       mSACell.font = { bold: true };
     }
@@ -863,7 +869,7 @@ export async function generateBOSExcelWorkbook(
     formula: `SUM(D${rekapStartRow}:D${rekapEndRow})`,
     result: calculation.grandTotal.saldoAwalRp
   };
-  rTotD.numFmt = '#,##0';
+  rTotD.numFmt = EXCEL_CLEAN_NUM_FMT;
   rTotD.font = { name: 'Arial', size: 10, bold: true };
   rTotD.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -879,7 +885,7 @@ export async function generateBOSExcelWorkbook(
       formula: `SUM(${colMasuk}${rekapStartRow}:${colMasuk}${rekapEndRow})`,
       result: calculation.grandTotal.bulanan[m].masukRp
     };
-    tMasuk.numFmt = '#,##0';
+    tMasuk.numFmt = EXCEL_CLEAN_NUM_FMT;
     tMasuk.font = { name: 'Arial', size: 10, bold: true };
     tMasuk.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -888,7 +894,7 @@ export async function generateBOSExcelWorkbook(
       formula: `SUM(${colKeluar}${rekapStartRow}:${colKeluar}${rekapEndRow})`,
       result: calculation.grandTotal.bulanan[m].keluarRp
     };
-    tKeluar.numFmt = '#,##0';
+    tKeluar.numFmt = EXCEL_CLEAN_NUM_FMT;
     tKeluar.font = { name: 'Arial', size: 10, bold: true };
     tKeluar.alignment = { horizontal: 'right', vertical: 'middle' };
 
@@ -897,7 +903,7 @@ export async function generateBOSExcelWorkbook(
       formula: `SUM(${colSA}${rekapStartRow}:${colSA}${rekapEndRow})`,
       result: calculation.grandTotal.bulanan[m].saldoAkhirRp
     };
-    tSA.numFmt = '#,##0';
+    tSA.numFmt = EXCEL_CLEAN_NUM_FMT;
     tSA.font = { name: 'Arial', size: 10, bold: true };
     tSA.alignment = { horizontal: 'right', vertical: 'middle' };
   }

@@ -126,6 +126,91 @@ export function formatRupiah(amount: number): string {
   }).format(amount);
 }
 
+export interface RenderMutasiCellResult {
+  isExist: boolean;
+  displayVolume: string;
+  displaySatuan: string;
+  displayHarga: string;
+  displayJumlah: string;
+  volume: string | number;
+  satuan: string;
+  hargaSatuan: string;
+  jumlah: string;
+}
+
+/**
+ * Renderer untuk Blok SALDO AWAL (Satuan & Harga selalu tampil)
+ * Khusus pada blok SALDO AWAL, nilai Satuan dan Harga Satuan WAJIB TETAP DITAMPILKAN
+ * sebagai master identitas data barang, meskipun nilai Volume = 0 atau Jumlah (Rp) = 0.
+ * Untuk kolom Volume dan Jumlah (Rp) pada Saldo Awal, jika bernilai 0, tampilkan string kosong "".
+ */
+export function renderSaldoAwalCell(
+  volume: number | string | undefined | null,
+  satuan: string | undefined | null,
+  hargaSatuan: number | string | undefined | null,
+  jumlah: number | string | undefined | null
+): RenderMutasiCellResult {
+  const numVol = volume ? Number(volume) : 0;
+  const isExist = Boolean(numVol > 0);
+  const numHarga = hargaSatuan !== undefined && hargaSatuan !== null ? Number(hargaSatuan) : 0;
+  const numJumlah = jumlah ? Number(jumlah) : 0;
+
+  const volFormatted = isExist ? numVol.toLocaleString('id-ID') : '';
+  const satFormatted = satuan || '';
+  const hrgFormatted = formatRupiah(numHarga);
+  const jmlFormatted = numJumlah > 0 ? formatRupiah(numJumlah) : '';
+
+  return {
+    isExist,
+    displayVolume: volFormatted,
+    displaySatuan: satFormatted,
+    displayHarga: hrgFormatted,
+    displayJumlah: jmlFormatted,
+    volume: isExist ? numVol : '',
+    satuan: satFormatted,
+    hargaSatuan: hrgFormatted,
+    jumlah: jmlFormatted
+  };
+}
+
+/**
+ * Renderer untuk Blok MUTASI (Masuk / Keluar)
+ * Pada blok transaksi PENAMBAHAN / MASUK dan PENGURANGAN / KELUAR, jika tidak ada aktivitas mutasi (Volume = 0 atau null):
+ * - Volume: Kosongkan sel ("").
+ * - Satuan: Kosongkan sel ("").
+ * - Harga Satuan: Kosongkan sel ("").
+ * - Jumlah (Rp): Kosongkan sel ("").
+ * Jika terjadi transaksi mutasi (Volume > 0), tampilkan seluruh data lengkap.
+ */
+export function renderMutasiCell(
+  volume: number | string | undefined | null,
+  satuan: string | undefined | null,
+  hargaSatuan: number | string | undefined | null,
+  jumlah: number | string | undefined | null
+): RenderMutasiCellResult {
+  const numVol = volume ? Number(volume) : 0;
+  const hasMutation = Boolean(numVol > 0);
+  const numHarga = hargaSatuan ? Number(hargaSatuan) : 0;
+  const numJumlah = jumlah ? Number(jumlah) : 0;
+
+  const volFormatted = hasMutation ? numVol.toLocaleString('id-ID') : '';
+  const satFormatted = hasMutation ? (satuan || '') : '';
+  const hrgFormatted = hasMutation && numHarga > 0 ? formatRupiah(numHarga) : '';
+  const jmlFormatted = hasMutation && numJumlah > 0 ? formatRupiah(numJumlah) : '';
+
+  return {
+    isExist: hasMutation,
+    displayVolume: volFormatted,
+    displaySatuan: satFormatted,
+    displayHarga: hrgFormatted,
+    displayJumlah: jmlFormatted,
+    volume: hasMutation ? numVol : '',
+    satuan: satFormatted,
+    hargaSatuan: hrgFormatted,
+    jumlah: jmlFormatted
+  };
+}
+
 /**
  * Format plain date to formal Indonesian string: "12 September 2026"
  */

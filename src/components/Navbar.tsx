@@ -185,7 +185,7 @@ export const Navbar: React.FC<Props> = ({
                   }`}
                 >
                   <Users className="w-3.5 h-3.5" />
-                  Master Pejabat
+                  Master Pegawai
                 </button>
               )}
             </nav>
@@ -217,39 +217,6 @@ export const Navbar: React.FC<Props> = ({
               </button>
             )}
 
-            {/* Toggle Format Kertas Cetak Dokumen (A4 / F4) */}
-            {onSelectPaperSize && (
-              <div 
-                className="flex items-center bg-slate-900 border border-slate-700/80 rounded-lg p-0.5 shadow-2xs"
-                title="Pilihan Format Ukuran Kertas Cetak Berkas Dokumen"
-              >
-                <span className="text-[10px] font-medium text-slate-400 px-1.5 hidden xl:inline">Kertas:</span>
-                <button
-                  type="button"
-                  onClick={() => onSelectPaperSize('A4')}
-                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
-                    paperSize === 'A4'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Format Standar A4 (210 x 297 mm)"
-                >
-                  A4
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onSelectPaperSize('F4')}
-                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all ${
-                    paperSize === 'F4'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                  title="Format Standar F4 / Folio (215 x 330 mm)"
-                >
-                  F4
-                </button>
-              </div>
-            )}
 
             {/* Admin-Only Config & Maintenance Tools */}
             {isAdmin && (
@@ -260,7 +227,7 @@ export const Navbar: React.FC<Props> = ({
                     type="button"
                     onClick={() => onOpenUnifiedSettings('all')}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 text-slate-200 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-md border border-slate-700 transition-colors shadow-2xs cursor-pointer"
-                    title="Buka Form Pengaturan Terpadu Instansi (Kop Surat, Format Penomoran, Master Pejabat, Backup & Danger Zone)"
+                    title="Buka Form Pengaturan Terpadu Instansi (Kop Surat, Format Penomoran, Master Pegawai, Backup & Danger Zone)"
                   >
                     <SlidersHorizontal className="w-3.5 h-3.5 text-blue-400" />
                     <span className="hidden lg:inline text-xs font-semibold">Pengaturan</span>
@@ -572,7 +539,7 @@ export const Navbar: React.FC<Props> = ({
                 onClick={() => onTabChange('pejabat')}
                 className={`px-2 py-1 rounded-md transition-colors ${activeTab === 'pejabat' ? 'bg-blue-600 text-white font-bold' : 'text-slate-400'}`}
               >
-                Pejabat
+                Pegawai
               </button>
             )}
           </div>

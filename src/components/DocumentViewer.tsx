@@ -1,4 +1,4 @@
-import { Printer } from 'lucide-react';
+import { FileText, Printer } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
   Barang, 
@@ -129,16 +129,61 @@ export const DocumentViewer: React.FC<Props> = ({
     }
   }, [initialBarangId]);
 
-  const activeTransaksi = transaksiList.find(t => t.id === selectedTransaksiId) || transaksiList[0];
+  // Helper to test if a transaction belongs to the selected period
+  const isDateInPeriod = (trx: TransaksiPengeluaran, month: number, year: number): boolean => {
+    const rawDate = trx.tanggal || trx.createdAt;
+    if (!rawDate) return false;
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) return false;
+
+    if (d.getFullYear() !== year) return false;
+
+    if (month === -1) return true; // 1 Tahun Penuh
+    if (month === 101) return d.getMonth() >= 0 && d.getMonth() <= 2; // Triwulan I
+    if (month === 102) return d.getMonth() >= 3 && d.getMonth() <= 5; // Triwulan II
+    if (month === 103) return d.getMonth() >= 6 && d.getMonth() <= 8; // Triwulan III
+    if (month === 104) return d.getMonth() >= 9 && d.getMonth() <= 11; // Triwulan IV
+    return d.getMonth() === month;
+  };
+
+  // Reactively filtered transactions for the selected month and year
+  const filteredTransaksiList = useMemo(() => {
+    return transaksiList.filter(trx => isDateInPeriod(trx, selectedMonth, selectedYear));
+  }, [transaksiList, selectedMonth, selectedYear]);
+
+  // Reactive auto-selection: when period changes, if selected transaction is not in filtered list,
+  // automatically select the first valid transaction in that period.
+  useEffect(() => {
+    if (filteredTransaksiList.length > 0) {
+      const isCurrentValid = filteredTransaksiList.some(t => t.id === selectedTransaksiId);
+      if (!isCurrentValid) {
+        onSelectTransaksi(filteredTransaksiList[0].id);
+      }
+    }
+  }, [filteredTransaksiList, selectedTransaksiId, onSelectTransaksi]);
+
+  // Active transaction resolved from filtered list
+  const activeTransaksi = useMemo(() => {
+    if (filteredTransaksiList.length === 0) return undefined;
+    return filteredTransaksiList.find(t => t.id === selectedTransaksiId) || filteredTransaksiList[0];
+  }, [filteredTransaksiList, selectedTransaksiId]);
+
   const activeBarang = masterBarang.find(b => b.id === selectedBarangId) || masterBarang[0];
 
   const isLandscape = docType === 'buku_penerimaan' || docType === 'buku_pengeluaran' || docType === 'buku_rekap' || docType === 'kartu_persediaan' || docType === 'mutasi_bos';
   const isBOSSheet = docType === 'mutasi_bos';
 
   const docConfig = ALL_DOCUMENTS_CATALOG.find(d => d.id === docType) || ALL_DOCUMENTS_CATALOG[0];
-  const activePeriodInfo = selectedMonth === -1 
-    ? `Akumulasi Penuh Tahun ${selectedYear}`
-    : `${MONTHS_ID[selectedMonth]} ${selectedYear}`;
+  const isOperasional = docConfig.category === 'operasional';
+
+  const activePeriodInfo = useMemo(() => {
+    if (selectedMonth === -1) return `Akumulasi Penuh Tahun ${selectedYear}`;
+    if (selectedMonth === 101) return `Triwulan I (Jan - Mar) ${selectedYear}`;
+    if (selectedMonth === 102) return `Triwulan II (Apr - Jun) ${selectedYear}`;
+    if (selectedMonth === 103) return `Triwulan III (Jul - Sep) ${selectedYear}`;
+    if (selectedMonth === 104) return `Triwulan IV (Okt - Des) ${selectedYear}`;
+    return `${MONTHS_ID[selectedMonth]} ${selectedYear}`;
+  }, [selectedMonth, selectedYear]);
 
   const handleExportFullBOSExcel = async () => {
     try {
@@ -238,7 +283,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 activeTransactionInfo={activeTransaksi ? {
                   nomorUrut: activeTransaksi.nomorUrut,
                   unitPemohon: activeTransaksi.unitPemohon,
-                  tanggalSurat: activeTransaksi.tanggalSurat,
+                  tanggalSurat: activeTransaksi.tanggal,
                   itemsCount: activeTransaksi.items.length
                 } : undefined}
                 activePeriodInfo={activePeriodInfo}
@@ -250,6 +295,7 @@ export const DocumentViewer: React.FC<Props> = ({
               <DocumentDetailPanel
                 selectedDocType={docType}
                 transaksiList={transaksiList}
+                filteredTransaksiList={filteredTransaksiList}
                 selectedTransaksiId={selectedTransaksiId}
                 onSelectTransaksi={onSelectTransaksi}
                 masterBarang={masterBarang}
@@ -310,6 +356,28 @@ export const DocumentViewer: React.FC<Props> = ({
             style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
             className="transition-transform duration-150 print:transform-none"
           >
+          {/* Notice when operational document has no transactions in selected period */}
+          {isOperasional && !activeTransaksi && (
+            <div className="bg-white rounded-2xl border border-slate-300 p-8 sm:p-10 text-center max-w-md mx-auto shadow-sm my-8">
+              <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mx-auto mb-3">
+                <FileText className="w-6 h-6" />
+              </div>
+              <h4 className="text-sm font-bold text-slate-800 mb-1">
+                Tidak Ada Transaksi Penyaluran
+              </h4>
+              <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                Tidak ditemukan data transaksi penyaluran barang pada periode <strong>{activePeriodInfo}</strong>. Silakan pilih bulan/tahun lain atau tampilkan 1 tahun penuh.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSelectedMonth(-1)}
+                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg shadow-2xs transition-colors cursor-pointer"
+              >
+                Tampilkan 1 Tahun Penuh ({selectedYear})
+              </button>
+            </div>
+          )}
+
           {/* Bundle Dokumen Operasional: Renders 4 separate A4Container sheets with page breaks */}
           {docType === 'bundle' && activeTransaksi && (
             <DocumentBundle

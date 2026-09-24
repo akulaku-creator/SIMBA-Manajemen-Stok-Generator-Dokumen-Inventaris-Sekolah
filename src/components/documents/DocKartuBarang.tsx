@@ -8,6 +8,7 @@ import {
   TransaksiPengeluaran 
 } from '../../types';
 import { formatTanggalIndonesia, MONTHS_ID } from '../../utils/numberGenerator';
+import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
 
 export interface DocKartuBarangProps {
@@ -62,19 +63,8 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
   minRows = 12,
   isLast = false
 }) => {
-  const kepsek = pejabatList.find(p => p.id === 'pejabat-kepsek') || pejabatList[0] || {
-    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
-    nip: '19680512 199303 1 005',
-    pangkatGolongan: 'Pembina Utama Muda / IV c',
-    jabatan: 'Kepala Sekolah'
-  };
-
-  const pengurusBarang = pejabatList.find(p => p.id === 'pejabat-pengurus-barang') || pejabatList[2] || {
-    nama: 'Rina Kartikasari, S.AP.',
-    nip: '19890820 201402 2 003',
-    pangkatGolongan: 'Penata Muda / III a',
-    jabatan: 'Pengurus Barang Pembantu'
-  };
+  const kepsek = resolveKepalaSekolah(pejabatList);
+  const pengurusBarang = resolvePengurusBarang(pejabatList);
 
   const { startDate, endDate, labelPeriode } = useMemo(() => {
     return getKartuBarangDateRange(periodFilter);

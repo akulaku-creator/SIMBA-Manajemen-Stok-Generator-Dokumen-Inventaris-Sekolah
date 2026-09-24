@@ -4,13 +4,12 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  Copy,
   Download,
   Eye,
   FileText,
   Info,
   Package,
-  Sparkles,
+  ShieldCheck,
   Users
 } from 'lucide-react';
 import React, { useState } from 'react';
@@ -25,11 +24,13 @@ import {
 } from '../types';
 import { ALL_DOCUMENTS_CATALOG } from './DocumentListView';
 import { MONTHS_ID } from '../utils/numberGenerator';
+import { buildVerificationData, DocTypeShort } from '../utils/qrVerificationHelper';
 
 interface Props {
   selectedDocType: DocumentType;
   // Transactions
   transaksiList: TransaksiPengeluaran[];
+  filteredTransaksiList?: TransaksiPengeluaran[];
   selectedTransaksiId: string;
   onSelectTransaksi: (id: string) => void;
   // Goods
@@ -63,6 +64,7 @@ interface Props {
 export const DocumentDetailPanel: React.FC<Props> = ({
   selectedDocType,
   transaksiList,
+  filteredTransaksiList,
   selectedTransaksiId,
   onSelectTransaksi,
   masterBarang,
@@ -86,11 +88,13 @@ export const DocumentDetailPanel: React.FC<Props> = ({
   isExportingBOS = false,
   onFocusPreview
 }) => {
-  const [copiedText, setCopiedText] = useState<string | null>(null);
   const [isDescOpen, setIsDescOpen] = useState(false);
 
   const docConfig = ALL_DOCUMENTS_CATALOG.find(d => d.id === selectedDocType) || ALL_DOCUMENTS_CATALOG[0];
-  const activeTrx = transaksiList.find(t => t.id === selectedTransaksiId) || transaksiList[0];
+  
+  // Use reactive filtered transactions if provided, fallback to raw transaksiList
+  const activeFilteredTrxList = filteredTransaksiList ?? transaksiList;
+  const activeTrx = activeFilteredTrxList.find(t => t.id === selectedTransaksiId);
 
   // Resolve current active signatories
   const activeKepsek = pejabatList.find(p => p.id === selectedKepalaSekolahId) ||
@@ -103,23 +107,20 @@ export const DocumentDetailPanel: React.FC<Props> = ({
     pejabatList[0];
 
   const isOperasional = docConfig.category === 'operasional';
-  const isLaporanMutasi = docConfig.category === 'laporan';
   const isKartuBarang = selectedDocType === 'kartu_barang' || selectedDocType === 'kartu_persediaan';
-  const isStockOpname = selectedDocType === 'bast_stock_opname';
   const isIndukBOS = docConfig.category === 'induk';
 
-  const copyDocNumbers = () => {
-    if (!activeTrx) return;
-    const text = `NPB: ${activeTrx.noNPB}\nSPB: ${activeTrx.noSPB}\nSPPB: ${activeTrx.noSPPB}\nBAST: ${activeTrx.noBAST}`;
-    navigator.clipboard.writeText(text);
-    setCopiedText('Nomor Disalin!');
-    setTimeout(() => setCopiedText(null), 2000);
+  const formatDateIndo = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   return (
     <div className="w-full bg-white rounded-xl border border-slate-200/90 shadow-2xs overflow-hidden flex flex-col">
       {/* Header Panel: Judul Dokumen Aktif & Ringkasan Cepat */}
-      <div className="p-3 sm:p-4 border-b border-slate-100 bg-slate-50/70">
+      <div className="p-3 sm:p-3.5 border-b border-slate-100 bg-slate-50/70">
         <div className="flex items-start justify-between gap-2.5">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
@@ -152,7 +153,7 @@ export const DocumentDetailPanel: React.FC<Props> = ({
               title="Tampilkan / Sembunyikan Deskripsi & Maksud Dokumen"
             >
               <Info className="w-3.5 h-3.5 text-blue-600" />
-              <span className="hidden sm:inline">Info Dokumen</span>
+              <span className="hidden sm:inline">Info</span>
               {isDescOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
 
@@ -183,262 +184,238 @@ export const DocumentDetailPanel: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Konten Card Parameter Ringkas */}
-      <div className="p-3 sm:p-4 space-y-3.5 overflow-y-auto max-h-[640px] text-xs">
+      {/* Konten Card Parameter: Clean UI & Compact Grid Layout */}
+      <div className="p-3 sm:p-3.5 space-y-3 overflow-y-auto max-h-[640px] text-xs">
 
-        {/* 1. RINGKASAN TRANSAKSI DALAM 1 BARIS RINGKAS */}
-        <div className="bg-slate-50/90 border border-slate-200 rounded-xl px-3 py-2 flex items-center justify-between text-xs text-slate-700 shadow-2xs">
+        {/* 1. SINGLE-LINE INFO STAT */}
+        <div className="bg-slate-50/90 border border-slate-200 rounded-xl px-3 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-700 shadow-2xs">
           <div className="flex items-center gap-1.5">
-            <Boxes className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+            <span className="text-[11px]">
+              Total Penyaluran: <strong id="stat_total_trx" className="text-slate-900 font-bold">{activeFilteredTrxList.length}</strong> Transaksi
+            </span>
+          </div>
+          <div className="hidden sm:block h-3.5 w-px bg-slate-300 shrink-0" />
+          <div className="flex items-center gap-1.5">
+            <Boxes className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span className="text-[11px]">Komoditas: <strong className="text-slate-900 font-bold">{masterBarang.length} Item</strong></span>
           </div>
-          <div className="h-3.5 w-px bg-slate-300 shrink-0" />
-          <div className="flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-            <span className="text-[11px]">Penyaluran: <strong className="text-slate-900 font-bold">{transaksiList.length} Transaksi</strong></span>
-          </div>
-          <div className="h-3.5 w-px bg-slate-300 shrink-0" />
+          <div className="hidden sm:block h-3.5 w-px bg-slate-300 shrink-0" />
           <div className="flex items-center gap-1.5">
             <Package className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
             <span className="text-[11px]">Penerimaan: <strong className="text-slate-900 font-bold">{transaksiPenerimaanList.length} Faktur</strong></span>
           </div>
         </div>
 
-        {/* 2. CARD PARAMETER LAPORAN (Periode Laporan / Filter Spesifik Dokumen) */}
-        <div className="space-y-2.5 bg-blue-50/30 p-3 rounded-xl border border-blue-100/80">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-              <span>Parameter Laporan Dokumen</span>
-            </h3>
-            <span className="text-[10px] text-blue-700 font-semibold bg-blue-100/60 px-2 py-0.5 rounded">
-              {docConfig.code}
-            </span>
-          </div>
-
-          {/* PERIODE LAPORAN: Filter Triwulan/Bulan dan Tahun */}
-          <div className="space-y-1.5">
-            <label className="font-semibold text-slate-700 flex items-center gap-1.5 text-xs">
-              <Calendar className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Periode Laporan (Bulan/Triwulan &amp; Tahun):</span>
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                value={selectedMonth}
-                onChange={(e) => onSelectMonth(Number(e.target.value))}
-                className="py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
-              >
-                <option value={-1}>Akumulasi 1 Tahun Penuh</option>
-                <option value={2}>Triwulan I (Jan - Mar)</option>
-                <option value={5}>Triwulan II (Apr - Jun)</option>
-                <option value={8}>Triwulan III (Jul - Sep)</option>
-                <option value={11}>Triwulan IV (Okt - Des)</option>
-                {MONTHS_ID.map((m, idx) => (
-                  <option key={m} value={idx}>{m}</option>
-                ))}
-              </select>
-
-              <select
-                value={selectedYear}
-                onChange={(e) => onSelectYear(Number(e.target.value))}
-                className="py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden"
-              >
-                {TAHUN_ANGGARAN_OPTIONS.map((year) => (
-                  <option key={year} value={year}>{year}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Parameter Tambahan Khusus Dokumen Operasional */}
-          {isOperasional && (
-            <div className="space-y-2 pt-1 border-t border-blue-100/60">
-              <label className="font-semibold text-slate-700 flex items-center justify-between text-xs">
-                <span>Pilih Transaksi yang Diterbitkan:</span>
-                <span className="font-mono text-[10px] text-slate-500">
-                  {transaksiList.length} Transaksi
+        {/* 2. COMPACT GRID LAYOUT (2-KOLOM) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          
+          {/* KOLOM 1: 1. PILIH PERIODE & TRANSAKSI */}
+          <div className="bg-blue-50/30 p-3 rounded-xl border border-blue-100/80 space-y-2.5 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <span>1. Periode &amp; Transaksi</span>
+                </h3>
+                <span className="text-[10px] text-blue-700 font-semibold bg-blue-100/60 px-1.5 py-0.5 rounded font-mono">
+                  {activeFilteredTrxList.length} Trx
                 </span>
-              </label>
+              </div>
 
-              <select
-                value={selectedTransaksiId}
-                onChange={(e) => onSelectTransaksi(e.target.value)}
-                className="w-full py-1.5 px-2.5 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-              >
-                {transaksiList.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    #{t.nomorUrut} - {t.unitPemohon} ({t.items.length} item) | {t.tanggalSurat}
-                  </option>
-                ))}
-              </select>
+              {/* PERIODE: Filter Bulan & Tahun */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label htmlFor="filter_bulan" className="text-[10px] font-semibold text-slate-500 block mb-1">
+                    Bulan / Triwulan:
+                  </label>
+                  <select
+                    id="filter_bulan"
+                    value={selectedMonth}
+                    onChange={(e) => onSelectMonth(Number(e.target.value))}
+                    className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value={-1}>1 Tahun Penuh</option>
+                    <option value={101}>Triwulan I (Jan - Mar)</option>
+                    <option value={102}>Triwulan II (Apr - Jun)</option>
+                    <option value={103}>Triwulan III (Jul - Sep)</option>
+                    <option value={104}>Triwulan IV (Okt - Des)</option>
+                    {MONTHS_ID.map((m, idx) => (
+                      <option key={m} value={idx}>{m}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {activeTrx && (
-                <div className="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Unit Pemohon:</span>
-                    <span className="font-bold text-slate-800">{activeTrx.unitPemohon}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Tanggal Transaksi:</span>
-                    <span className="font-medium text-slate-700">{activeTrx.tanggalSurat}</span>
-                  </div>
+                <div>
+                  <label htmlFor="filter_tahun" className="text-[10px] font-semibold text-slate-500 block mb-1">
+                    Tahun Anggaran:
+                  </label>
+                  <select
+                    id="filter_tahun"
+                    value={selectedYear}
+                    onChange={(e) => onSelectYear(Number(e.target.value))}
+                    className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                  >
+                    {TAHUN_ANGGARAN_OPTIONS.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-                  {/* Rantai Nomor Surat */}
-                  <div className="pt-1.5 border-t border-slate-100">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold text-slate-600 uppercase">Rantai Nomor Surat:</span>
+              {/* Transaksi Diterbitkan (untuk Dokumen Operasional) */}
+              {isOperasional && (
+                <div className="pt-1">
+                  <label htmlFor="select_transaksi" className="text-[10px] font-semibold text-slate-500 block mb-1">
+                    Transaksi Diterbitkan:
+                  </label>
+                  <select
+                    id="select_transaksi"
+                    value={activeFilteredTrxList.length > 0 ? (selectedTransaksiId || activeTrx?.id || '') : ''}
+                    onChange={(e) => onSelectTransaksi(e.target.value)}
+                    disabled={activeFilteredTrxList.length === 0}
+                    className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-semibold text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400 cursor-pointer truncate"
+                  >
+                    {activeFilteredTrxList.length === 0 ? (
+                      <option value="">-- Tidak ada transaksi pada periode ini --</option>
+                    ) : (
+                      activeFilteredTrxList.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          #{t.nomorUrut} - {t.unitPemohon} ({t.items.length} item)
+                        </option>
+                      ))
+                    )}
+                  </select>
+
+                  {/* QR Code Verification Indicator */}
+                  {activeTrx && (
+                    <div className="mt-2 p-2 bg-emerald-50/90 border border-emerald-200 rounded-lg flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="p-1 bg-emerald-100 rounded text-emerald-700 shrink-0">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                        </div>
+                        <div className="truncate">
+                          <div className="text-[10px] font-bold text-emerald-950 flex items-center gap-1">
+                            QR Code Terverifikasi Aktif
+                          </div>
+                          <div className="text-[9px] text-emerald-700 font-mono truncate">
+                            Validitas TTE Digital SIMBA
+                          </div>
+                        </div>
+                      </div>
                       <button
                         type="button"
-                        onClick={copyDocNumbers}
-                        className="text-blue-600 hover:text-blue-800 text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
+                        onClick={() => {
+                          const docShort: DocTypeShort = selectedDocType === 'npb' ? 'NPB' : selectedDocType === 'spb' ? 'SPB' : selectedDocType === 'sppb' ? 'SPPB' : 'BAST';
+                          const docNo = docShort === 'NPB' ? activeTrx.noNPB : docShort === 'SPB' ? activeTrx.noSPB : docShort === 'SPPB' ? activeTrx.noSPPB : activeTrx.noBAST;
+                          const verifData = buildVerificationData(docShort, activeTrx, docNo);
+                          window.dispatchEvent(new CustomEvent('simba:verify-doc', { detail: { ...verifData, transaksi: activeTrx } }));
+                        }}
+                        className="px-2 py-1 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded shadow-xs transition-colors shrink-0 cursor-pointer"
+                        title="Klik untuk membuka jendela verifikasi keaslian dokumen"
                       >
-                        {copiedText ? (
-                          <>
-                            <Check className="w-3 h-3 text-emerald-600" />
-                            <span className="text-emerald-600">{copiedText}</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3 h-3" />
-                            <span>Salin Nomor</span>
-                          </>
-                        )}
+                        Cek Validasi
                       </button>
                     </div>
+                  )}
+                </div>
+              )}
 
-                    <div className="grid grid-cols-2 gap-1 font-mono text-[9px]">
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 truncate">
-                        <span className="text-slate-400">NPB: </span>{activeTrx.noNPB}
-                      </div>
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 truncate">
-                        <span className="text-slate-400">SPB: </span>{activeTrx.noSPB}
-                      </div>
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 truncate">
-                        <span className="text-slate-400">SPPB: </span>{activeTrx.noSPPB}
-                      </div>
-                      <div className="bg-slate-50 p-1 rounded border border-slate-200 truncate font-semibold text-blue-700">
-                        <span className="text-slate-400">BAST: </span>{activeTrx.noBAST}
-                      </div>
+              {/* Pemilihan Komoditas untuk Kartu Barang */}
+              {isKartuBarang && (
+                <div className="pt-1 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold text-slate-500">Pilih Komoditas:</span>
+                    <div className="inline-flex bg-white rounded-lg p-0.5 border border-slate-300">
+                      <button
+                        type="button"
+                        onClick={() => onToggleBatchPrintAll(false)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                          !isBatchPrintAll ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600'
+                        }`}
+                      >
+                        1 Barang
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onToggleBatchPrintAll(true)}
+                        className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
+                          isBatchPrintAll ? 'bg-purple-600 text-white shadow-2xs' : 'text-slate-600'
+                        }`}
+                      >
+                        Semua ({masterBarang.length})
+                      </button>
                     </div>
                   </div>
+
+                  {!isBatchPrintAll && (
+                    <select
+                      value={selectedBarangId}
+                      onChange={(e) => onSelectBarang(e.target.value)}
+                      className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-medium text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500 cursor-pointer truncate"
+                    >
+                      {masterBarang.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.namaBarang} (Stok: {b.stokSekarang} {b.satuan})
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
             </div>
-          )}
 
-          {/* Parameter Tambahan Khusus Kartu Barang & Persediaan */}
-          {isKartuBarang && (
-            <div className="space-y-2 pt-1 border-t border-blue-100/60">
+            {/* Ekspor Format Excel BOS jika relevan */}
+            {isIndukBOS && onExportExcelBOS && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={onExportExcelBOS}
+                  disabled={isExportingBOS}
+                  className="w-full py-1.5 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{isExportingBOS ? 'Mengekspor Excel...' : 'Ekspor Format Resmi Excel (.xlsx)'}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* KOLOM 2: 2. RINGKASAN & PENANDATANGAN */}
+          <div className="bg-slate-50/70 p-3 rounded-xl border border-slate-200 space-y-2.5 flex flex-col justify-between">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-700 text-xs">Pilih Komoditas:</span>
-                <div className="inline-flex bg-white rounded-lg p-0.5 border border-slate-300">
-                  <button
-                    type="button"
-                    onClick={() => onToggleBatchPrintAll(false)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                      !isBatchPrintAll ? 'bg-blue-600 text-white shadow-2xs' : 'text-slate-600'
-                    }`}
-                  >
-                    1 Barang
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onToggleBatchPrintAll(true)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-semibold cursor-pointer ${
-                      isBatchPrintAll ? 'bg-purple-600 text-white shadow-2xs' : 'text-slate-600'
-                    }`}
-                  >
-                    Cetak Semua ({masterBarang.length})
-                  </button>
-                </div>
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                  <span>2. Ringkasan &amp; Penandatangan</span>
+                </h3>
               </div>
 
-              {!isBatchPrintAll && (
-                <select
-                  value={selectedBarangId}
-                  onChange={(e) => onSelectBarang(e.target.value)}
-                  className="w-full py-1.5 px-2 bg-white border border-slate-300 rounded-lg text-slate-800 font-medium text-xs focus:outline-hidden focus:ring-1 focus:ring-blue-500"
-                >
-                  {masterBarang.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {b.namaBarang} (Stok: {b.stokSekarang} {b.satuan}) - {b.kodeRekening}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
-
-          {/* Parameter Tambahan Khusus Laporan BOS */}
-          {isIndukBOS && onExportExcelBOS && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={onExportExcelBOS}
-                disabled={isExportingBOS}
-                className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 cursor-pointer shadow-2xs"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>{isExportingBOS ? 'Mengekspor Excel...' : 'Ekspor Format Resmi Excel (.xlsx)'}</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 3. PIHAK PENANDATANGAN: DROPDOWN INTERAKTIF DENGAN PENAMPIL NIP OTOMATIS */}
-        <div className="space-y-2 bg-white p-3 rounded-xl border border-slate-200 shadow-2xs">
-          <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-            <Users className="w-3.5 h-3.5 text-blue-600" />
-            <span>Pihak Penandatangan Berwenang</span>
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Dropdown Kepala Sekolah / Kuasa Pengguna Barang */}
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
-              <label className="text-[10px] text-slate-500 uppercase font-bold block">
-                Kepala Sekolah / Kuasa Pengguna
-              </label>
-              {onSelectKepalaSekolah ? (
-                <select
-                  value={selectedKepalaSekolahId || activeKepsek?.id}
-                  onChange={(e) => onSelectKepalaSekolah(e.target.value)}
-                  className="w-full text-xs py-1.5 px-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
-                >
-                  {pejabatList.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nama} ({p.jabatan || 'Pejabat'})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <span className="font-bold text-slate-900 block truncate">
-                  {activeKepsek?.nama || 'Kepala Sekolah'}
-                </span>
-              )}
-
-              {/* Penampil NIP Otomatis */}
-              <div className="text-[10px] text-slate-600 font-mono bg-white p-1.5 rounded-md border border-slate-200">
+              {/* Detail Transaksi Ringkas */}
+              <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-1 text-[11px]">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-400">NIP:</span>
-                  <span className="font-semibold text-slate-800">{activeKepsek?.nip || '-'}</span>
+                  <span className="text-slate-500">Unit Pemohon:</span>
+                  <strong id="detail_pemohon" className="text-slate-900 font-bold">
+                    {activeTrx ? activeTrx.unitPemohon : '-'}
+                  </strong>
                 </div>
-                {activeKepsek?.pangkatGolongan && (
-                  <div className="text-[9px] text-slate-500 truncate mt-0.5 border-t border-slate-100 pt-0.5">
-                    {activeKepsek.pangkatGolongan}
-                  </div>
-                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500">Tanggal Transaksi:</span>
+                  <strong id="detail_tanggal" className="text-slate-900 font-bold">
+                    {activeTrx ? formatDateIndo(activeTrx.tanggal || activeTrx.tanggalSurat) : '-'}
+                  </strong>
+                </div>
               </div>
-            </div>
 
-            {/* Dropdown Pengurus Barang Pembantu */}
-            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
-              <label className="text-[10px] text-slate-500 uppercase font-bold block">
-                Pengurus Barang Pembantu
-              </label>
-              {onSelectPengurusBarang ? (
+              {/* Dropdown Pejabat Pengurus Barang */}
+              <div>
+                <label htmlFor="select_pejabat" className="text-[10px] font-semibold text-slate-500 block mb-1">
+                  Pengurus Barang Pembantu:
+                </label>
                 <select
+                  id="select_pejabat"
                   value={selectedPengurusBarangId || activePengurus?.id}
-                  onChange={(e) => onSelectPengurusBarang(e.target.value)}
+                  onChange={(e) => onSelectPengurusBarang && onSelectPengurusBarang(e.target.value)}
                   className="w-full text-xs py-1.5 px-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
                 >
                   {pejabatList.map((p) => (
@@ -447,31 +424,46 @@ export const DocumentDetailPanel: React.FC<Props> = ({
                     </option>
                   ))}
                 </select>
-              ) : (
-                <span className="font-bold text-slate-900 block truncate">
-                  {activePengurus?.nama || 'Pengurus Barang'}
-                </span>
-              )}
-
-              {/* Penampil NIP Otomatis */}
-              <div className="text-[10px] text-slate-600 font-mono bg-white p-1.5 rounded-md border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400">NIP:</span>
-                  <span className="font-semibold text-slate-800">{activePengurus?.nip || '-'}</span>
+                <div className="text-[10px] text-slate-500 font-mono mt-0.5 px-1 flex items-center justify-between">
+                  <span>NIP: {activePengurus?.nip || '-'}</span>
+                  {activePengurus?.pangkatGolongan && (
+                    <span className="text-[9px] text-slate-400 truncate">{activePengurus.pangkatGolongan}</span>
+                  )}
                 </div>
-                {activePengurus?.pangkatGolongan && (
-                  <div className="text-[9px] text-slate-500 truncate mt-0.5 border-t border-slate-100 pt-0.5">
-                    {activePengurus.pangkatGolongan}
-                  </div>
-                )}
+              </div>
+
+              {/* Dropdown Kepala Sekolah / Kuasa Pengguna */}
+              <div>
+                <label htmlFor="select_kepsek" className="text-[10px] font-semibold text-slate-500 block mb-1">
+                  Kepala Sekolah / Kuasa Pengguna:
+                </label>
+                <select
+                  id="select_kepsek"
+                  value={selectedKepalaSekolahId || activeKepsek?.id}
+                  onChange={(e) => onSelectKepalaSekolah && onSelectKepalaSekolah(e.target.value)}
+                  className="w-full text-xs py-1.5 px-2 bg-white border border-slate-300 rounded-lg font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                >
+                  {pejabatList.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.nama} ({p.jabatan || 'Pejabat'})
+                    </option>
+                  ))}
+                </select>
+                <div className="text-[10px] text-slate-500 font-mono mt-0.5 px-1 flex items-center justify-between">
+                  <span>NIP: {activeKepsek?.nip || '-'}</span>
+                  {activeKepsek?.pangkatGolongan && (
+                    <span className="text-[9px] text-slate-400 truncate">{activeKepsek.pangkatGolongan}</span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
+
         </div>
 
-        {/* 4. Rincian Barang Dokumen Operasional Terpilih */}
+        {/* 3. RINCIAN BARANG DOKUMEN OPERASIONAL TERPILIH (JIKA ADA TRANSAKSI AKTIF) */}
         {isOperasional && activeTrx && (
-          <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+          <div className="bg-white p-2.5 rounded-xl border border-slate-200 space-y-1.5">
             <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
               <span className="flex items-center gap-1.5">
                 <Package className="w-3.5 h-3.5 text-blue-600" />
@@ -483,7 +475,7 @@ export const DocumentDetailPanel: React.FC<Props> = ({
             </h3>
 
             <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <div className="max-h-40 overflow-y-auto">
+              <div className="max-h-36 overflow-y-auto">
                 <table className="w-full text-left text-[10px]">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold sticky top-0">
                     <tr>

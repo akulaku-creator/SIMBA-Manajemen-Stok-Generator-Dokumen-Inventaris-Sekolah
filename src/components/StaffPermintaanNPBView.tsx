@@ -34,6 +34,7 @@ import {
 } from '../types';
 import { formatTanggalIndonesia, generateDocumentNumbers, calculateNextDocumentCounters, deriveSchoolCode } from '../utils/numberGenerator';
 import { getBarangByRekening, getUniqueKodeRekening } from '../utils/rekeningHelper';
+import { getNamaRekeningByKode } from '../data/kodeRekeningData';
 import { DocNPB } from './documents/DocNPB';
 
 interface Props {
@@ -91,7 +92,7 @@ export const StaffPermintaanNPBView: React.FC<Props> = ({
       kodeBarang: defaultInitialBarang?.kodeBarang || '',
       nusp: defaultInitialBarang?.nusp || '',
       kodeRekening: defaultInitialBarang?.kodeRekening || defaultInitialRekening,
-      namaRekening: defaultInitialBarang?.namaRekening || rekeningList[0]?.nama || 'Belanja Alat Tulis Kantor',
+      namaRekening: defaultInitialBarang?.namaRekening || rekeningList[0]?.nama || getNamaRekeningByKode(defaultInitialRekening),
       namaBarang: defaultInitialBarang?.namaBarang || '',
       spesifikasi: defaultInitialBarang?.spesifikasi || '',
       satuan: defaultInitialBarang?.satuan || 'Pcs',
@@ -168,7 +169,7 @@ export const StaffPermintaanNPBView: React.FC<Props> = ({
       kodeBarang: firstAvailable.kodeBarang,
       nusp: firstAvailable.nusp,
       kodeRekening: firstAvailable.kodeRekening || targetRekening,
-      namaRekening: firstAvailable.namaRekening || rekeningList.find(r => r.kode === targetRekening)?.nama || 'Belanja Alat Tulis Kantor',
+      namaRekening: firstAvailable.namaRekening || rekeningList.find(r => r.kode === targetRekening)?.nama || getNamaRekeningByKode(targetRekening),
       namaBarang: firstAvailable.namaBarang,
       spesifikasi: firstAvailable.spesifikasi || '',
       satuan: firstAvailable.satuan,

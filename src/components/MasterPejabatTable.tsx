@@ -1,6 +1,7 @@
-import { Edit2, FileSpreadsheet, Plus, Trash2, UserCheck, Users, X } from 'lucide-react';
+import { Download, Edit2, FileSpreadsheet, Plus, Search, Trash2, UserCheck, Users, X } from 'lucide-react';
 import React, { useState } from 'react';
-import { Pejabat } from '../types';
+import { DAFTAR_JABATAN_KEDINASAN, Pejabat } from '../types';
+import { exportMasterPegawaiToExcel } from '../utils/excelHelper';
 import { ImportPejabatModal } from './ImportPejabatModal';
 
 interface Props {
@@ -21,6 +22,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
 
   const [formData, setFormData] = useState<Partial<Pejabat>>({
     nama: '',
@@ -28,6 +30,17 @@ export const MasterPejabatTable: React.FC<Props> = ({
     pangkatGolongan: '',
     jabatan: '',
     unitKerja: ''
+  });
+
+  const filteredPejabat = pejabatList.filter(p => {
+    const q = search.toLowerCase();
+    return (
+      p.nama.toLowerCase().includes(q) ||
+      p.nip.toLowerCase().includes(q) ||
+      p.jabatan.toLowerCase().includes(q) ||
+      (p.unitKerja && p.unitKerja.toLowerCase().includes(q)) ||
+      (p.pangkatGolongan && p.pangkatGolongan.toLowerCase().includes(q))
+    );
   });
 
   const handleOpenAdd = () => {
@@ -78,7 +91,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
         <div>
           <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-blue-600" />
-            Master Pejabat &amp; Penandatangan Dokumen
+            Master Pegawai &amp; Penandatangan Dokumen
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             Data NIP, Nama Lengkap dengan Gelar, Pangkat/Golongan, dan Jabatan otomatis mengisi blok tanda tangan pada NPB, SPB, SPPB, dan BAST.
@@ -86,22 +99,53 @@ export const MasterPejabatTable: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Tombol Export ke Excel (Filter-Aware) */}
           <button
+            type="button"
+            onClick={() => exportMasterPegawaiToExcel(filteredPejabat)}
+            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-xs transition-all active:scale-98"
+            title={`Ekspor ${filteredPejabat.length} data pegawai ke berkas Excel (.xlsx) sesuai filter dan pencarian aktif`}
+          >
+            <Download className="w-4 h-4" />
+            Export ke Excel
+          </button>
+
+          {/* Tombol Import dari Excel */}
+          <button
+            type="button"
             onClick={() => setIsImportModalOpen(true)}
             className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-xs transition-all active:scale-98"
-            title="Import daftar nama pejabat & tanda tangan dari berkas Excel (.xlsx, .xls, .csv)"
+            title="Import daftar nama pegawai & tanda tangan dari berkas Excel (.xlsx, .xls, .csv)"
           >
             <FileSpreadsheet className="w-4 h-4" />
             Import dari Excel
           </button>
 
           <button
+            type="button"
             onClick={handleOpenAdd}
             className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2.5 rounded-lg shadow-xs transition-all active:scale-98"
           >
             <Plus className="w-4 h-4" />
-            Tambah Pejabat / Staf
+            Tambah Pegawai / Staf
           </button>
+        </div>
+      </div>
+
+      {/* Filter / Search Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-xs ring-1 ring-slate-900/5">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Cari nama pegawai, NIP, jabatan, atau unit kerja..."
+            className="w-full pl-9 pr-4 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+          />
+        </div>
+        <div className="text-xs text-slate-500 font-medium">
+          Menampilkan <span className="font-bold text-slate-800">{filteredPejabat.length}</span> dari {pejabatList.length} pegawai
         </div>
       </div>
 
@@ -112,7 +156,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
             <thead className="bg-slate-50 text-slate-700 uppercase font-semibold text-[11px] tracking-wider border-b border-slate-200">
               <tr>
                 <th className="p-3.5 w-10 text-center">No</th>
-                <th className="p-3.5">Nama Pejabat &amp; Gelar</th>
+                <th className="p-3.5">Nama Pegawai &amp; Gelar</th>
                 <th className="p-3.5 w-48">NIP</th>
                 <th className="p-3.5 w-48">Pangkat / Golongan</th>
                 <th className="p-3.5">Jabatan Kedinasan</th>
@@ -121,45 +165,55 @@ export const MasterPejabatTable: React.FC<Props> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {pejabatList.map((p, idx) => (
-                <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="p-3.5 text-center text-slate-400 font-medium">{idx + 1}</td>
-                  <td className="p-3.5">
-                    <div className="font-semibold text-slate-900 flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[11px] font-bold border border-blue-100">
-                        {p.nama.charAt(0)}
+              {filteredPejabat.length > 0 ? (
+                filteredPejabat.map((p, idx) => (
+                  <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="p-3.5 text-center text-slate-400 font-medium">{idx + 1}</td>
+                    <td className="p-3.5">
+                      <div className="font-semibold text-slate-900 flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[11px] font-bold border border-blue-100">
+                          {p.nama.charAt(0)}
+                        </div>
+                        {p.nama}
                       </div>
-                      {p.nama}
-                    </div>
-                  </td>
-                  <td className="p-3.5 font-mono text-[11px] text-slate-700">{p.nip}</td>
-                  <td className="p-3.5 text-slate-700">{p.pangkatGolongan}</td>
-                  <td className="p-3.5">
-                    <span className="font-semibold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded text-[11px] border border-slate-200">
-                      {p.jabatan}
-                    </span>
-                  </td>
-                  <td className="p-3.5 text-slate-600">{p.unitKerja || '-'}</td>
-                  <td className="p-3.5 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <button
-                        onClick={() => handleOpenEdit(p)}
-                        className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit Pejabat"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={() => onDeletePejabat(p.id)}
-                        className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                        title="Hapus Pejabat"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    </td>
+                    <td className="p-3.5 font-mono text-[11px] text-slate-700">{p.nip}</td>
+                    <td className="p-3.5 text-slate-700">{p.pangkatGolongan}</td>
+                    <td className="p-3.5">
+                      <span className="font-semibold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded text-[11px] border border-slate-200">
+                        {p.jabatan}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-slate-600">{p.unitKerja || '-'}</td>
+                    <td className="p-3.5 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(p)}
+                          className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          title="Edit Pegawai"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDeletePejabat(p.id)}
+                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                          title="Hapus Pegawai"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-slate-500 italic">
+                    Tidak ada data pegawai yang sesuai dengan pencarian.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -172,9 +226,10 @@ export const MasterPejabatTable: React.FC<Props> = ({
             <div className="px-5 py-4 bg-gradient-to-r from-slate-900 to-blue-950 text-white flex items-center justify-between border-b border-slate-800">
               <h3 className="text-sm font-bold flex items-center gap-2">
                 <Users className="w-4 h-4 text-blue-400" />
-                {editingId ? 'Edit Pejabat Penandatangan' : 'Tambah Pejabat Baru'}
+                {editingId ? 'Edit Pegawai Penandatangan' : 'Tambah Pegawai Baru'}
               </h3>
               <button 
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
               >
@@ -186,7 +241,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
               <div className="mx-5 mt-4 p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2 text-blue-900">
                   <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="text-[11px]">Punya file Excel daftar guru / pejabat?</span>
+                  <span className="text-[11px]">Punya file Excel daftar guru / pegawai?</span>
                 </div>
                 <button
                   type="button"
@@ -242,18 +297,25 @@ export const MasterPejabatTable: React.FC<Props> = ({
                 />
               </div>
 
-              <div>
+              <div className="mb-3">
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Jabatan Kedinasan
+                  Jabatan Resmi / Kedinasan
                 </label>
-                <input
-                  type="text"
-                  value={formData.jabatan}
+                <select
+                  id="select_jabatan_kedinasan"
+                  value={formData.jabatan || ''}
                   onChange={(e) => setFormData({ ...formData, jabatan: e.target.value })}
-                  placeholder="Kepala Sekolah / Wakasek Sarana / Pengurus Barang Pembantu..."
-                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden"
+                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden"
                   required
-                />
+                >
+                  <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
+                  {DAFTAR_JABATAN_KEDINASAN.map((jab) => (
+                    <option key={jab} value={jab}>{jab}</option>
+                  ))}
+                  {formData.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(formData.jabatan as any) && (
+                    <option value={formData.jabatan}>{formData.jabatan}</option>
+                  )}
+                </select>
               </div>
 
               <div>
@@ -281,7 +343,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
                   type="submit"
                   className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition-all active:scale-98"
                 >
-                  Simpan Pejabat
+                  Simpan Pegawai
                 </button>
               </div>
             </form>
@@ -289,7 +351,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Modal Import Excel Pejabat */}
+      {/* Modal Import Excel Pegawai */}
       <ImportPejabatModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}

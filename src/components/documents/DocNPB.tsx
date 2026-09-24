@@ -1,7 +1,9 @@
 import React from 'react';
 import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatTanggalIndonesia } from '../../utils/numberGenerator';
+import { resolvePemohon } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
+import { DocQRCode } from './DocQRCode';
 
 interface Props {
   transaksi: TransaksiPengeluaran;
@@ -13,27 +15,13 @@ interface Props {
 export const DocNPB: React.FC<Props> = ({ 
   transaksi, 
   kopConfig, 
-  pejabatList, 
-  minRows = 12 
+  pejabatList
 }) => {
-  const pemohon = pejabatList.find(p => p.id === transaksi.pemohonId) || {
-    nama: 'Staf Pemohon',
-    nip: '-',
-    pangkatGolongan: '-',
-    jabatan: transaksi.unitPemohon
-  };
-
-  const sarpras = pejabatList.find(p => p.id === transaksi.sarprasId) || {
-    nama: 'Ahmad Fauzi, S.Pd., M.T.',
-    nip: '19780415 200501 1 009',
-    pangkatGolongan: 'Penata Tk. I / III d',
-    jabatan: 'Wakasek Sarana Prasarana'
-  };
-
-  const totalEmptyRows = Math.max(0, minRows - transaksi.items.length);
+  // Penandatangan Tunggal: Pemohon / Penanggung Jawab Unit
+  const pemohon = resolvePemohon(pejabatList, transaksi);
 
   return (
-    <div className="doc-content font-serif text-black select-text">
+    <div className="doc-content font-serif text-black select-text w-full">
       {/* Dynamic Header Kop Surat (Pengecualian: Tetap proporsional & elegan) */}
       <div className="doc-header-kop avoid-break">
         <KopSuratView config={kopConfig} />
@@ -84,69 +72,97 @@ export const DocNPB: React.FC<Props> = ({
         </p>
       </div>
 
-      {/* Items Table with Spasi Rapat & Full Width */}
-      <table className="doc-table w-full border-collapse border border-black mb-2">
+      {/* Items Table with table-layout: fixed and specified percentage column widths */}
+      <table className="doc-table w-full border-collapse border border-black mb-2" style={{ tableLayout: 'fixed', width: '100%' }}>
+        <colgroup>
+          <col style={{ width: '5%' }} />
+          <col style={{ width: '15%' }} />
+          <col style={{ width: '40%' }} />
+          <col style={{ width: '10%' }} />
+          <col style={{ width: '10%' }} />
+          <col style={{ width: '20%' }} />
+        </colgroup>
         <thead>
-          <tr className="bg-slate-100/75 text-center font-bold">
-            <th className="border border-black px-1.5 py-1 w-8">No.</th>
-            <th className="border border-black px-1.5 py-1 w-24">Kode Barang</th>
-            <th className="border border-black px-2 py-1">Nama &amp; Spesifikasi Barang</th>
-            <th className="border border-black px-1.5 py-1 w-16">Satuan</th>
-            <th className="border border-black px-1.5 py-1 w-20">Jumlah Diminta</th>
-            <th className="border border-black px-2 py-1 w-44">Keperluan / Keterangan</th>
+          <tr className="bg-slate-100 text-center font-bold text-[8.5pt]">
+            <th className="border border-black px-1 py-1 text-center" style={{ width: '5%' }}>No.</th>
+            <th className="border border-black px-1.5 py-1 text-center" style={{ width: '15%' }}>Kode Barang</th>
+            <th className="border border-black px-2 py-1 text-left" style={{ width: '40%' }}>Nama Barang &amp; Spesifikasi</th>
+            <th className="border border-black px-1 py-1 text-center" style={{ width: '10%' }}>Satuan</th>
+            <th className="border border-black px-1 py-1 text-center" style={{ width: '10%' }}>Jumlah Diminta</th>
+            <th className="border border-black px-2 py-1 text-left" style={{ width: '20%' }}>Keperluan / Keterangan</th>
           </tr>
         </thead>
         <tbody>
-          {transaksi.items.map((item, index) => (
-            <tr key={item.id || index} className="align-top avoid-break">
-              <td className="border border-black px-1.5 py-0.5 text-center font-medium">{index + 1}.</td>
-              <td className="border border-black px-1.5 py-0.5 font-mono text-[8pt] text-center">{item.kodeBarang}</td>
-              <td className="border border-black px-2 py-0.5 font-medium">{item.namaBarang}</td>
-              <td className="border border-black px-1.5 py-0.5 text-center">{item.satuan}</td>
-              <td className="border border-black px-1.5 py-0.5 text-center font-bold">{item.usulanJumlah}</td>
-              <td className="border border-black px-2 py-0.5 text-[8pt]">{item.keperluan || '-'}</td>
-            </tr>
-          ))}
-
-          {/* Standard blank grid rows */}
-          {Array.from({ length: totalEmptyRows }).map((_, i) => (
-            <tr key={`empty-${i}`} className="h-5 avoid-break">
-              <td className="border border-black px-1.5 py-0.5 text-center text-slate-300">
-                {transaksi.items.length + i + 1}.
+          {transaksi.items && transaksi.items.length > 0 ? (
+            transaksi.items.map((item, index) => (
+              <tr key={item.id || index} className="align-top avoid-break text-[8.5pt]">
+                <td className="border border-black px-1 py-0.5 text-center font-medium">{index + 1}.</td>
+                <td className="border border-black px-1 py-0.5 text-center font-mono text-[8pt] text-slate-900">
+                  {item.kodeBarang || '-'}
+                </td>
+                <td className="border border-black px-2 py-0.5 text-left">
+                  <div className="font-bold text-slate-900">{item.namaBarang}</div>
+                  {item.spesifikasi && item.spesifikasi !== '-' && item.spesifikasi !== item.namaBarang && (
+                    <div className="text-[7.5pt] text-slate-600 italic font-normal mt-0.5">{item.spesifikasi}</div>
+                  )}
+                </td>
+                <td className="border border-black px-1 py-0.5 text-center text-slate-800">
+                  {item.satuan}
+                </td>
+                <td className="border border-black px-1 py-0.5 text-center font-bold text-slate-900">
+                  {item.usulanJumlah || item.jumlah}
+                </td>
+                <td className="border border-black px-2 py-0.5 text-left text-[8pt] text-slate-800">
+                  {item.keperluan || transaksi.keperluanUmum || '-'}
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={6} className="p-2 text-center text-slate-500 italic">
+                Tidak ada data barang permintaan.
               </td>
-              <td className="border border-black px-1.5 py-0.5"></td>
-              <td className="border border-black px-2 py-0.5"></td>
-              <td className="border border-black px-1.5 py-0.5"></td>
-              <td className="border border-black px-1.5 py-0.5"></td>
-              <td className="border border-black px-2 py-0.5"></td>
             </tr>
-          ))}
+          )}
         </tbody>
       </table>
 
-      {/* Signature block with avoid-break and compact signature space */}
-      <div className="doc-signature-block avoid-break">
-        <div className="grid grid-cols-2 text-center">
-          <div>
-            <p className="font-semibold">Mengetahui / Menyetujui,</p>
-            <p className="font-medium text-slate-800">{sarpras.jabatan}</p>
-            <div className="doc-signature-space" />
-            <p className="font-bold underline uppercase tracking-wide">{sarpras.nama}</p>
-            <p className="font-mono text-[8pt]">NIP. {sarpras.nip}</p>
-            {sarpras.pangkatGolongan && sarpras.pangkatGolongan !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {sarpras.pangkatGolongan}</p>
-            )}
+      {/* Signature block with avoid-break: QR Code Verifikasi (Kiri) & Penandatangan Pemohon (Kanan) */}
+      <div className="doc-signature-block avoid-break mt-6 text-[10pt] font-sans">
+        <div className="flex justify-between items-end">
+          {/* Kolom Kiri: QR Code Verifikasi Dokumen Resmi SIMBA */}
+          <div className="pb-1">
+            <DocQRCode
+              docType="NPB"
+              docNumber={transaksi.noNPB}
+              transaksi={transaksi}
+              kopConfig={kopConfig}
+            />
           </div>
 
-          <div>
-            <p>
-              {kopConfig.kotaSurat || 'Kota'}, {formatTanggalIndonesia(transaksi.tanggal)}
-            </p>
-            <p className="font-semibold text-slate-800">Pemohon / Unit Pengguna,</p>
-            <div className="doc-signature-space" />
-            <p className="font-bold underline uppercase tracking-wide">{pemohon.nama}</p>
-            <p className="font-mono text-[8pt]">NIP. {pemohon.nip || '-'}</p>
-            <p className="text-[8pt] text-slate-600">{pemohon.jabatan}</p>
+          {/* Kolom Kanan: Pemohon / Penanggung Jawab Unit */}
+          <div className="w-[280px] text-center">
+            <div>
+              {kopConfig.kotaSurat || 'Ciamis'}, {formatTanggalIndonesia(transaksi.tanggal)}
+            </div>
+            <div className="font-bold text-slate-900 mt-1">
+              Pemohon / Penanggung Jawab Unit,
+            </div>
+            <div className="font-bold uppercase text-slate-900">
+              {transaksi.unitPemohon || pemohon.jabatan || 'Unit Pengguna'}
+            </div>
+            <div style={{ height: '55px' }} />
+            <div className="font-bold underline text-slate-900">
+              {pemohon.nama}
+            </div>
+            <div>
+              {pemohon.nip && pemohon.nip !== '-' ? `NIP. ${pemohon.nip}` : 'NIP. -'}
+            </div>
+            {pemohon.pangkatGolongan && pemohon.pangkatGolongan !== '-' && (
+              <div>
+                Pangkat/Gol: {pemohon.pangkatGolongan}
+              </div>
+            )}
           </div>
         </div>
       </div>

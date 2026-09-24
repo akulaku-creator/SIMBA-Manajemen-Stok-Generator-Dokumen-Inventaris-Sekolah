@@ -230,7 +230,7 @@ export const ResetTransaksiModal: React.FC<Props> = ({
                 </li>
                 <li className="flex items-center gap-1.5 py-0.5">
                   <Check className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                  <span><strong>Master Pejabat &amp; Kop Surat</strong></span>
+                  <span><strong>Master Pegawai &amp; Kop Surat</strong></span>
                 </li>
               </ul>
             </div>

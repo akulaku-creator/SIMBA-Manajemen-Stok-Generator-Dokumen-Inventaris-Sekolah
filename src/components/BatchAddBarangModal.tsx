@@ -12,6 +12,11 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Barang, ItemPenerimaan } from '../types';
 import { formatRupiah } from '../utils/numberGenerator';
 import { getUniqueKodeRekening } from '../utils/rekeningHelper';
+import {
+  findMasterRekening,
+  getNamaRekeningByKode,
+  MASTER_KODE_REKENING
+} from '../data/kodeRekeningData';
 
 interface Props {
   isOpen: boolean;
@@ -32,6 +37,57 @@ function formatThousands(value: number | string): string {
   const digits = String(value).replace(/\D/g, '');
   if (!digits) return '0';
   return new Intl.NumberFormat('id-ID').format(parseInt(digits, 10));
+}
+
+// Robust Data Mapping Helpers for items (supporting camelCase, snake_case, or alternative keys)
+export function getNamaBarang(item: any): string {
+  if (!item) return 'Nama Barang Tidak Ditemukan';
+  const val =
+    item.namaBarang ||
+    item.nama_barang ||
+    item.namaItem ||
+    item.nama_item ||
+    item.deskripsi ||
+    item.uraian ||
+    '';
+  return String(val).trim() || 'Nama Barang Tidak Ditemukan';
+}
+
+export function getKodeBarang(item: any): string {
+  if (!item) return '-';
+  const val = item.kodeBarang || item.kode_barang || '';
+  return String(val).trim() || '-';
+}
+
+export function getNusp(item: any): string {
+  if (!item) return '-';
+  const val = item.nusp || item.no_nusp || '';
+  return String(val).trim() || '-';
+}
+
+export function getRekeningInfo(item: any): { kode: string; nama: string } {
+  if (!item) {
+    return {
+      kode: '5.1.02.01.01.0024',
+      nama: 'Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor'
+    };
+  }
+
+  const rawKode = (item.kodeRekening || item.kode_rekening || '').trim();
+  const rawNama = (item.namaRekening || item.nama_rekening || item.kategori || '').trim();
+
+  // Cari di 40 Master Rekening Resmi
+  const masterMatch =
+    (rawKode ? MASTER_KODE_REKENING.find((r) => r.kode === rawKode) : null) ||
+    (rawNama ? findMasterRekening(rawNama) : null);
+
+  const finalKode = masterMatch?.kode || rawKode || '5.1.02.01.01.0024';
+  const finalNama = masterMatch?.nama || rawNama || getNamaRekeningByKode(finalKode);
+
+  return {
+    kode: finalKode,
+    nama: finalNama
+  };
 }
 
 export const BatchAddBarangModal: React.FC<Props> = ({
@@ -55,15 +111,26 @@ export const BatchAddBarangModal: React.FC<Props> = ({
   // Filtered barang list
   const filteredBarang = useMemo(() => {
     return masterBarang.filter((b) => {
-      const matchSearch =
-        !search.trim() ||
-        b.namaBarang.toLowerCase().includes(search.toLowerCase()) ||
-        b.kodeBarang.toLowerCase().includes(search.toLowerCase()) ||
-        b.nusp.toLowerCase().includes(search.toLowerCase()) ||
-        (b.spesifikasi && b.spesifikasi.toLowerCase().includes(search.toLowerCase())) ||
-        (b.namaRekening && b.namaRekening.toLowerCase().includes(search.toLowerCase()));
+      const nama = getNamaBarang(b);
+      const kode = getKodeBarang(b);
+      const nusp = getNusp(b);
+      const rekInfo = getRekeningInfo(b);
+      const spesifikasi = b.spesifikasi || (b as any).deskripsi || '';
 
-      const matchRekening = selectedRekening === 'all' || b.kodeRekening === selectedRekening;
+      const q = search.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        nama.toLowerCase().includes(q) ||
+        kode.toLowerCase().includes(q) ||
+        nusp.toLowerCase().includes(q) ||
+        spesifikasi.toLowerCase().includes(q) ||
+        rekInfo.nama.toLowerCase().includes(q) ||
+        rekInfo.kode.toLowerCase().includes(q);
+
+      const matchRekening =
+        selectedRekening === 'all' ||
+        rekInfo.kode === selectedRekening ||
+        b.kodeRekening === selectedRekening;
 
       return matchSearch && matchRekening;
     });
@@ -187,18 +254,25 @@ export const BatchAddBarangModal: React.FC<Props> = ({
   const handleConfirmBatch = () => {
     if (selectedCount === 0) return;
 
-    const newItems: ItemPenerimaan[] = selectedBarangItems.map(({ barang: b, draft }) => ({
-      barangId: b.id,
-      namaBarang: b.namaBarang,
-      kodeBarang: b.kodeBarang,
-      nusp: b.nusp,
-      kodeRekening: b.kodeRekening,
-      namaRekening: b.namaRekening,
-      satuan: b.satuan,
-      jumlahMasuk: draft.jumlahMasuk,
-      hargaSatuan: draft.hargaSatuan,
-      subtotal: draft.jumlahMasuk * draft.hargaSatuan
-    }));
+    const newItems: ItemPenerimaan[] = selectedBarangItems.map(({ barang: b, draft }) => {
+      const rekInfo = getRekeningInfo(b);
+      const nama = getNamaBarang(b);
+      const kode = getKodeBarang(b);
+      const nusp = getNusp(b);
+
+      return {
+        barangId: b.id,
+        namaBarang: nama,
+        kodeBarang: kode,
+        nusp: nusp,
+        kodeRekening: rekInfo.kode,
+        namaRekening: rekInfo.nama,
+        satuan: b.satuan || (b as any).satuan_barang || 'Pcs',
+        jumlahMasuk: draft.jumlahMasuk,
+        hargaSatuan: draft.hargaSatuan,
+        subtotal: draft.jumlahMasuk * draft.hargaSatuan
+      };
+    });
 
     onAddBatch(newItems);
     onClose();
@@ -347,12 +421,12 @@ export const BatchAddBarangModal: React.FC<Props> = ({
                         )}
                       </button>
                     </th>
-                    <th style={{ width: '22%' }} className="p-2.5">Kategori / Rekening</th>
-                    <th style={{ width: '28%' }} className="p-2.5">Nama &amp; Kode Barang</th>
-                    <th style={{ width: '9%' }} className="p-2.5 text-center">Satuan / Stok</th>
-                    <th style={{ width: '12%' }} className="p-2.5 text-center">Jml Masuk</th>
-                    <th style={{ width: '14%' }} className="p-2.5 text-right">Harga Satuan (Rp)</th>
-                    <th style={{ width: '10%' }} className="p-2.5 text-right">Subtotal</th>
+                    <th style={{ width: '24%' }} className="px-3 py-2.5">Kategori / Rekening</th>
+                    <th style={{ width: '28%' }} className="px-4 py-2.5">Nama &amp; Kode Barang</th>
+                    <th style={{ width: '11%' }} className="px-2.5 py-2.5 text-center">Satuan / Stok</th>
+                    <th style={{ width: '10%' }} className="p-2.5 text-center">Jml Masuk</th>
+                    <th style={{ width: '11%' }} className="p-2.5 text-right">Harga Satuan (Rp)</th>
+                    <th style={{ width: '11%' }} className="p-2.5 text-right">Subtotal</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -360,6 +434,14 @@ export const BatchAddBarangModal: React.FC<Props> = ({
                     const draft = getDraft(b);
                     const isChecked = draft.selected;
                     const subtotal = isChecked ? draft.jumlahMasuk * draft.hargaSatuan : 0;
+
+                    const namaBarang = getNamaBarang(b);
+                    const kodeBarang = getKodeBarang(b);
+                    const nusp = getNusp(b);
+                    const rekInfo = getRekeningInfo(b);
+                    const rawStok = b.stokSekarang ?? (b as any).stok_sekarang ?? (b as any).stok ?? 0;
+                    const stok = typeof rawStok === 'number' ? rawStok : parseInt(rawStok, 10) || 0;
+                    const satuan = b.satuan || (b as any).satuan_barang || 'Pcs';
 
                     return (
                       <tr
@@ -384,37 +466,51 @@ export const BatchAddBarangModal: React.FC<Props> = ({
                           </button>
                         </td>
 
-                        {/* Rekening */}
-                        <td className="p-2.5 truncate" title={`${b.kodeRekening} - ${b.namaRekening}`}>
-                          <div className={`font-semibold text-[11px] truncate ${isChecked ? 'text-slate-800' : 'text-slate-500'}`}>
-                            {b.namaRekening}
+                        {/* Kategori / Rekening: Baris 1: Uraian Kategori, Baris 2: Kode Rekening */}
+                        <td className="px-3 py-2.5 overflow-hidden" title={`${rekInfo.kode} - ${rekInfo.nama}`}>
+                          {/* Baris 1: Uraian Kategori (misal: Bahan-Bahan/Bibit Tanaman) */}
+                          <div className={`font-semibold text-xs leading-snug line-clamp-2 ${isChecked ? 'text-slate-900 font-bold' : 'text-slate-700'}`}>
+                            {rekInfo.nama}
                           </div>
-                          <div className="font-mono text-[10px] text-slate-400 truncate">
-                            {b.kodeRekening}
+                          {/* Baris 2: Kode Rekening (misal: 5.1.02.01.01.0008) */}
+                          <div className="font-mono text-[10px] text-slate-500 font-medium mt-0.5 truncate">
+                            {rekInfo.kode}
                           </div>
                         </td>
 
-                        {/* Nama Barang & NUSP */}
-                        <td className="p-2.5">
-                          <div className={`font-semibold leading-tight ${isChecked ? 'text-slate-900' : 'text-slate-600'}`}>
-                            {b.namaBarang}
+                        {/* Nama & Kode Barang: Sesuai struktur JSX/HTML yang diminta */}
+                        <td className="px-4 py-3">
+                          {/* Nama Barang Utama (Wajib Tampil) */}
+                          <div className={`font-semibold text-sm leading-snug ${isChecked ? 'text-slate-950 font-bold' : 'text-gray-900'}`}>
+                            {namaBarang || 'Nama Barang Tidak Ditemukan'}
                           </div>
-                          <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500 font-mono">
-                            <span>{b.kodeBarang}</span>
-                            {b.nusp && (
-                              <span className="bg-slate-100 text-slate-600 px-1 rounded text-[9px]">
-                                NUSP: {b.nusp}
+                          
+                          {/* Kode Barang & Badge NUSP */}
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 font-mono">
+                            <span>{kodeBarang}</span>
+                            <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 text-[10px]">
+                              NUSP: {nusp || '-'}
+                            </span>
+                          </div>
+                          {b.spesifikasi && (
+                            <div className="text-[10px] text-gray-400 line-clamp-1 mt-0.5" title={b.spesifikasi}>
+                              {b.spesifikasi}
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Satuan / Stok: Sembunyikan jika Stok bernilai 0 atau null, hanya tampil jika stok > 0 */}
+                        <td className="px-2.5 py-2.5 text-center">
+                          <div className={`font-semibold text-xs ${isChecked ? 'text-slate-800' : 'text-slate-600'}`}>
+                            {satuan}
+                          </div>
+                          {stok > 0 && (
+                            <div className="mt-1">
+                              <span className="inline-block bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-mono font-medium">
+                                Stok: {stok}
                               </span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Satuan & Stok Saat Ini */}
-                        <td className="p-2.5 text-center">
-                          <span className={`font-medium ${isChecked ? 'text-slate-700' : 'text-slate-400'}`}>{b.satuan}</span>
-                          <div className="text-[10px] text-slate-400">
-                            Stok: {b.stokSekarang}
-                          </div>
+                            </div>
+                          )}
                         </td>
 
                         {/* Input Jumlah Masuk */}

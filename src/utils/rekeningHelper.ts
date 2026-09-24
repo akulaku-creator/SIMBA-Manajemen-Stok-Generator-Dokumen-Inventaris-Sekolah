@@ -1,4 +1,5 @@
 import { Barang } from '../types';
+import { getNamaRekeningByKode } from '../data/kodeRekeningData';
 
 export interface RekeningOption {
   kode: string;
@@ -15,7 +16,7 @@ export const getUniqueKodeRekening = (masterBarang: Barang[]): RekeningOption[] 
 
   masterBarang.forEach((b) => {
     const kode = b.kodeRekening?.trim() || '5.1.02.01.01.0024';
-    const rawNama = b.namaRekening?.trim() || 'Belanja Alat Tulis Kantor';
+    const rawNama = b.namaRekening?.trim() || getNamaRekeningByKode(kode);
 
     if (!map.has(kode)) {
       map.set(kode, { nama: rawNama, count: 1 });
@@ -30,6 +31,7 @@ export const getUniqueKodeRekening = (masterBarang: Barang[]): RekeningOption[] 
       // Clean up repetitive government account prefixes for readable dropdowns
       const shortNama = nama
         .replace(/^Belanja Alat\/Bahan untuk Kegiatan Kantor-/i, '')
+        .replace(/^Alat\/Bahan untuk Kegiatan Kantor-/i, '')
         .replace(/^Belanja /i, '');
       return {
         kode,

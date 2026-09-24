@@ -273,12 +273,13 @@ table {
 
 /* Signature Blocks (Seksi Tanda Tangan) */
 .doc-signature-block {
-  margin-top: 6px !important;
-  padding-top: 2px !important;
+  margin-top: 8px !important;
+  padding-top: 4px !important;
   line-height: var(--doc-line-height-compact) !important;
   font-size: var(--doc-font-size-signature) !important;
   page-break-inside: avoid !important;
   break-inside: avoid !important;
+  -webkit-column-break-inside: avoid !important;
 }
 
 .doc-signature-block p {
@@ -287,10 +288,10 @@ table {
   line-height: var(--doc-line-height-compact) !important;
 }
 
-/* Compact Signature Gap (40-44px instead of overflowing 80px) */
+/* Wet Ink Signature & Official Stamp Spacing (Minimum 60px - 80px) */
 .doc-signature-space {
-  height: 42px !important;
-  min-height: 40px !important;
+  height: 68px !important;
+  min-height: 60px !important;
 }
 
 /* =========================================================================
@@ -582,14 +583,15 @@ table {
     display: table-footer-group !important;
   }
 
-  /* Blok Tanda Tangan: Spasi rapat dan anti-pecah halaman */
+  /* Blok Tanda Tangan: Spasi rapat, ruang tanda tangan & stempel basah (60-80px), dan anti-pecah halaman */
   .doc-signature-block {
-    margin-top: 4px !important;
+    margin-top: 6px !important;
     padding-top: 2px !important;
     line-height: 1.0 !important;
     font-size: var(--doc-font-size-signature) !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
   }
 
   .doc-signature-block p {
@@ -599,8 +601,8 @@ table {
   }
 
   .doc-signature-space {
-    height: 38px !important;
-    min-height: 36px !important;
+    height: 68px !important;
+    min-height: 60px !important;
   }
 
   /* Force clean black text */

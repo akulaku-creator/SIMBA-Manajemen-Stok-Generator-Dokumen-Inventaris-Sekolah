@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../../types';
 import { formatRupiah, formatTanggalIndonesia, getKalimatStockOpname, terbilang } from '../../utils/numberGenerator';
+import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
 
 interface Props {
@@ -24,19 +25,8 @@ export const DocStockOpname: React.FC<Props> = ({
   selectedYear = new Date().getFullYear(),
   nomorDokumen
 }) => {
-  const kepsek = pejabatList.find(p => p.id === 'pejabat-kepsek') || pejabatList[0] || {
-    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
-    nip: '19680512 199303 1 005',
-    pangkatGolongan: 'Pembina Utama Muda / IV c',
-    jabatan: 'Kepala Sekolah'
-  };
-
-  const pengurusBarang = pejabatList.find(p => p.id === 'pejabat-pengurus-barang') || pejabatList[2] || {
-    nama: 'Rina Kartikasari, S.AP.',
-    nip: '19890820 201402 2 003',
-    pangkatGolongan: 'Penata Muda / III a',
-    jabatan: 'Pengurus Barang Pembantu'
-  };
+  const kepsek = resolveKepalaSekolah(pejabatList);
+  const pengurusBarang = resolvePengurusBarang(pejabatList);
 
   // Determine last day of selected month/year
   const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../../types';
 import { formatRupiah, formatTanggalIndonesia } from '../../utils/numberGenerator';
+import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
 
 interface Props {
@@ -39,19 +40,8 @@ export const DocBukuRekap: React.FC<Props> = ({
   pejabatList,
   minRows = 16
 }) => {
-  const pengurusBarang = pejabatList.find(p => p.id === 'pejabat-pengurus-barang') || pejabatList[2] || {
-    nama: 'Rina Kartikasari, S.AP.',
-    nip: '19890820 201402 2 003',
-    pangkatGolongan: 'Penata Muda / III a',
-    jabatan: 'Pengurus Barang Pembantu'
-  };
-
-  const kepsek = pejabatList.find(p => p.id === 'pejabat-kepsek') || pejabatList[0] || {
-    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
-    nip: '19680512 199303 1 005',
-    pangkatGolongan: 'Pembina Utama Muda / IV c',
-    jabatan: 'Kepala Sekolah'
-  };
+  const kepsek = resolveKepalaSekolah(pejabatList);
+  const pengurusBarang = resolvePengurusBarang(pejabatList);
 
   // Compile combined ledger entries chronologically
   const rows: RekapRow[] = [];
@@ -173,28 +163,30 @@ export const DocBukuRekap: React.FC<Props> = ({
 
                 {/* Masuk */}
                 <td className="border border-black px-1 py-1 text-center font-medium bg-emerald-50/10">
-                  {row.jumlahMasuk > 0 ? row.jumlahMasuk : '-'}
+                  {row.jumlahMasuk > 0 ? row.jumlahMasuk : ''}
                 </td>
                 <td className="border border-black px-1 py-1 text-right text-[8pt] bg-emerald-50/10">
-                  {row.hargaSatuanMasuk > 0 ? formatRupiah(row.hargaSatuanMasuk).replace('Rp', '') : '-'}
+                  {row.jumlahMasuk > 0 && row.hargaSatuanMasuk > 0 ? formatRupiah(row.hargaSatuanMasuk).replace('Rp', '') : ''}
                 </td>
                 <td className="border border-black px-1 py-1 text-right font-medium text-[8pt] bg-emerald-50/10">
-                  {row.totalMasuk > 0 ? formatRupiah(row.totalMasuk).replace('Rp', '') : '-'}
+                  {row.jumlahMasuk > 0 && row.totalMasuk > 0 ? formatRupiah(row.totalMasuk).replace('Rp', '') : ''}
                 </td>
 
                 {/* Keluar */}
                 <td className="border border-black px-1 py-1 text-center font-medium bg-amber-50/10">
-                  {row.jumlahKeluar > 0 ? row.jumlahKeluar : '-'}
+                  {row.jumlahKeluar > 0 ? row.jumlahKeluar : ''}
                 </td>
                 <td className="border border-black px-1 py-1 text-right text-[8pt] bg-amber-50/10">
-                  {row.hargaSatuanKeluar > 0 ? formatRupiah(row.hargaSatuanKeluar).replace('Rp', '') : '-'}
+                  {row.jumlahKeluar > 0 && row.hargaSatuanKeluar > 0 ? formatRupiah(row.hargaSatuanKeluar).replace('Rp', '') : ''}
                 </td>
                 <td className="border border-black px-1 py-1 text-right font-medium text-[8pt] bg-amber-50/10">
-                  {row.totalKeluar > 0 ? formatRupiah(row.totalKeluar).replace('Rp', '') : '-'}
+                  {row.jumlahKeluar > 0 && row.totalKeluar > 0 ? formatRupiah(row.totalKeluar).replace('Rp', '') : ''}
                 </td>
 
                 {/* Sisa & Ket */}
-                <td className="border border-black px-1 py-1 text-center font-bold">{row.saldoJumlah}</td>
+                <td className="border border-black px-1 py-1 text-center font-bold">
+                  {row.saldoJumlah > 0 ? row.saldoJumlah : ''}
+                </td>
                 <td className="border border-black px-1 py-1 text-[8pt]">{row.keterangan}</td>
               </tr>
             ))}
@@ -227,16 +219,20 @@ export const DocBukuRekap: React.FC<Props> = ({
                 JUMLAH TOTAL:
               </td>
               {/* Masuk Totals */}
-              <td className="border border-black px-1 py-1.5">{totalVolumeMasuk}</td>
-              <td className="border border-black px-1 py-1.5 bg-slate-100/50">-</td>
+              <td className="border border-black px-1 py-1.5">
+                {totalVolumeMasuk > 0 ? totalVolumeMasuk : ''}
+              </td>
+              <td className="border border-black px-1 py-1.5 bg-slate-100/50"></td>
               <td className="border border-black px-1 py-1.5 text-right font-mono text-[8pt]">
-                {formatRupiah(grandTotalMasuk)}
+                {grandTotalMasuk > 0 ? formatRupiah(grandTotalMasuk) : ''}
               </td>
               {/* Keluar Totals */}
-              <td className="border border-black px-1 py-1.5">{totalVolumeKeluar}</td>
-              <td className="border border-black px-1 py-1.5 bg-slate-100/50">-</td>
+              <td className="border border-black px-1 py-1.5">
+                {totalVolumeKeluar > 0 ? totalVolumeKeluar : ''}
+              </td>
+              <td className="border border-black px-1 py-1.5 bg-slate-100/50"></td>
               <td className="border border-black px-1 py-1.5 text-right font-mono text-[8pt]">
-                {formatRupiah(grandTotalKeluar)}
+                {grandTotalKeluar > 0 ? formatRupiah(grandTotalKeluar) : ''}
               </td>
               {/* Balance */}
               <td colSpan={2} className="border border-black px-2 py-1.5 text-left text-[8pt]">

@@ -10,7 +10,9 @@ import { DocumentViewer } from './components/DocumentViewer';
 import { KopSettingsModal } from './components/KopSettingsModal';
 import { MasterBarangTable } from './components/MasterBarangTable';
 import { MasterPejabatTable } from './components/MasterPejabatTable';
-import { MainTab, Navbar } from './components/Navbar';
+import { MainTab } from './components/Navbar';
+import { AppSidebar } from './components/layout/AppSidebar';
+import { AppTopbar } from './components/layout/AppTopbar';
 import { NumberingSettingsModal } from './components/NumberingSettingsModal';
 import { PenerimaanForm } from './components/PenerimaanForm';
 import { ResetTransaksiModal } from './components/ResetTransaksiModal';
@@ -23,6 +25,8 @@ import { LoginView } from './components/LoginView';
 import { AuditLogModal } from './components/AuditLogModal';
 import { SecurityDeleteConfirmModal } from './components/SecurityDeleteConfirmModal';
 import { UnifiedSettingsModal } from './components/UnifiedSettingsModal';
+import { DocumentVerificationModal } from './components/DocumentVerificationModal';
+import { buildVerificationData, DocTypeShort, VerificationData } from './utils/qrVerificationHelper';
 import { logAuditEvent } from './utils/auditLogger';
 import { exportFullDatabase, getLastBackupTime } from './utils/backupHelper';
 import { 
@@ -48,6 +52,7 @@ import {
   UserRole 
 } from './types';
 import { DEFAULT_NUMBERING_CONFIG } from './utils/numberGenerator';
+import { getNamaRekeningByKode } from './data/kodeRekeningData';
 
 export default function App() {
   // Persistence via localStorage with fallback to default data
@@ -68,22 +73,72 @@ export default function App() {
 
   const [masterBarang, setMasterBarang] = useState<Barang[]>(() => {
     const saved = localStorage.getItem('simba_master_barang');
-    return saved ? JSON.parse(saved) : DEFAULT_BARANG;
+    const list: Barang[] = saved ? JSON.parse(saved) : DEFAULT_BARANG;
+    // Auto-migrate & synchronize official descriptions for 40 official accounts:
+    // Single Source of Truth: 1 Kategori Barang = 1 Kode Rekening Belanja
+    return list.map(b => {
+      const kode = b.kodeRekening?.trim() || '5.1.02.01.01.0024';
+      const officialName = getNamaRekeningByKode(kode);
+      return {
+        ...b,
+        kodeRekening: kode,
+        namaRekening: officialName,
+        kategori: officialName
+      };
+    });
   });
 
   const [kategoriList, setKategoriList] = useState<KategoriBarangItem[]>(() => {
     const saved = localStorage.getItem('simba_kategori_list');
-    return saved ? JSON.parse(saved) : DEFAULT_KATEGORI_LIST;
+    const list: KategoriBarangItem[] = saved ? JSON.parse(saved) : DEFAULT_KATEGORI_LIST;
+    if (!saved || list.length < 40) {
+      return DEFAULT_KATEGORI_LIST;
+    }
+    return list.map(kat => {
+      const matchedDefault = DEFAULT_KATEGORI_LIST.find(d => d.nama.toLowerCase() === kat.nama.toLowerCase() || d.kodeRekening === kat.kodeRekening);
+      const kode = kat.kodeRekening || matchedDefault?.kodeRekening || '5.1.02.01.01.0024';
+      const officialName = getNamaRekeningByKode(kode);
+      return {
+        ...kat,
+        nama: officialName,
+        kodeRekening: kode,
+        namaRekening: officialName
+      };
+    });
   });
 
   const [transaksiList, setTransaksiList] = useState<TransaksiPengeluaran[]>(() => {
     const saved = localStorage.getItem('simba_transaksi_list');
-    return saved ? JSON.parse(saved) : DEFAULT_TRANSAKSI_PENGELUARAN;
+    const list: TransaksiPengeluaran[] = saved ? JSON.parse(saved) : DEFAULT_TRANSAKSI_PENGELUARAN;
+    return list.map(trx => ({
+      ...trx,
+      items: trx.items.map(it => {
+        const kode = it.kodeRekening?.trim() || '5.1.02.01.01.0024';
+        const officialName = getNamaRekeningByKode(kode);
+        return {
+          ...it,
+          kodeRekening: kode,
+          namaRekening: officialName || it.namaRekening
+        };
+      })
+    }));
   });
 
   const [penerimaanList, setPenerimaanList] = useState<TransaksiPenerimaan[]>(() => {
     const saved = localStorage.getItem('simba_penerimaan_list');
-    return saved ? JSON.parse(saved) : DEFAULT_TRANSAKSI_PENERIMAAN;
+    const list: TransaksiPenerimaan[] = saved ? JSON.parse(saved) : DEFAULT_TRANSAKSI_PENERIMAAN;
+    return list.map(rcv => ({
+      ...rcv,
+      items: rcv.items.map(it => {
+        const kode = it.kodeRekening?.trim() || '5.1.02.01.01.0024';
+        const officialName = getNamaRekeningByKode(kode);
+        return {
+          ...it,
+          kodeRekening: kode,
+          namaRekening: officialName || it.namaRekening
+        };
+      })
+    }));
   });
 
   // User Management & Roles
@@ -115,6 +170,8 @@ export default function App() {
 
   // UI Navigation & Modals State
   const [activeTab, setActiveTab] = useState<MainTab>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [selectedTransaksiId, setSelectedTransaksiId] = useState<string>(
     transaksiList[0]?.id || ''
   );
@@ -150,6 +207,61 @@ export default function App() {
     return saved ? JSON.parse(saved) : null;
   });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Digital Document Verification Modal (QR Code Validasi)
+  const [verificationModalState, setVerificationModalState] = useState<{
+    isOpen: boolean;
+    data: VerificationData | null;
+    transaksi?: TransaksiPengeluaran | null;
+  }>({
+    isOpen: false,
+    data: null
+  });
+
+  // Listen for verification requests (from QR code clicks on printed docs or buttons)
+  useEffect(() => {
+    const handleVerifyEvent = (e: Event) => {
+      const customEvt = e as CustomEvent;
+      if (customEvt.detail) {
+        setVerificationModalState({
+          isOpen: true,
+          data: customEvt.detail,
+          transaksi: customEvt.detail.transaksi || null
+        });
+      }
+    };
+    window.addEventListener('simba:verify-doc', handleVerifyEvent);
+    return () => {
+      window.removeEventListener('simba:verify-doc', handleVerifyEvent);
+    };
+  }, []);
+
+  // Handle URL verification params (e.g. when QR code is scanned with mobile phone camera)
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.location.search) {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('verify') === 'doc') {
+          const id = searchParams.get('id');
+          const type = (searchParams.get('type') || 'npb').toUpperCase() as DocTypeShort;
+          const no = searchParams.get('no') || '';
+
+          const matched = transaksiList.find(t => t.id === id || t.noNPB === no || t.noSPB === no || t.noSPPB === no || t.noBAST === no);
+          if (matched) {
+            const docNo = no || (type === 'NPB' ? matched.noNPB : type === 'SPB' ? matched.noSPB : type === 'SPPB' ? matched.noSPPB : matched.noBAST);
+            const verifData = buildVerificationData(type, matched, docNo, kopConfig);
+            setVerificationModalState({
+              isOpen: true,
+              data: verifData,
+              transaksi: matched
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to parse URL verification parameters:', err);
+    }
+  }, [transaksiList, kopConfig]);
 
   const handleUpdateSheetConfig = (newCfg: GoogleSheetSyncConfig | null) => {
     setGoogleSheetConfig(newCfg);
@@ -521,19 +633,19 @@ export default function App() {
 
   const handleDeletePejabat = (id: string) => {
     const p = pejabatList.find(item => item.id === id);
-    if (confirm(`Apakah Anda yakin ingin menghapus pejabat "${p?.nama}"?`)) {
+    if (confirm(`Apakah Anda yakin ingin menghapus pegawai "${p?.nama}"?`)) {
       setPejabatList(pejabatList.filter(item => item.id !== id));
-      showToast(`Pejabat berhasil dihapus.`);
+      showToast(`Pegawai berhasil dihapus.`);
     }
   };
 
   const handleImportPejabat = (importedList: Pejabat[], mode: 'append' | 'replace') => {
     if (mode === 'replace') {
       setPejabatList(importedList);
-      showToast(`Berhasil mengganti seluruh Master Pejabat dengan ${importedList.length} data baru dari Excel.`);
+      showToast(`Berhasil mengganti seluruh Master Pegawai dengan ${importedList.length} data baru dari Excel.`);
     } else {
       setPejabatList(prev => [...prev, ...importedList]);
-      showToast(`Berhasil mengimpor ${importedList.length} pejabat baru dari file Excel.`);
+      showToast(`Berhasil mengimpor ${importedList.length} pegawai baru dari file Excel.`);
     }
   };
 
@@ -685,11 +797,82 @@ export default function App() {
     kopConfig: KopSuratConfig;
     numberingConfig: NumberingPatternConfig;
     pejabatList: Pejabat[];
+    kategoriList?: KategoriBarangItem[];
   }) => {
     setKopConfig(updated.kopConfig);
     setNumberingConfig(updated.numberingConfig);
     setPejabatList(updated.pejabatList);
+    if (updated.kategoriList && updated.kategoriList.length > 0) {
+      handleUpdateKategoriList(updated.kategoriList);
+    }
     showToast('Seluruh konfigurasi instansi & pejabat berhasil disimpan serentak.');
+  };
+
+  // Single Source of Truth Category Management Handler with automatic barang migration
+  const handleUpdateKategoriList = (newList: KategoriBarangItem[]) => {
+    const oldCategories = kategoriList;
+    const oldNames = new Set<string>(oldCategories.map(k => k.nama.trim()));
+    const newNames = new Set<string>(newList.map(k => k.nama.trim()));
+    const defaultCategoryName = newList[0]?.nama || 'Umum';
+
+    // Map renamed categories (same id, different nama)
+    const renameMap = new Map<string, string>();
+    oldCategories.forEach(oldCat => {
+      const match = newList.find(n => n.id === oldCat.id);
+      if (match && match.nama.trim() !== oldCat.nama.trim()) {
+        renameMap.set(oldCat.nama.trim(), match.nama.trim());
+      }
+    });
+
+    // Detect deleted categories
+    const deletedNames = new Set<string>();
+    oldNames.forEach((name: string) => {
+      if (!newNames.has(name) && !renameMap.has(name)) {
+        deletedNames.add(name);
+      }
+    });
+
+    // Auto-migrate masterBarang if any categories were renamed or deleted
+    if (renameMap.size > 0 || deletedNames.size > 0) {
+      setMasterBarang(prev => {
+        const updatedBarang = prev.map(b => {
+          const currentCat = (b.kategori || '').trim();
+          if (renameMap.has(currentCat)) {
+            return { ...b, kategori: renameMap.get(currentCat)! };
+          }
+          if (deletedNames.has(currentCat) || !newNames.has(currentCat)) {
+            return { ...b, kategori: defaultCategoryName };
+          }
+          return b;
+        });
+        localStorage.setItem('simba_master_barang', JSON.stringify(updatedBarang));
+        return updatedBarang;
+      });
+    }
+
+    setKategoriList(newList);
+    localStorage.setItem('simba_kategori_list', JSON.stringify(newList));
+    showToast('Daftar Kategori Barang berhasil diperbarui dan disinkronkan ke seluruh sistem.');
+  };
+
+  // Mass migration for legacy/unmapped barang categories
+  const handleMigrateUnmappedCategories = (targetCategoryName?: string) => {
+    const target = targetCategoryName || 'Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor';
+    setMasterBarang(prev => {
+      const updatedBarang = prev.map(b => {
+        const kode = b.kodeRekening?.trim() || '5.1.02.01.01.0024';
+        const officialName = getNamaRekeningByKode(kode);
+        return {
+          ...b,
+          kodeRekening: kode,
+          namaRekening: officialName,
+          kategori: officialName || target
+        };
+      });
+      localStorage.setItem('simba_master_barang', JSON.stringify(updatedBarang));
+      return updatedBarang;
+    });
+    showToast(`Seluruh data barang berhasil diselaraskan ke Master Rekening Resmi.`);
   };
 
   // Restore Database Handler (Replace All or Merge)
@@ -823,7 +1006,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-100/70 text-slate-900 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen bg-[#F8FAFC] text-slate-800 flex flex-col lg:flex-row font-sans selection:bg-blue-600 selection:text-white">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="no-print fixed bottom-5 right-5 z-50 bg-slate-900/95 backdrop-blur-md text-white px-4 py-3.5 rounded-xl shadow-2xl border border-slate-700/80 flex items-center gap-3 text-xs max-w-md ring-1 ring-white/10 animate-in fade-in slide-in-from-bottom-5 duration-200">
@@ -838,43 +1021,55 @@ export default function App() {
         </div>
       )}
 
-      {/* Top Navbar */}
-      <Navbar
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onOpenNewTransaksi={() => setIsNewTransaksiModalOpen(true)}
-        onOpenNewPenerimaan={() => setIsNewPenerimaanModalOpen(true)}
-        onOpenKopSettings={() => setIsKopSettingsOpen(true)}
-        onOpenNumberingSettings={() => setIsNumberingSettingsOpen(true)}
-        onOpenUnifiedSettings={(tab) => {
-          const validTabs: Array<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger'> = [
-            'all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger'
-          ];
-          const targetTab = typeof tab === 'string' && (validTabs as string[]).includes(tab)
-            ? (tab as 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger')
-            : 'all';
-          setUnifiedSettingsTab(targetTab);
-          setIsUnifiedSettingsOpen(true);
-        }}
-        onExecuteBackup={handleExecuteFullBackup}
-        lastBackupTime={lastBackupTime}
-        onOpenSchemaModal={() => setIsSchemaModalOpen(true)}
-        schoolName={kopConfig.namaSekolah}
-        currentUser={currentUser}
-        onOpenUserManagement={() => setIsUserManagementOpen(true)}
-        onOpenResetTransaksi={() => setIsResetTransaksiOpen(true)}
-        onOpenAuditLog={() => setIsAuditLogOpen(true)}
-        onOpenLoginModal={() => setIsLoginModalOpen(true)}
-        onLogout={handleLogout}
-        onSwitchRole={handleQuickSwitchRole}
-        onOpenGoogleSheets={() => setIsGoogleSheetsOpen(true)}
-        isGoogleSheetConnected={Boolean(googleSheetConfig?.spreadsheetId)}
-        paperSize={paperSize}
-        onSelectPaperSize={setPaperSize}
-      />
+      {/* Modern Collapsible Dark Navy Sidebar */}
+      <div className="no-print">
+        <AppSidebar
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          isCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+          isMobileOpen={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
+          currentUser={currentUser}
+          schoolName={kopConfig.namaSekolah}
+          onOpenGoogleSheets={() => setIsGoogleSheetsOpen(true)}
+          onOpenUnifiedSettings={() => {
+            setUnifiedSettingsTab('all');
+            setIsUnifiedSettingsOpen(true);
+          }}
+          onExecuteBackup={handleExecuteFullBackup}
+          onOpenAuditLog={() => setIsAuditLogOpen(true)}
+          onOpenUserManagement={() => setIsUserManagementOpen(true)}
+          onOpenLoginModal={() => setIsLoginModalOpen(true)}
+          onLogout={handleLogout}
+          onOpenResetTransaksi={() => setIsResetTransaksiOpen(true)}
+        />
+      </div>
 
-      {/* Main Container */}
-      <main className="flex-1 w-full">
+      {/* Main Column: Topbar + Page Content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="no-print">
+          <AppTopbar
+            activeTab={activeTab}
+            schoolName={kopConfig.namaSekolah}
+            currentUser={currentUser}
+            onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
+            onOpenNewTransaksi={() => {
+              setEditingTransaksi(null);
+              setIsNewTransaksiModalOpen(true);
+            }}
+            onOpenNewPenerimaan={() => {
+              setEditingPenerimaan(null);
+              setIsNewPenerimaanModalOpen(true);
+            }}
+            paperSize={paperSize}
+            onSelectPaperSize={setPaperSize}
+            lastBackupTime={lastBackupTime}
+          />
+        </div>
+
+        {/* Main Container */}
+        <main className="flex-1 w-full">
         {/* ROLE 1: Pengguna (Staf/Guru) - Tampilan antarmuka ringkas khusus Permintaan Barang (NPB) */}
         {currentUser.role === 'pengguna' ? (
           <StaffPermintaanNPBView
@@ -948,7 +1143,8 @@ export default function App() {
                   onDeleteBarang={handleDeleteBarang}
                   onImportBarang={handleImportBarang}
                   kategoriList={kategoriList}
-                  onUpdateKategoriList={setKategoriList}
+                  onUpdateKategoriList={handleUpdateKategoriList}
+                  onMigrateUnmappedCategories={handleMigrateUnmappedCategories}
                   onViewKartuBarang={(barangId) => {
                     setGeneratorInitialDocType('kartu_barang');
                     setGeneratorInitialBarangId(barangId);
@@ -978,7 +1174,7 @@ export default function App() {
                   <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center space-y-2 max-w-lg mx-auto my-12">
                     <div className="text-amber-600 font-bold text-base">Akses Khusus Administrator</div>
                     <p className="text-xs text-slate-500">
-                      Menu Master Pejabat dan struktur penandatangan dokumen dinas hanya dapat diubah oleh Administrator sistem.
+                      Menu Master Pegawai dan struktur penandatangan dokumen dinas hanya dapat diubah oleh Administrator sistem.
                     </p>
                     <button
                       onClick={() => setActiveTab('dashboard')}
@@ -993,6 +1189,7 @@ export default function App() {
           </>
         )}
       </main>
+      </div>
 
       {/* MODAL: Input Transaksi Penyaluran Baru (Spreadsheet-like) */}
       {isNewTransaksiModalOpen && (
@@ -1156,6 +1353,15 @@ export default function App() {
             handleConfirmDeletePenerimaan();
           }
         }}
+      />
+
+      {/* MODAL KEABSAHAN: Verifikasi Digital Dokumen Resmi & Integritas QR Code */}
+      <DocumentVerificationModal
+        isOpen={verificationModalState.isOpen}
+        onClose={() => setVerificationModalState(prev => ({ ...prev, isOpen: false }))}
+        data={verificationModalState.data}
+        transaksi={verificationModalState.transaksi}
+        kopConfig={kopConfig}
       />
     </div>
   );

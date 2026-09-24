@@ -197,7 +197,7 @@ export const DocumentMenuGrid: React.FC<Props> = ({
       id: 'bast',
       category: 'operasional',
       code: 'DOK-04',
-      title: 'Berita Acara Serah Terima (BAST)',
+      title: '4. Berita Acara Serah Terima (BAST Penyaluran)',
       description: 'Bukti sah hukum serah terima fisik barang persediaan antara Pengurus Barang dengan Pemohon barang bersangkutan.',
       orientation: 'Portrait',
       paperSize: 'A4 / F4',

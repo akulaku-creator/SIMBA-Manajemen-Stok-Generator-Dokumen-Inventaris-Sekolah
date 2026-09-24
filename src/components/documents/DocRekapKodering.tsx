@@ -12,6 +12,7 @@ import { Barang, KopSuratConfig, Pejabat, TAHUN_ANGGARAN_OPTIONS, TransaksiPener
 import { downloadBOSExcelFile } from '../../utils/excelBosGenerator';
 import { calculateMutasiBOSData, NAMA_BULAN } from '../../utils/mutasiBosEngine';
 import { formatRupiah } from '../../utils/numberGenerator';
+import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 
 interface Props {
   masterBarang: Barang[];
@@ -37,19 +38,8 @@ export const DocRekapKodering: React.FC<Props> = ({
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
   // Pejabat for Signatures
-  const kepsek = pejabatList.find(p => p.id === 'pejabat-kepsek') || pejabatList[0] || {
-    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
-    nip: '19680512 199303 1 005',
-    pangkatGolongan: 'Pembina Utama Muda / IV c',
-    jabatan: 'Kepala Sekolah'
-  };
-
-  const pengurusBarang = pejabatList.find(p => p.id === 'pejabat-pengurus-barang') || pejabatList[2] || {
-    nama: 'Rina Kartikasari, S.AP.',
-    nip: '19890820 201402 2 003',
-    pangkatGolongan: 'Penata Muda / III a',
-    jabatan: 'Pengurus Barang Pembantu'
-  };
+  const kepsek = resolveKepalaSekolah(pejabatList);
+  const pengurusBarang = resolvePengurusBarang(pejabatList);
 
   const calculation = useMemo(() => {
     return calculateMutasiBOSData(
@@ -288,7 +278,7 @@ export const DocRekapKodering: React.FC<Props> = ({
                         {row.namaRekening}
                       </td>
                       <td className="border-r border-slate-200 px-3 py-2 text-right font-mono font-bold text-slate-900 bg-slate-50/60">
-                        {formatRupiah(row.saldoAwalRp)}
+                        {row.saldoAwalRp > 0 ? formatRupiah(row.saldoAwalRp) : ''}
                       </td>
 
                       {visibleMonthIndices.map(m => {
@@ -296,13 +286,13 @@ export const DocRekapKodering: React.FC<Props> = ({
                         return (
                           <React.Fragment key={`${row.kodeRekening}-${m}`}>
                             <td className="border-r border-slate-200 px-2 py-2 text-right font-mono text-emerald-800 font-medium">
-                              {b.masukRp > 0 ? formatRupiah(b.masukRp) : '-'}
+                              {b.masukRp > 0 ? formatRupiah(b.masukRp) : ''}
                             </td>
                             <td className="border-r border-slate-200 px-2 py-2 text-right font-mono text-rose-800 font-medium">
-                              {b.keluarRp > 0 ? formatRupiah(b.keluarRp) : '-'}
+                              {b.keluarRp > 0 ? formatRupiah(b.keluarRp) : ''}
                             </td>
                             <td className="border-r border-slate-200 px-2 py-2 text-right font-mono font-bold text-blue-950 bg-blue-50/40">
-                              {formatRupiah(b.saldoAkhirRp)}
+                              {b.saldoAkhirRp > 0 ? formatRupiah(b.saldoAkhirRp) : ''}
                             </td>
                           </React.Fragment>
                         );
@@ -318,7 +308,7 @@ export const DocRekapKodering: React.FC<Props> = ({
                   TOTAL KESELURUHAN KODERING:
                 </td>
                 <td className="border-r border-slate-300 px-3 py-2.5 text-right font-mono font-black text-slate-950 bg-slate-300/80">
-                  {formatRupiah(calculation.grandTotal.saldoAwalRp)}
+                  {calculation.grandTotal.saldoAwalRp > 0 ? formatRupiah(calculation.grandTotal.saldoAwalRp) : ''}
                 </td>
 
                 {visibleMonthIndices.map(m => {
@@ -326,13 +316,13 @@ export const DocRekapKodering: React.FC<Props> = ({
                   return (
                     <React.Fragment key={`total-rekap-${m}`}>
                       <td className="border-r border-slate-300 px-2 py-2.5 text-right font-mono font-black text-emerald-950 bg-emerald-100">
-                        {formatRupiah(gtM.masukRp)}
+                        {gtM.masukRp > 0 ? formatRupiah(gtM.masukRp) : ''}
                       </td>
                       <td className="border-r border-slate-300 px-2 py-2.5 text-right font-mono font-black text-rose-950 bg-rose-100">
-                        {formatRupiah(gtM.keluarRp)}
+                        {gtM.keluarRp > 0 ? formatRupiah(gtM.keluarRp) : ''}
                       </td>
                       <td className="border-r border-slate-300 px-2 py-2.5 text-right font-mono font-black text-blue-950 bg-blue-100">
-                        {formatRupiah(gtM.saldoAkhirRp)}
+                        {gtM.saldoAkhirRp > 0 ? formatRupiah(gtM.saldoAkhirRp) : ''}
                       </td>
                     </React.Fragment>
                   );

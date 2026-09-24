@@ -41,6 +41,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { 
   AppUser, 
   Barang, 
+  DAFTAR_JABATAN_KEDINASAN,
   GitHubSyncConfig,
   KategoriBarangItem, 
   KopSuratConfig, 
@@ -259,6 +260,36 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           pangkatGolongan: field === 'pangkatGolongan' ? value : '',
           jabatan: field === 'jabatan' ? value : '',
           unitKerja: field === 'unitKerja' ? value : ''
+        }];
+      }
+    });
+  };
+
+  // Select Pejabat from Master Pejabat with auto-population
+  const handleSelectPejabatForRole = (roleTargetId: string, selectedPejabatId: string) => {
+    const selected = (pejabatData && pejabatData.find(p => p.id === selectedPejabatId)) ||
+      (pejabatList && pejabatList.find(p => p.id === selectedPejabatId));
+    if (!selected) return;
+
+    setPejabatData(prev => {
+      const exists = prev.some(p => p.id === roleTargetId);
+      if (exists) {
+        return prev.map(p => p.id === roleTargetId ? {
+          ...p,
+          nama: selected.nama,
+          nip: selected.nip,
+          pangkatGolongan: selected.pangkatGolongan,
+          jabatan: selected.jabatan,
+          unitKerja: selected.unitKerja || p.unitKerja
+        } : p);
+      } else {
+        return [...prev, {
+          id: roleTargetId,
+          nama: selected.nama,
+          nip: selected.nip,
+          pangkatGolongan: selected.pangkatGolongan,
+          jabatan: selected.jabatan,
+          unitKerja: selected.unitKerja || ''
         }];
       }
     });
@@ -599,8 +630,8 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl xl:max-w-6xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         
         {/* Modal Header */}
         <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
@@ -631,7 +662,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
         </div>
 
         {/* Section Navigation Tabs */}
-        <div className="px-6 bg-slate-50 border-b border-slate-200 flex items-center gap-2 overflow-x-auto py-2.5 text-xs font-semibold">
+        <div className="px-6 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center gap-2 text-xs font-semibold">
           <button
             type="button"
             onClick={() => setActiveSection('all')}
@@ -1086,7 +1117,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                     3
                   </div>
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">Master Pejabat Penandatangan Resmi</h3>
+                    <h3 className="text-sm font-bold text-slate-900">Master Pegawai Penandatangan Resmi</h3>
                     <p className="text-[11px] text-slate-500">Konfigurasi nama lengkap, NIP, pangkat/golongan, dan jabatan untuk tanda tangan berkas.</p>
                   </div>
                 </div>
@@ -1101,50 +1132,71 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       <UserCheck className="w-4 h-4 text-purple-600" />
                       Kepala Sekolah (Mengetahui)
                     </span>
+                    <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-md font-semibold">
+                      Kuasa Pengguna
+                    </span>
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Nama Lengkap &amp; Gelar</label>
-                    <input
-                      type="text"
-                      value={kepsek.nama}
-                      onChange={e => handleUpdatePejabatField(kepsek.id, 'nama', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-semibold text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                      placeholder="Drs. H. Bambang Suhartono, M.Pd."
-                    />
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Nama Lengkap &amp; Gelar
+                    </label>
+                    <select
+                      id="select_pejabat_kepsek"
+                      value={pejabatData.find(p => p.nama === kepsek.nama)?.id || ''}
+                      onChange={e => handleSelectPejabatForRole(kepsek.id, e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-2 bg-white font-semibold text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih dari Master Pegawai --</option>
+                      {pejabatData.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.nama} ({p.jabatan || 'Pegawai'})
+                        </option>
+                      ))}
+                      {kepsek.nama && !pejabatData.some(p => p.nama === kepsek.nama) && (
+                        <option value={kepsek.id}>{kepsek.nama} (Pegawai Terpilih)</option>
+                      )}
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">NIP</label>
+                    <label className="block text-slate-600 font-semibold mb-1">NIP (Terisi Otomatis)</label>
                     <input
                       type="text"
                       value={kepsek.nip}
-                      onChange={e => handleUpdatePejabatField(kepsek.id, 'nip', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-mono text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                      placeholder="19680512 199303 1 005"
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Pangkat / Golongan</label>
+                    <label className="block text-slate-600 font-semibold mb-1">Pangkat / Golongan (Terisi Otomatis)</label>
                     <input
                       type="text"
                       value={kepsek.pangkatGolongan}
-                      onChange={e => handleUpdatePejabatField(kepsek.id, 'pangkatGolongan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                      placeholder="Pembina Utama Muda / IV c"
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Jabatan Resmi</label>
-                    <input
-                      type="text"
-                      value={kepsek.jabatan}
+                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
+                    <select
+                      id="select_jabatan_kedinasan_kepsek"
+                      value={kepsek.jabatan || ''}
                       onChange={e => handleUpdatePejabatField(kepsek.id, 'jabatan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                      placeholder="Kepala Sekolah"
-                    />
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
+                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
+                        <option key={jab} value={jab}>{jab}</option>
+                      ))}
+                      {kepsek.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(kepsek.jabatan as any) && (
+                        <option value={kepsek.jabatan}>{kepsek.jabatan}</option>
+                      )}
+                    </select>
                   </div>
                 </div>
 
@@ -1155,50 +1207,71 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       <UserCheck className="w-4 h-4 text-blue-600" />
                       Pengurus Barang (Penyalur)
                     </span>
+                    <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md font-semibold">
+                      Penyalur / Gudang
+                    </span>
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Nama Lengkap &amp; Gelar</label>
-                    <input
-                      type="text"
-                      value={pengurusBarang.nama}
-                      onChange={e => handleUpdatePejabatField(pengurusBarang.id, 'nama', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-semibold text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                      placeholder="Rina Kartikasari, S.AP."
-                    />
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Nama Lengkap &amp; Gelar
+                    </label>
+                    <select
+                      id="select_pejabat_pengurus_barang"
+                      value={pejabatData.find(p => p.nama === pengurusBarang.nama)?.id || ''}
+                      onChange={e => handleSelectPejabatForRole(pengurusBarang.id, e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-2 bg-white font-semibold text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih dari Master Pegawai --</option>
+                      {pejabatData.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.nama} ({p.jabatan || 'Pegawai'})
+                        </option>
+                      ))}
+                      {pengurusBarang.nama && !pejabatData.some(p => p.nama === pengurusBarang.nama) && (
+                        <option value={pengurusBarang.id}>{pengurusBarang.nama} (Pegawai Terpilih)</option>
+                      )}
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">NIP</label>
+                    <label className="block text-slate-600 font-semibold mb-1">NIP (Terisi Otomatis)</label>
                     <input
                       type="text"
                       value={pengurusBarang.nip}
-                      onChange={e => handleUpdatePejabatField(pengurusBarang.id, 'nip', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-mono text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                      placeholder="19890820 201402 2 003"
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Pangkat / Golongan</label>
+                    <label className="block text-slate-600 font-semibold mb-1">Pangkat / Golongan (Terisi Otomatis)</label>
                     <input
                       type="text"
                       value={pengurusBarang.pangkatGolongan}
-                      onChange={e => handleUpdatePejabatField(pengurusBarang.id, 'pangkatGolongan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                      placeholder="Penata Muda / III a"
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Jabatan Resmi</label>
-                    <input
-                      type="text"
-                      value={pengurusBarang.jabatan}
+                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
+                    <select
+                      id="select_jabatan_kedinasan_pengurus"
+                      value={pengurusBarang.jabatan || ''}
                       onChange={e => handleUpdatePejabatField(pengurusBarang.id, 'jabatan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                      placeholder="Pengurus Barang Pembantu"
-                    />
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
+                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
+                        <option key={jab} value={jab}>{jab}</option>
+                      ))}
+                      {pengurusBarang.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(pengurusBarang.jabatan as any) && (
+                        <option value={pengurusBarang.jabatan}>{pengurusBarang.jabatan}</option>
+                      )}
+                    </select>
                   </div>
                 </div>
 
@@ -1209,50 +1282,71 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       <UserCheck className="w-4 h-4 text-emerald-600" />
                       Petugas Sarpras (Pemeriksa)
                     </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-semibold">
+                      Pemeriksa Teknis
+                    </span>
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Nama Lengkap &amp; Gelar</label>
-                    <input
-                      type="text"
-                      value={sarpras.nama}
-                      onChange={e => handleUpdatePejabatField(sarpras.id, 'nama', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-semibold text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                      placeholder="Ahmad Fauzi, S.Pd., M.T."
-                    />
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Nama Lengkap &amp; Gelar
+                    </label>
+                    <select
+                      id="select_pejabat_sarpras"
+                      value={pejabatData.find(p => p.nama === sarpras.nama)?.id || ''}
+                      onChange={e => handleSelectPejabatForRole(sarpras.id, e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-2 bg-white font-semibold text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih dari Master Pegawai --</option>
+                      {pejabatData.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.nama} ({p.jabatan || 'Pegawai'})
+                        </option>
+                      ))}
+                      {sarpras.nama && !pejabatData.some(p => p.nama === sarpras.nama) && (
+                        <option value={sarpras.id}>{sarpras.nama} (Pegawai Terpilih)</option>
+                      )}
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">NIP</label>
+                    <label className="block text-slate-600 font-semibold mb-1">NIP (Terisi Otomatis)</label>
                     <input
                       type="text"
                       value={sarpras.nip}
-                      onChange={e => handleUpdatePejabatField(sarpras.id, 'nip', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white font-mono text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                      placeholder="19780415 200501 1 009"
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Pangkat / Golongan</label>
+                    <label className="block text-slate-600 font-semibold mb-1">Pangkat / Golongan (Terisi Otomatis)</label>
                     <input
                       type="text"
                       value={sarpras.pangkatGolongan}
-                      onChange={e => handleUpdatePejabatField(sarpras.id, 'pangkatGolongan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                      placeholder="Penata Tingkat I / III d"
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-slate-600 font-semibold mb-1">Jabatan Resmi</label>
-                    <input
-                      type="text"
-                      value={sarpras.jabatan}
+                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
+                    <select
+                      id="select_jabatan_kedinasan_sarpras"
+                      value={sarpras.jabatan || ''}
                       onChange={e => handleUpdatePejabatField(sarpras.id, 'jabatan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                      placeholder="Wakasek Sarana Prasarana"
-                    />
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
+                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
+                        <option key={jab} value={jab}>{jab}</option>
+                      ))}
+                      {sarpras.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(sarpras.jabatan as any) && (
+                        <option value={sarpras.jabatan}>{sarpras.jabatan}</option>
+                      )}
+                    </select>
                   </div>
                 </div>
 
@@ -1318,7 +1412,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                           📤 Transaksi Penyaluran: <strong className="text-slate-900 font-bold">{transaksiList.length} berkas</strong>
                         </div>
                         <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
-                          👥 Master Pejabat: <strong className="text-slate-900 font-bold">{pejabatData.length} orang</strong>
+                          👥 Master Pegawai: <strong className="text-slate-900 font-bold">{pejabatData.length} orang</strong>
                         </div>
                         <div className="bg-white px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-700 font-medium">
                           📑 Konfigurasi Kop &amp; No. Surat

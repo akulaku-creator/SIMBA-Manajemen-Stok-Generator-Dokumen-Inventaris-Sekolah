@@ -20,6 +20,12 @@ import React, { useMemo, useState } from 'react';
 import { Barang, PengajuanItem } from '../types';
 import { formatRupiah } from '../utils/numberGenerator';
 import { getUniqueKodeRekening } from '../utils/rekeningHelper';
+import {
+  getKodeBarang,
+  getNamaBarang,
+  getNusp,
+  getRekeningInfo
+} from './BatchAddBarangModal';
 
 interface Props {
   isOpen: boolean;
@@ -58,16 +64,26 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
   // Filtered barang list
   const filteredBarang = useMemo(() => {
     return masterBarang.filter((b) => {
-      const matchSearch =
-        !search.trim() ||
-        b.namaBarang.toLowerCase().includes(search.toLowerCase()) ||
-        b.kodeBarang.toLowerCase().includes(search.toLowerCase()) ||
-        b.nusp.toLowerCase().includes(search.toLowerCase()) ||
-        (b.spesifikasi && b.spesifikasi.toLowerCase().includes(search.toLowerCase())) ||
-        (b.namaRekening && b.namaRekening.toLowerCase().includes(search.toLowerCase())) ||
-        (b.kategori && b.kategori.toLowerCase().includes(search.toLowerCase()));
+      const nama = getNamaBarang(b);
+      const kode = getKodeBarang(b);
+      const nusp = getNusp(b);
+      const rekInfo = getRekeningInfo(b);
+      const spesifikasi = b.spesifikasi || (b as any).deskripsi || '';
 
-      const matchRekening = selectedRekening === 'all' || b.kodeRekening === selectedRekening;
+      const q = search.trim().toLowerCase();
+      const matchSearch =
+        !q ||
+        nama.toLowerCase().includes(q) ||
+        kode.toLowerCase().includes(q) ||
+        nusp.toLowerCase().includes(q) ||
+        spesifikasi.toLowerCase().includes(q) ||
+        rekInfo.nama.toLowerCase().includes(q) ||
+        rekInfo.kode.toLowerCase().includes(q);
+
+      const matchRekening =
+        selectedRekening === 'all' ||
+        rekInfo.kode === selectedRekening ||
+        b.kodeRekening === selectedRekening;
       const matchAvailability = !onlyAvailable || b.stokSekarang > 0;
 
       return matchSearch && matchRekening && matchAvailability;
@@ -244,21 +260,28 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
       return;
     }
 
-    const itemsToAdd: PengajuanItem[] = selectedItemsData.list.map(({ barang: b, draft }) => ({
-      id: `item-${Date.now()}-${b.id}`,
-      barangId: b.id,
-      kodeBarang: b.kodeBarang,
-      nusp: b.nusp,
-      kodeRekening: b.kodeRekening,
-      namaRekening: b.namaRekening,
-      namaBarang: b.namaBarang,
-      spesifikasi: b.spesifikasi || '',
-      satuan: b.satuan,
-      sisaBarang: b.stokSekarang,
-      usulanJumlah: draft.usulanJumlah,
-      hargaSatuan: b.hargaSatuan,
-      keperluan: (draft.keperluan && draft.keperluan.trim()) || globalKeperluan || defaultKeperluan
-    }));
+    const itemsToAdd: PengajuanItem[] = selectedItemsData.list.map(({ barang: b, draft }) => {
+      const nama = getNamaBarang(b);
+      const kode = getKodeBarang(b);
+      const nusp = getNusp(b);
+      const rekInfo = getRekeningInfo(b);
+
+      return {
+        id: `item-${Date.now()}-${b.id}`,
+        barangId: b.id,
+        kodeBarang: kode,
+        nusp: nusp,
+        kodeRekening: rekInfo.kode,
+        namaRekening: rekInfo.nama,
+        namaBarang: nama,
+        spesifikasi: b.spesifikasi || '',
+        satuan: b.satuan || (b as any).satuan_barang || 'Pcs',
+        sisaBarang: b.stokSekarang,
+        usulanJumlah: draft.usulanJumlah,
+        hargaSatuan: b.hargaSatuan,
+        keperluan: (draft.keperluan && draft.keperluan.trim()) || globalKeperluan || defaultKeperluan
+      };
+    });
 
     onAddBatch(itemsToAdd);
     onClose();
@@ -474,6 +497,11 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
                     const isAvailable = b.stokSekarang > 0;
                     const isOverStock = draft.usulanJumlah > b.stokSekarang;
 
+                    const namaBarang = getNamaBarang(b);
+                    const kodeBarang = getKodeBarang(b);
+                    const nusp = getNusp(b);
+                    const rekInfo = getRekeningInfo(b);
+
                     return (
                       <tr
                         key={b.id}
@@ -500,35 +528,36 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
                         </td>
 
                         {/* Nama Barang & Spesifikasi */}
-                        <td className="p-2.5 overflow-hidden">
-                          <div className="font-bold text-slate-800 text-xs truncate" title={b.namaBarang}>
-                            {b.namaBarang}
+                        <td className="px-4 py-3 overflow-hidden">
+                          <div className="font-semibold text-gray-900 text-sm leading-snug truncate" title={namaBarang}>
+                            {namaBarang || 'Nama Barang Tidak Ditemukan'}
                           </div>
-                          <div className="text-[10px] text-slate-500 font-mono flex items-center gap-1.5 mt-0.5 truncate">
-                            <span>Kode: {b.kodeBarang}</span>
-                            <span>&bull;</span>
-                            <span>NUSP: {b.nusp}</span>
+                          <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500 font-mono">
+                            <span>{kodeBarang}</span>
+                            <span className="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200 text-[10px]">
+                              NUSP: {nusp || '-'}
+                            </span>
                           </div>
                           {b.spesifikasi && (
-                            <div className="text-[10px] text-slate-400 truncate mt-0.5" title={b.spesifikasi}>
+                            <div className="text-[10px] text-gray-400 truncate mt-0.5" title={b.spesifikasi}>
                               {b.spesifikasi}
                             </div>
                           )}
                         </td>
 
                         {/* Kategori / Rekening */}
-                        <td className="p-2.5 overflow-hidden">
-                          <span className="inline-block font-mono text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 truncate max-w-full">
-                            {b.kodeRekening}
-                          </span>
-                          <div className="text-[10px] text-blue-700 font-medium truncate mt-0.5" title={b.namaRekening}>
-                            {b.namaRekening}
+                        <td className="px-3 py-2.5 overflow-hidden" title={`${rekInfo.kode} - ${rekInfo.nama}`}>
+                          <div className="font-semibold text-xs text-slate-800 line-clamp-2 leading-snug">
+                            {rekInfo.nama}
+                          </div>
+                          <div className="font-mono text-[10px] text-slate-500 font-medium mt-0.5 truncate">
+                            {rekInfo.kode}
                           </div>
                         </td>
 
                         {/* Satuan */}
                         <td className="p-2.5 text-center font-medium text-slate-700 truncate">
-                          {b.satuan}
+                          {b.satuan || (b as any).satuan_barang || 'Pcs'}
                         </td>
 
                         {/* Sisa Stok Real-Time */}

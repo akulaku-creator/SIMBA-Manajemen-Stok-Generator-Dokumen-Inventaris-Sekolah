@@ -96,7 +96,7 @@ export const ImportPejabatModal: React.FC<Props> = ({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">Import Master Pejabat dari Excel</h3>
+              <h3 className="text-sm font-bold text-white">Import Master Pegawai dari Excel</h3>
               <p className="text-[11px] text-slate-300">
                 Unggah berkas spreadsheet (.xlsx, .xls, .csv) data penandatangan dokumen dinas
               </p>
@@ -218,7 +218,7 @@ export const ImportPejabatModal: React.FC<Props> = ({
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span className="text-xs font-bold text-slate-900">
-                    Pratinjau Data Siap Impor ({parsedData.length} Pejabat)
+                    Pratinjau Data Siap Impor ({parsedData.length} Pegawai)
                   </span>
                 </div>
               </div>
@@ -228,7 +228,7 @@ export const ImportPejabatModal: React.FC<Props> = ({
                   <thead className="bg-slate-100 text-slate-700 sticky top-0 text-[11px] uppercase tracking-wider font-semibold border-b border-slate-200">
                     <tr>
                       <th className="p-2.5 w-8 text-center">No</th>
-                      <th className="p-2.5">Nama Pejabat & Gelar</th>
+                      <th className="p-2.5">Nama Pegawai &amp; Gelar</th>
                       <th className="p-2.5">NIP</th>
                       <th className="p-2.5">Pangkat / Golongan</th>
                       <th className="p-2.5">Jabatan</th>
@@ -271,7 +271,7 @@ export const ImportPejabatModal: React.FC<Props> = ({
                     <div>
                       <span className="font-semibold text-slate-900 block text-[11px]">Tambahkan ke Daftar</span>
                       <span className="text-[10px] text-slate-500">
-                        {existingCount} pejabat lama dipertahankan, {parsedData.length} data baru ditambahkan.
+                        {existingCount} pegawai lama dipertahankan, {parsedData.length} data baru ditambahkan.
                       </span>
                     </div>
                   </label>
@@ -289,7 +289,7 @@ export const ImportPejabatModal: React.FC<Props> = ({
                     <div>
                       <span className="font-semibold text-slate-900 block text-[11px]">Ganti Seluruh Data</span>
                       <span className="text-[10px] text-slate-500">
-                        Menggantikan seluruh pejabat saat ini dengan {parsedData.length} data dari file Excel.
+                        Menggantikan seluruh pegawai saat ini dengan {parsedData.length} data dari file Excel.
                       </span>
                     </div>
                   </label>
@@ -315,7 +315,7 @@ export const ImportPejabatModal: React.FC<Props> = ({
               className="inline-flex items-center gap-1.5 px-5 py-2.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none rounded-lg shadow-xs transition-all active:scale-98"
             >
               <UserCheck className="w-4 h-4" />
-              Impor {parsedData.length > 0 ? `${parsedData.length} Pejabat` : 'Data'}
+              Impor {parsedData.length > 0 ? `${parsedData.length} Pegawai` : 'Data'}
             </button>
           </div>
         </div>

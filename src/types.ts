@@ -37,6 +37,8 @@ export interface KategoriBarangItem {
   id: string;
   nama: string;
   prefixKode?: string;
+  kodeRekening?: string; // Standard Government Expenditure Account (e.g. 5.1.02.01.01.0024)
+  namaRekening?: string; // Official account description
   jenisDefault?: JenisBarang;
   deskripsi?: string;
 }
@@ -48,13 +50,27 @@ export interface KodeRekening {
   jenisAset?: JenisBarang;
 }
 
+export const DAFTAR_JABATAN_KEDINASAN = [
+  'Guru',
+  'Tenaga Kependidikan',
+  'Kepala Sekolah',
+  'Kepala Laboratorium',
+  'Wakasek',
+  'Caraka',
+  'Satpam',
+  'Pengurus Barang Pembantu'
+] as const;
+
+export type JabatanKedinasan = typeof DAFTAR_JABATAN_KEDINASAN[number];
+
 export interface Pejabat {
   id: string;
   nama: string;
   nip: string;
   pangkatGolongan: string; // e.g. "Pembina / IV a", "Penata Muda / III a"
-  jabatan: string; // e.g. "Kepala Sekolah", "Wakasek Sarana Prasarana", "Pengurus Barang Pembantu", "Staf Tata Usaha"
+  jabatan: string; // e.g. "Kepala Sekolah", "Wakasek", "Pengurus Barang Pembantu"
   unitKerja?: string;
+  role?: string;
 }
 
 export interface Barang {
@@ -107,6 +123,8 @@ export interface TransaksiPengeluaran {
   
   // Signatories
   pemohonId: string;
+  pemohonNama?: string;
+  pemohonNip?: string;
   sarprasId: string;
   pengurusBarangId: string;
   kepsekId: string;

@@ -43,7 +43,7 @@ export const DocumentBundle: React.FC<Props> = ({
         />
       </A4Container>
 
-      {/* 3. Surat Perintah Penyaluran Barang (SPPB) - Halaman 3 */}
+      {/* 3. Surat Perintah Penyaluran Barang (SPPB) - Halaman 3 (Portrait) */}
       <A4Container paperSize={paperSize} orientation="portrait" breakAfter={true}>
         <DocSPPB 
           transaksi={transaksi} 
