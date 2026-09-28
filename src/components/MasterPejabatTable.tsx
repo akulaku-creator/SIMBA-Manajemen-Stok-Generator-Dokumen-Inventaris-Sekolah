@@ -24,6 +24,10 @@ export const MasterPejabatTable: React.FC<Props> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
+  // Async Export Excel State (Loading, Progress & Double-Click Prevention)
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
+  const [exportProgress, setExportProgress] = useState<{ percent: number; statusText: string } | null>(null);
+
   const [formData, setFormData] = useState<Partial<Pejabat>>({
     nama: '',
     nip: '',
@@ -42,6 +46,28 @@ export const MasterPejabatTable: React.FC<Props> = ({
       (p.pangkatGolongan && p.pangkatGolongan.toLowerCase().includes(q))
     );
   });
+
+  // Async Non-blocking Export Handler
+  const handleExportExcelAsync = async () => {
+    if (isExportingExcel) return;
+    try {
+      setIsExportingExcel(true);
+      setExportProgress({ percent: 5, statusText: 'Menyiapkan data...' });
+      
+      // Jeda agar browser sempat merefleksikan perubahan UI
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      await exportMasterPegawaiToExcel(filteredPejabat, (percent, statusText) => {
+        setExportProgress({ percent, statusText });
+      });
+    } catch (err) {
+      console.error('Gagal melakukan ekspor Excel:', err);
+      alert('Terjadi kesalahan saat mengunduh berkas Excel. Silakan coba kembali.');
+    } finally {
+      setIsExportingExcel(false);
+      setExportProgress(null);
+    }
+  };
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -99,15 +125,30 @@ export const MasterPejabatTable: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Tombol Export ke Excel (Filter-Aware) */}
+          {/* Tombol Export ke Excel (Filter-Aware & Non-blocking) */}
           <button
             type="button"
-            onClick={() => exportMasterPegawaiToExcel(filteredPejabat)}
-            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-xs transition-all active:scale-98"
-            title={`Ekspor ${filteredPejabat.length} data pegawai ke berkas Excel (.xlsx) sesuai filter dan pencarian aktif`}
+            id="btn-export-excel-pejabat"
+            onClick={handleExportExcelAsync}
+            disabled={isExportingExcel}
+            className={`inline-flex items-center gap-1.5 text-white text-xs font-semibold px-3.5 py-2.5 rounded-lg shadow-xs transition-all active:scale-98 ${
+              isExportingExcel
+                ? 'bg-emerald-700/80 cursor-wait opacity-85'
+                : 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
+            }`}
+            title={`Ekspor ${filteredPejabat.length} data pegawai ke berkas Excel (.xlsx) secara non-blocking`}
           >
-            <Download className="w-4 h-4" />
-            Export ke Excel
+            {isExportingExcel ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0"></div>
+                <span>{exportProgress?.statusText || 'Memproses Excel...'}</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                <span>Export ke Excel</span>
+              </>
+            )}
           </button>
 
           {/* Tombol Import dari Excel */}
@@ -131,6 +172,28 @@ export const MasterPejabatTable: React.FC<Props> = ({
           </button>
         </div>
       </div>
+
+      {/* Loading Progress Bar saat Export Berjalan */}
+      {isExportingExcel && exportProgress && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 shadow-xs space-y-2 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between text-xs text-emerald-950 font-medium">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              <span>{exportProgress.statusText}</span>
+            </div>
+            <span className="font-mono font-bold text-emerald-700">{exportProgress.percent}%</span>
+          </div>
+          <div className="w-full bg-emerald-200/80 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-emerald-600 h-2 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${exportProgress.percent}%` }}
+            ></div>
+          </div>
+          <p className="text-[11px] text-emerald-700">
+            Mengolah {filteredPejabat.length} data pegawai menggunakan chunking non-blocking agar browser tetap responsif.
+          </p>
+        </div>
+      )}
 
       {/* Filter / Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-xs ring-1 ring-slate-900/5">

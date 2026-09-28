@@ -418,15 +418,30 @@ export const MasterBarangTable: React.FC<Props> = ({
 
         {/* 3 Tombol Aksi Utama: Export ke Excel, Import dari Excel, + Tambah Barang Baru */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Export Excel Button (Hijau / Emerald) */}
+          {/* Export Excel Button (Hijau / Emerald) dengan Proteksi Non-blocking & Loading State */}
           <button
             type="button"
-            onClick={() => exportMasterBarangToExcel(filtered)}
-            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
-            title={`Ekspor ${filtered.length} data barang ke berkas Excel (.xlsx) sesuai filter dan pencarian aktif`}
+            id="btn-export-excel"
+            onClick={handleExportExcelAsync}
+            disabled={isExportingExcel}
+            className={`inline-flex items-center gap-1.5 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 ${
+              isExportingExcel 
+                ? 'bg-emerald-700/80 cursor-wait opacity-85' 
+                : 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
+            }`}
+            title={`Ekspor ${filtered.length} data barang ke berkas Excel (.xlsx) secara non-blocking`}
           >
-            <Download className="w-4 h-4" />
-            Export ke Excel
+            {isExportingExcel ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0"></div>
+                <span>{exportProgress?.statusText || 'Memproses File Excel...'}</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                <span>Export ke Excel</span>
+              </>
+            )}
           </button>
 
           {/* Import Excel Button (Hijau / Emerald) */}
@@ -451,6 +466,28 @@ export const MasterBarangTable: React.FC<Props> = ({
           </button>
         </div>
       </div>
+
+      {/* Loading Progress Bar saat Export Berjalan */}
+      {isExportingExcel && exportProgress && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 shadow-xs space-y-2 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between text-xs text-emerald-950 font-medium">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+              <span>{exportProgress.statusText}</span>
+            </div>
+            <span className="font-mono font-bold text-emerald-700">{exportProgress.percent}%</span>
+          </div>
+          <div className="w-full bg-emerald-200/80 rounded-full h-2 overflow-hidden">
+            <div 
+              className="bg-emerald-600 h-2 rounded-full transition-all duration-300 ease-out"
+              style={{ width: `${exportProgress.percent}%` }}
+            ></div>
+          </div>
+          <p className="text-[11px] text-emerald-700">
+            Mengolah {filtered.length} data menggunakan chunking non-blocking agar peramban web tetap responsif.
+          </p>
+        </div>
+      )}
 
       {/* Filter Tabs (Semua / BHP / Belanja Modal) & Search */}
       <div className="space-y-3 bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-xs ring-1 ring-slate-900/5">

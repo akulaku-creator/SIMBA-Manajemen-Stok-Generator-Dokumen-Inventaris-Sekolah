@@ -96,8 +96,11 @@ export const DocMutasiBOS: React.FC<Props> = ({
   }, [calculation.kelompokRekening, searchQuery]);
 
   const handleExportExcel = async () => {
+    if (isExporting) return;
     try {
       setIsExporting(true);
+      // Berikan jeda sebentar agar browser sempat merefleksikan perubahan UI & spinner
+      await new Promise(r => setTimeout(r, 100));
       await downloadBOSExcelFile(
         masterBarang,
         transaksiPengeluaranList,
@@ -249,11 +252,24 @@ export const DocMutasiBOS: React.FC<Props> = ({
             id="btn-export-excel-bos"
             onClick={handleExportExcel}
             disabled={isExporting}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white font-semibold rounded-lg border border-emerald-700 transition-all shadow-xs disabled:opacity-50"
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-white font-semibold rounded-lg border border-emerald-700 transition-all shadow-xs ${
+              isExporting 
+                ? 'bg-emerald-700/80 cursor-wait opacity-85' 
+                : 'bg-emerald-600 hover:bg-emerald-700 active:scale-98 cursor-pointer'
+            }`}
             title="Unduh file Excel (.xlsx) dengan formula live, header rapi, border, dan kalkulasi otomatis untuk sheet BOS & REKAP PER KODERING"
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>{isExporting ? 'Membuat .xlsx...' : 'Ekspor Excel (.xlsx)'}</span>
+            {isExporting ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0"></div>
+                <span>Membuat .xlsx...</span>
+              </>
+            ) : (
+              <>
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Ekspor Excel (.xlsx)</span>
+              </>
+            )}
           </button>
 
           <button
