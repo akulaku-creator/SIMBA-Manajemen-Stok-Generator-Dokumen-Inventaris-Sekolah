@@ -392,16 +392,29 @@ export const TransactionForm: React.FC<Props> = ({
         setErrorMsg(`Barang pada baris ${i + 1} belum dipilih.`);
         return;
       }
+      if (!it.kodeBarang) {
+        setErrorMsg(`Kode barang pada baris ${i + 1} tidak boleh kosong.`);
+        return;
+      }
       if (it.usulanJumlah <= 0) {
-        setErrorMsg(`Jumlah diminta pada baris ${i + 1} (${it.namaBarang}) harus lebih besar dari 0.`);
+        setErrorMsg(`Jumlah pengeluaran pada baris ${i + 1} (${it.namaBarang}) harus lebih besar dari 0.`);
         return;
       }
       if (it.usulanJumlah > it.sisaBarang) {
-        setErrorMsg(
-          `Over-Stock Limit: Baris ${i + 1} (${it.namaBarang}) meminta ${it.usulanJumlah} ${it.satuan}, melampaui sisa stok gudang (${it.sisaBarang} ${it.satuan}).`
-        );
+        setErrorMsg('Stok tidak mencukupi. Jumlah pengeluaran melebihi stok tersedia.');
+        alert('Stok tidak mencukupi. Jumlah pengeluaran melebihi stok tersedia.');
         return;
       }
+    }
+
+    if (!tanggal || tanggal.trim() === '') {
+      setErrorMsg('Tanggal transaksi harus valid.');
+      return;
+    }
+
+    if (!noNPB || !noSPB || !noSPPB || !noBAST) {
+      setErrorMsg('Nomor dokumen resmi (NPB, SPB, SPPB, BAST) tidak boleh kosong.');
+      return;
     }
 
     // Open confirmation modal

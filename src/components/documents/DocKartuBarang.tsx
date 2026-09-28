@@ -10,6 +10,7 @@ import {
 import { formatTanggalIndonesia, MONTHS_ID } from '../../utils/numberGenerator';
 import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
+import { isDateBeforePeriod, isDateInPeriod } from './DocKartuPersediaan';
 
 export interface DocKartuBarangProps {
   barang: Barang;
@@ -70,29 +71,47 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
     return getKartuBarangDateRange(periodFilter);
   }, [periodFilter]);
 
+  const targetYear = periodFilter.year;
+  const targetMonth = periodFilter.type === 'bulan' ? (periodFilter.month ?? 0)
+    : periodFilter.type === 'triwulan' ? (100 + (periodFilter.triwulan ?? 1))
+    : -1;
+
   // Compute mutasi data
-  const { rows, totalMasuk, totalKeluar, saldoAkhir, saldoAwalPeriode } = useMemo(() => {
-    // 1. Transactions prior to startDate
+  const { rows, totalMasuk, totalKeluar, saldoAkhir, saldoAwalPeriode, saldoAwalDateString } = useMemo(() => {
+    // 1. Transactions prior to target period
     const priorMasuk = transaksiPenerimaanList
-      .filter(t => new Date(t.tanggal) < startDate)
+      .filter(t => isDateBeforePeriod(t.tanggal, targetMonth, targetYear))
       .reduce((sum, t) => {
         const item = t.items.find(i => i.barangId === barang.id);
-        return sum + (item ? item.jumlahMasuk : 0);
+        return sum + (item ? Number(item.jumlahMasuk) || 0 : 0);
       }, 0);
 
     const priorKeluar = transaksiPengeluaranList
-      .filter(t => new Date(t.tanggal) < startDate)
+      .filter(t => isDateBeforePeriod(t.tanggal || t.createdAt, targetMonth, targetYear))
       .reduce((sum, t) => {
         const item = t.items.find(i => i.barangId === barang.id);
-        return sum + (item ? item.usulanJumlah : 0);
+        return sum + (item ? Number(item.usulanJumlah) || 0 : 0);
       }, 0);
 
-    const initialSaldo = Math.max(0, barang.stokAwal + priorMasuk - priorKeluar);
+    const initialSaldo = Math.max(0, (Number(barang.stokAwal) || 0) + priorMasuk - priorKeluar);
+
+    // Compute saldo awal date (last day of previous month/period)
+    let saldoAwalDate = '';
+    if (targetMonth === -1) {
+      saldoAwalDate = `31 Desember ${targetYear - 1}`;
+    } else if (targetMonth >= 101 && targetMonth <= 104) {
+      const startM = (targetMonth - 101) * 3;
+      const prevDate = new Date(targetYear, startM, 0);
+      saldoAwalDate = `${prevDate.getDate()} ${MONTHS_ID[prevDate.getMonth()]} ${prevDate.getFullYear()}`;
+    } else {
+      const prevDate = new Date(targetYear, targetMonth, 0);
+      saldoAwalDate = `${prevDate.getDate()} ${MONTHS_ID[prevDate.getMonth()]} ${prevDate.getFullYear()}`;
+    }
 
     // 2. Events during period
     interface EventItem {
       tanggal: string;
-      dateObj: Date;
+      dateSortKey: string;
       noBukti: string;
       jenis: 'masuk' | 'keluar';
       masuk: number;
@@ -104,18 +123,17 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
 
     // Incoming
     transaksiPenerimaanList.forEach(t => {
-      const d = new Date(t.tanggal);
-      if (d >= startDate && d <= endDate) {
+      if (isDateInPeriod(t.tanggal, targetMonth, targetYear)) {
         const item = t.items.find(i => i.barangId === barang.id);
         if (item && item.jumlahMasuk > 0) {
           events.push({
             tanggal: t.tanggal,
-            dateObj: d,
+            dateSortKey: t.tanggal,
             noBukti: t.noBukti || 'Penerimaan BOS',
             jenis: 'masuk',
-            masuk: item.jumlahMasuk,
+            masuk: Number(item.jumlahMasuk) || 0,
             keluar: 0,
-            keterangan: `Penerimaan BOS - ${t.penyedia || t.sumberDana || 'Penyedia'}`
+            keterangan: `Penerimaan Barang - ${t.penyedia || 'Penyedia'}`
           });
         }
       }
@@ -123,18 +141,20 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
 
     // Outgoing
     transaksiPengeluaranList.forEach(t => {
-      const d = new Date(t.tanggal);
-      if (d >= startDate && d <= endDate) {
+      const rawDate = t.tanggal || t.createdAt;
+      if (isDateInPeriod(rawDate, targetMonth, targetYear)) {
         const item = t.items.find(i => i.barangId === barang.id);
         if (item && item.usulanJumlah > 0) {
+          const docDate = t.tanggal || (t.createdAt ? t.createdAt.split('T')[0] : '');
+          const pemohon = t.unitPemohon || t.pemohonNama || 'Pemohon';
           events.push({
-            tanggal: t.tanggal,
-            dateObj: d,
+            tanggal: docDate,
+            dateSortKey: docDate,
             noBukti: t.noSPPB || t.noBAST || t.noSPB || t.noNPB || 'Penyaluran',
             jenis: 'keluar',
             masuk: 0,
-            keluar: item.usulanJumlah,
-            keterangan: `Penyaluran ke ${t.unitPemohon}`
+            keluar: Number(item.usulanJumlah) || 0,
+            keterangan: `Pengeluaran Barang - ${pemohon}`
           });
         }
       }
@@ -142,8 +162,8 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
 
     // Sort chronologically: if same date, masuk comes before keluar
     events.sort((a, b) => {
-      const diff = a.dateObj.getTime() - b.dateObj.getTime();
-      if (diff !== 0) return diff;
+      if (a.dateSortKey < b.dateSortKey) return -1;
+      if (a.dateSortKey > b.dateSortKey) return 1;
       return a.jenis === 'masuk' ? -1 : 1;
     });
 
@@ -250,9 +270,14 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
               <span className="flex-1 text-[11px] leading-tight">{barang.namaRekening}</span>
             </div>
             <div className="flex">
-              <span className="w-36 font-semibold text-slate-800">Kode Barang / NUSP</span>
+              <span className="w-36 font-semibold text-slate-800">Kode Barang</span>
               <span className="w-3">:</span>
-              <span className="font-mono flex-1">{barang.kodeBarang} / {barang.nusp}</span>
+              <span className="font-mono font-bold flex-1">{barang.kodeBarang}</span>
+            </div>
+            <div className="flex">
+              <span className="w-36 font-semibold text-slate-800">NUSP</span>
+              <span className="w-3">:</span>
+              <span className="font-mono font-bold text-blue-900 flex-1">{barang.nusp || '-'}</span>
             </div>
           </div>
         </div>
@@ -284,8 +309,8 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
             {/* Saldo Awal Periode Row */}
             <tr className="bg-amber-50/40 font-medium">
               <td className="border border-black px-2 py-1 text-center">1</td>
-              <td className="border border-black px-2 py-1 text-center font-mono text-[11px]">
-                {formatTanggalIndonesia(startDate.toISOString().split('T')[0])}
+              <td className="border border-black px-2 py-1 text-center font-mono text-[11px] whitespace-nowrap">
+                {saldoAwalDateString}
               </td>
               <td className="border border-black px-2 py-1 font-mono text-[11px] text-slate-700">
                 SALDO-AWAL
@@ -368,32 +393,31 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
         </div>
 
         <div className="grid grid-cols-2 gap-8 text-xs text-center">
-          {/* Left: Kepala Sekolah */}
+          {/* Left: Kuasa Pengguna Barang */}
           <div className="flex flex-col justify-between h-32">
             <div>
-              <p className="font-semibold">Mengetahui,</p>
-              <p className="font-bold uppercase">{kepsek.jabatan || 'Kepala Sekolah'}</p>
+              <p className="font-semibold text-slate-700">Mengetahui,</p>
+              <p className="font-bold uppercase text-slate-900">Kuasa Pengguna Barang / Atasan Langsung</p>
             </div>
             <div>
-              <p className="font-bold underline uppercase">{kepsek.nama}</p>
-              <p className="text-[11px]">NIP. {kepsek.nip}</p>
+              <p className="font-bold underline uppercase text-slate-900">{kepsek.nama}</p>
+              <p className="text-[11px] font-mono text-slate-600">NIP. {kepsek.nip || '..........................'}</p>
               {kepsek.pangkatGolongan && (
-                <p className="text-[10px] text-slate-600">{kepsek.pangkatGolongan}</p>
+                <p className="text-[10px] text-slate-500">{kepsek.pangkatGolongan}</p>
               )}
             </div>
           </div>
 
-          {/* Right: Pengurus Barang */}
+          {/* Right: Pengurus/Penyimpan Barang */}
           <div className="flex flex-col justify-between h-32">
             <div>
-              <p className="font-semibold">Petugas Penyimpan /</p>
-              <p className="font-bold uppercase">{pengurusBarang.jabatan || 'Pengurus Barang Pembantu'}</p>
+              <p className="font-bold uppercase text-slate-900">Pengurus/Penyimpan Barang</p>
             </div>
             <div>
-              <p className="font-bold underline uppercase">{pengurusBarang.nama}</p>
-              <p className="text-[11px]">NIP. {pengurusBarang.nip}</p>
+              <p className="font-bold underline uppercase text-slate-900">{pengurusBarang.nama}</p>
+              <p className="text-[11px] font-mono text-slate-600">NIP. {pengurusBarang.nip || '..........................'}</p>
               {pengurusBarang.pangkatGolongan && (
-                <p className="text-[10px] text-slate-600">{pengurusBarang.pangkatGolongan}</p>
+                <p className="text-[10px] text-slate-500">{pengurusBarang.pangkatGolongan}</p>
               )}
             </div>
           </div>

@@ -94,14 +94,14 @@ export const CentralPrintBar: React.FC<Props> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xs sm:text-sm font-bold text-slate-900 leading-tight truncate">
-                  {docTitle} - {paperSize} {isLandscape ? 'Landscape' : 'Portrait'}
+                  {docCode === 'LAMPIRAN-13' ? 'KARTU PERSEDIAAN BARANG' : `${docTitle} - ${paperSize} ${isLandscape ? 'Landscape' : 'Portrait'}`}
                 </h1>
                 <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 shrink-0">
                   {docCode}
                 </span>
               </div>
               <p className="text-[10px] text-slate-500 truncate mt-0.5">
-                {docCategoryLabel} &bull; Margin Standar Baku Dinas
+                {docCode === 'LAMPIRAN-13' ? `Lampiran 13 • ${paperSize} ${isLandscape ? 'Landscape' : 'Portrait'}` : `${docCategoryLabel} • Margin Standar Baku Dinas`}
               </p>
             </div>
           </div>
@@ -120,10 +120,10 @@ export const CentralPrintBar: React.FC<Props> = ({
                   title="Pilih Periode Bulan / Triwulan / 1 Tahun Penuh"
                 >
                   <option value={-1}>1 Tahun Penuh</option>
-                  <option value={2}>Triwulan I (Jan-Mar)</option>
-                  <option value={5}>Triwulan II (Apr-Jun)</option>
-                  <option value={8}>Triwulan III (Jul-Sep)</option>
-                  <option value={11}>Triwulan IV (Okt-Des)</option>
+                  <option value={101}>Triwulan I (Jan-Mar)</option>
+                  <option value={102}>Triwulan II (Apr-Jun)</option>
+                  <option value={103}>Triwulan III (Jul-Sep)</option>
+                  <option value={104}>Triwulan IV (Okt-Des)</option>
                   {MONTHS_ID.map((m, idx) => (
                     <option key={m} value={idx}>{m}</option>
                   ))}

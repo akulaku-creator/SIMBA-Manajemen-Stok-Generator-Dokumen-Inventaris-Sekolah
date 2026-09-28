@@ -2352,10 +2352,10 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                   <div className="space-y-1.5 max-w-xl">
                     <h4 className="text-sm font-bold text-rose-950 flex items-center gap-2">
                       <Trash2 className="w-4 h-4 text-rose-600" />
-                      Kosongkan Seluruh Riwayat Transaksi (Penyaluran &amp; Penerimaan)
+                      Pembersihan &amp; Pengosongan Data (Selectable Scope)
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      Menghapus seluruh berkas transaksi <strong>({transaksiList.length} Penyaluran, {penerimaanList.length} Faktur Penerimaan)</strong> dan mereset nomor urut berkas. Data master barang dan profil instansi akan tetap aman tersimpan. Tindakan ini memerlukan otorisasi PIN Administrator.
+                      Pilih modul yang ingin dikosongkan (Transaksi Penyaluran, Penerimaan BOS, Mutasi Stok, hingga Master Barang &amp; Pegawai) dengan otorisasi PIN Administrator. Master Kode Rekening Belanja (40 item resmi) tetap terlindungi dan tidak dapat dihapus.
                     </p>
                   </div>
 

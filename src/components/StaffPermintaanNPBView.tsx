@@ -232,12 +232,11 @@ export const StaffPermintaanNPBView: React.FC<Props> = ({
       return;
     }
 
-    // Check stock warning
+    // Check stock: Tidak mengizinkan pengeluaran melebihi stok
     const overStock = items.find(it => it.usulanJumlah > it.sisaBarang);
     if (overStock) {
-      if (!confirm(`Peringatan: Usulan jumlah untuk "${overStock.namaBarang}" (${overStock.usulanJumlah} ${overStock.satuan}) melebihi stok yang saat ini tersedia di gudang (${overStock.sisaBarang} ${overStock.satuan}). Tetap lanjutkan pengajuan usulan NPB?`)) {
-        return;
-      }
+      alert('Stok tidak mencukupi. Jumlah pengeluaran melebihi stok tersedia.');
+      return;
     }
 
     const generated = generateDocumentNumbers(counters, tanggal, schoolCode, numberingConfig, kopConfig?.namaSekolah);

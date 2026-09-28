@@ -20,13 +20,15 @@ interface Props {
   onClose: () => void;
   existingCount: number;
   onImport: (barangList: Barang[], mode: 'append' | 'replace') => void;
+  showToast?: (message: string) => void;
 }
 
 export const ImportBarangModal: React.FC<Props> = ({
   isOpen,
   onClose,
   existingCount,
-  onImport
+  onImport,
+  showToast
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -38,6 +40,13 @@ export const ImportBarangModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
+  const triggerToast = (msg: string) => {
+    if (showToast) {
+      showToast(msg);
+    }
+    window.dispatchEvent(new CustomEvent('simba:toast', { detail: msg }));
+  };
+
   const handleFile = async (file: File) => {
     setSelectedFile(file);
     setIsProcessing(true);
@@ -48,8 +57,13 @@ export const ImportBarangModal: React.FC<Props> = ({
       const result = await parseExcelBarang(file, existingCount);
       setParsedData(result.data);
       setErrors(result.errors);
+      if (result.errors.length > 0) {
+        triggerToast(`Perhatian: Terdapat ${result.errors.length} baris tidak lengkap.`);
+      }
     } catch (err: any) {
-      setErrors([err?.message || 'Gagal membaca berkas Excel. Pastikan format file .xlsx, .xls, atau .csv valid.']);
+      const errMsg = err?.message || 'Gagal membaca berkas Excel. Pastikan format file .xlsx, .xls, atau .csv valid.';
+      setErrors([errMsg]);
+      triggerToast(errMsg);
     } finally {
       setIsProcessing(false);
     }
@@ -204,16 +218,39 @@ export const ImportBarangModal: React.FC<Props> = ({
 
           {/* Warnings & Errors */}
           {errors.length > 0 && (
-            <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs space-y-1">
-              <div className="font-semibold flex items-center gap-1.5 text-amber-800">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                Catatan Pemeriksaan ({errors.length}):
+            <div className={`p-4 rounded-xl text-xs space-y-2 border ${
+              errors.some(e => e.includes('Format kolom template Excel tidak sesuai'))
+                ? 'bg-rose-50 border-rose-200 text-rose-900 ring-1 ring-rose-500/20'
+                : 'bg-amber-50 border-amber-200 text-amber-900'
+            }`}>
+              <div className="font-bold flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-rose-800">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  {errors.some(e => e.includes('Format kolom template Excel tidak sesuai'))
+                    ? 'Peringatan Validasi Format Template'
+                    : `Catatan Pemeriksaan (${errors.length})`}
+                </span>
+                {errors.some(e => e.includes('Format kolom template Excel tidak sesuai')) && (
+                  <button
+                    type="button"
+                    onClick={generateBarangTemplate}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-rose-100 text-rose-700 font-semibold rounded-lg border border-rose-300 text-[11px] shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Download className="w-3 h-3" />
+                    Unduh Template Resmi (.xlsx)
+                  </button>
+                )}
               </div>
-              <ul className="list-disc pl-5 space-y-0.5 text-[11px] text-amber-700 max-h-24 overflow-y-auto">
+              <ul className="list-disc pl-5 space-y-1 text-[11px] text-rose-800 max-h-32 overflow-y-auto">
                 {errors.map((err, i) => (
-                  <li key={i}>{err}</li>
+                  <li key={i} className="leading-relaxed">{err}</li>
                 ))}
               </ul>
+              {errors.some(e => e.includes('Format kolom template Excel tidak sesuai')) && (
+                <p className="text-[10px] text-rose-600 pt-1 border-t border-rose-200/60 font-medium">
+                  Pastikan susunan kolom berkas Excel mengikuti urutan resmi: Kolom A (No), Kolom B (Kode Rekening), Kolom C (Kode Barang), Kolom D (Nama Barang), Kolom E (Spesifikasi), Kolom F (Satuan), Kolom G (Harga Satuan).
+                </p>
+              )}
             </div>
           )}
 

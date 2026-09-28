@@ -129,10 +129,63 @@ export const DocumentViewer: React.FC<Props> = ({
     }
   }, [initialBarangId]);
 
-  // Helper to test if a transaction belongs to the selected period
+  // Dynamic filter for Kartu Barang & Kartu Persediaan synced with toolbar selectedMonth & selectedYear
+  const effectiveKartuPeriodFilter: KartuBarangPeriodFilter = useMemo(() => {
+    if (selectedMonth === -1) {
+      return { type: 'tahun', year: selectedYear };
+    }
+    if (selectedMonth === 101) {
+      return { type: 'triwulan', year: selectedYear, triwulan: 1 };
+    }
+    if (selectedMonth === 102) {
+      return { type: 'triwulan', year: selectedYear, triwulan: 2 };
+    }
+    if (selectedMonth === 103) {
+      return { type: 'triwulan', year: selectedYear, triwulan: 3 };
+    }
+    if (selectedMonth === 104) {
+      return { type: 'triwulan', year: selectedYear, triwulan: 4 };
+    }
+    return {
+      type: 'bulan',
+      year: selectedYear,
+      month: selectedMonth
+    };
+  }, [selectedMonth, selectedYear]);
+
+  const handleUpdateKartuPeriodFilter = (newFilter: KartuBarangPeriodFilter) => {
+    setKartuPeriodFilter(newFilter);
+    if (newFilter.year) {
+      setSelectedYear(newFilter.year);
+    }
+    if (newFilter.type === 'bulan' && newFilter.month !== undefined) {
+      setSelectedMonth(newFilter.month);
+    } else if (newFilter.type === 'tahun') {
+      setSelectedMonth(-1);
+    } else if (newFilter.type === 'triwulan' && newFilter.triwulan) {
+      setSelectedMonth(100 + newFilter.triwulan);
+    }
+  };
+
+  // Timezone-safe helper to test if a transaction belongs to the selected period
   const isDateInPeriod = (trx: TransaksiPengeluaran, month: number, year: number): boolean => {
     const rawDate = trx.tanggal || trx.createdAt;
     if (!rawDate) return false;
+    const cleanStr = rawDate.includes('T') ? rawDate.split('T')[0] : rawDate.trim();
+    const parts = cleanStr.split('-');
+    if (parts.length === 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10) - 1;
+      if (!isNaN(y) && !isNaN(m)) {
+        if (y !== year) return false;
+        if (month === -1) return true; // 1 Tahun Penuh
+        if (month === 101) return m >= 0 && m <= 2; // Triwulan I
+        if (month === 102) return m >= 3 && m <= 5; // Triwulan II
+        if (month === 103) return m >= 6 && m <= 8; // Triwulan III
+        if (month === 104) return m >= 9 && m <= 11; // Triwulan IV
+        return m === month;
+      }
+    }
     const d = new Date(rawDate);
     if (isNaN(d.getTime())) return false;
 
@@ -303,8 +356,8 @@ export const DocumentViewer: React.FC<Props> = ({
                 onSelectBarang={setSelectedBarangId}
                 isBatchPrintAll={isBatchPrintAll}
                 onToggleBatchPrintAll={setIsBatchPrintAll}
-                kartuPeriodFilter={kartuPeriodFilter}
-                onUpdateKartuPeriodFilter={setKartuPeriodFilter}
+                kartuPeriodFilter={effectiveKartuPeriodFilter}
+                onUpdateKartuPeriodFilter={handleUpdateKartuPeriodFilter}
                 selectedMonth={selectedMonth}
                 onSelectMonth={setSelectedMonth}
                 selectedYear={selectedYear}
@@ -483,7 +536,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
-                  periodFilter={kartuPeriodFilter}
+                  periodFilter={effectiveKartuPeriodFilter}
                   minRows={minRows}
                   isLast={true}
                 />
@@ -496,7 +549,9 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
-                  periodFilter={kartuPeriodFilter}
+                  periodFilter={effectiveKartuPeriodFilter}
+                  selectedMonth={selectedMonth}
+                  selectedYear={selectedYear}
                   minRows={minRows}
                   isLast={true}
                 />
@@ -533,7 +588,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
-                  periodFilter={kartuPeriodFilter}
+                  periodFilter={effectiveKartuPeriodFilter}
                   minRows={minRows}
                   isLast={bIdx === masterBarang.length - 1}
                 />
@@ -558,7 +613,9 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
-                  periodFilter={kartuPeriodFilter}
+                  periodFilter={effectiveKartuPeriodFilter}
+                  selectedMonth={selectedMonth}
+                  selectedYear={selectedYear}
                   minRows={minRows}
                   isLast={bIdx === masterBarang.length - 1}
                 />

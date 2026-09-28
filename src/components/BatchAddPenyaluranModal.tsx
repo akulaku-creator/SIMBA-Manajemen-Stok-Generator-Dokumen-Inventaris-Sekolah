@@ -252,7 +252,7 @@ export const BatchAddPenyaluranModal: React.FC<Props> = ({
   const handleApplyBatch = () => {
     if (selectedItemsData.count === 0) return;
     if (selectedItemsData.hasOverStock) {
-      alert('Terdapat barang yang jumlah dimintanya melampaui sisa stok gudang. Harap sesuaikan kuantitas terlebih dahulu.');
+      alert('Stok tidak mencukupi. Jumlah pengeluaran melebihi stok tersedia.');
       return;
     }
     if (selectedItemsData.hasZeroQty) {

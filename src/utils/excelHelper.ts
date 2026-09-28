@@ -167,81 +167,79 @@ export async function parseExcelPejabat(file: File): Promise<{
 // MASTER BARANG EXCEL UTILITIES
 // -------------------------------------------------------------
 
+export function parseNominal(val: any, fallback = 0): number {
+  if (typeof val === 'number') return isNaN(val) ? fallback : val;
+  if (!val) return fallback;
+  const cleaned = String(val).replace(/[^0-9.-]/g, '');
+  const parsed = parseFloat(cleaned);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
 export function generateBarangTemplate(): void {
+  // Struktur Template Resmi:
+  // Kolom A (Indeks 0) : No.
+  // Kolom B (Indeks 1) : Kode Rekening / Kategori [kode_rekening]
+  // Kolom C (Indeks 2) : Kode Barang / Kode Aset [kode_barang]
+  // Kolom D (Indeks 3) : Nama Barang [nama_barang]
+  // Kolom E (Indeks 4) : Spesifikasi / Merk [spesifikasi]
+  // Kolom F (Indeks 5) : Satuan [satuan]
+  // Kolom G (Indeks 6) : Harga Satuan (Rp) [harga_satuan]
+  // Kolom H (Indeks 7) : Stok Awal [stok_awal]
+  // Kolom I (Indeks 8) : Lokasi Gudang [lokasi_gudang]
   const headers = [
-    'Kode Barang',
-    'NUSP',
-    'Jenis Aset (BHP / Belanja Modal)',
+    'No.',
     'Kode Rekening',
-    'Nama Rekening Belanja',
+    'Kode Barang',
     'Nama Barang',
     'Spesifikasi',
-    'Kategori',
     'Satuan',
     'Harga Satuan (Rp)',
     'Stok Awal',
-    'Stok Sekarang',
     'Lokasi Gudang'
   ];
 
   const sampleData = [
     [
-      '1.01.03.01.25',
-      '0001/2026',
-      'BHP',
+      1,
       '5.1.02.01.01.0025',
-      'Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+      '1.01.03.01.25',
       'Kertas HVS A4 80gr Sinar Dunia',
       'Ukuran 210 x 297 mm, 500 lembar/rim',
-      'ATK / Kertas',
       'Rim',
       48500,
-      100,
       100,
       'Gudang TU - Rak A1'
     ],
     [
-      '1.01.03.01.26',
-      '0002/2026',
-      'BHP',
+      2,
       '5.1.02.01.01.0025',
-      'Alat/Bahan untuk Kegiatan Kantor-Kertas dan Cover',
+      '1.01.03.01.26',
       'Kertas HVS F4 / Folio 75gr PaperOne',
       'Ukuran 215 x 330 mm, 500 lembar/rim',
-      'ATK / Kertas',
       'Rim',
       52000,
-      80,
       80,
       'Gudang TU - Rak A2'
     ],
     [
-      '1.03.02.01.01',
-      '0101/2026',
-      'Belanja Modal',
+      3,
       '5.2.02.05.01.0005',
-      'Belanja Modal Peralatan Komputer (PC, Laptop, Server)',
+      '1.03.02.01.01',
       'Laptop Asus ExpertBook B1400 Core i5',
       'Intel Core i5-1135G7, RAM 16GB, SSD 512GB, Win 11 Pro',
-      'Peralatan & Mesin (Aset)',
       'Unit',
       11850000,
-      5,
       5,
       'Ruang Server & IT'
     ],
     [
-      '1.03.01.02.01',
-      '0102/2026',
-      'Belanja Modal',
+      4,
       '5.2.02.10.01.0002',
-      'Belanja Modal Meubelair & Perabot Kantor (Meja, Kursi, Lemari)',
+      '1.03.01.02.01',
       'Lemari Arsip Besi 2 Pintu Kaca Lion',
       'Bahan plat baja 0.8mm powder coating, 4 rak ambalan',
-      'Perabot & Meubelair (Aset)',
       'Unit',
       3450000,
-      3,
       3,
       'Gudang Sarpras'
     ]
@@ -251,19 +249,15 @@ export function generateBarangTemplate(): void {
 
   // Set column widths
   ws['!cols'] = [
-    { wch: 16 }, // Kode Barang
-    { wch: 14 }, // NUSP
-    { wch: 22 }, // Jenis Aset
-    { wch: 20 }, // Kode Rekening
-    { wch: 42 }, // Nama Rekening
-    { wch: 35 }, // Nama Barang
-    { wch: 35 }, // Spesifikasi
-    { wch: 24 }, // Kategori
-    { wch: 12 }, // Satuan
-    { wch: 18 }, // Harga Satuan
-    { wch: 12 }, // Stok Awal
-    { wch: 14 }, // Stok Sekarang
-    { wch: 24 }  // Lokasi Gudang
+    { wch: 6 },  // Kolom A (0): No.
+    { wch: 22 }, // Kolom B (1): Kode Rekening
+    { wch: 18 }, // Kolom C (2): Kode Barang
+    { wch: 38 }, // Kolom D (3): Nama Barang
+    { wch: 38 }, // Kolom E (4): Spesifikasi
+    { wch: 12 }, // Kolom F (5): Satuan
+    { wch: 18 }, // Kolom G (6): Harga Satuan (Rp)
+    { wch: 12 }, // Kolom H (7): Stok Awal
+    { wch: 22 }  // Kolom I (8): Lokasi Gudang
   ];
 
   const wb = XLSX.utils.book_new();
@@ -285,108 +279,257 @@ export async function parseExcelBarang(
     throw new Error('File Excel tidak memiliki lembar kerja (worksheet).');
   }
 
-  const rawRows: Record<string, any>[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+  // 1. Baca data berbasis Array 2D (AOA) untuk mendeteksi indeks kolom presisi
+  const rawAoa: any[][] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: '' });
   
-  if (!rawRows || rawRows.length === 0) {
+  if (!rawAoa || rawAoa.length === 0) {
     throw new Error('File Excel tidak memiliki baris data inventaris barang.');
   }
 
+  // 2. Temukan baris header (baris pertama yang berisi teks bermakna)
+  let headerRowIndex = -1;
+  for (let r = 0; r < Math.min(rawAoa.length, 6); r++) {
+    const rowValues = rawAoa[r] || [];
+    const hasText = rowValues.some((v: any) => typeof v === 'string' && v.trim().length > 1);
+    if (hasText) {
+      headerRowIndex = r;
+      break;
+    }
+  }
+
+  if (headerRowIndex === -1) {
+    throw new Error('Format kolom template Excel tidak sesuai');
+  }
+
+  const headerRow = rawAoa[headerRowIndex] || [];
+  const normalizedHeaders = headerRow.map((h: any) => normalizeKey(String(h || '')));
+
+  // 3. VALIDASI HEADER TEMPLATE RESMI
+  // Cek apakah berkas memiliki kolom-kolom yang sesuai dengan template resmi
+  const hasNamaBarangHeader = normalizedHeaders.some((h: string) => 
+    h.includes('nama barang') || h.includes('nama item') || h.includes('uraian barang') || h === 'nama' || h === 'barang'
+  );
+  const hasKodeBarangHeader = normalizedHeaders.some((h: string) => 
+    h.includes('kode barang') || h.includes('kode aset') || h.includes('kd barang')
+  );
+  const hasKodeRekeningHeader = normalizedHeaders.some((h: string) => 
+    h.includes('kode rekening') || h.includes('rekening') || h === 'kategori'
+  );
+  const hasSpesifikasiOrSatuanHeader = normalizedHeaders.some((h: string) => 
+    h.includes('spesifikasi') || h.includes('spek') || h.includes('merk') || h.includes('satuan') || h.includes('harga')
+  );
+
+  // Jika kolom-kolom pokok template tidak ditemukan sama sekali, tolak dengan pesan resmi
+  const recognizedHeaderCount = [
+    hasNamaBarangHeader,
+    hasKodeBarangHeader,
+    hasKodeRekeningHeader,
+    hasSpesifikasiOrSatuanHeader
+  ].filter(Boolean).length;
+
+  if (recognizedHeaderCount < 2) {
+    throw new Error('Format kolom template Excel tidak sesuai');
+  }
+
+  // Cari indeks kolom dinamis dari header (jika pengguna menggeser posisi kolom)
+  let colIdxRekening = -1;
+  let colIdxKodeBarang = -1;
+  let colIdxNamaBarang = -1;
+  let colIdxSpesifikasi = -1;
+  let colIdxSatuan = -1;
+  let colIdxHarga = -1;
+  let colIdxStok = -1;
+  let colIdxLokasi = -1;
+
+  normalizedHeaders.forEach((h: string, idx: number) => {
+    if (h.includes('nama barang') || h.includes('uraian barang') || h.includes('nama item') || h === 'nama') {
+      if (colIdxNamaBarang === -1) colIdxNamaBarang = idx;
+    } else if (h.includes('kode barang') || h.includes('kode aset') || h.includes('kd barang')) {
+      if (colIdxKodeBarang === -1) colIdxKodeBarang = idx;
+    } else if (h.includes('kode rekening') || h.includes('rekening') || h === 'kategori') {
+      if (colIdxRekening === -1) colIdxRekening = idx;
+    } else if (h.includes('spesifikasi') || h.includes('spek') || h.includes('merk')) {
+      if (colIdxSpesifikasi === -1) colIdxSpesifikasi = idx;
+    } else if (h.includes('satuan') || h === 'unit') {
+      if (colIdxSatuan === -1) colIdxSatuan = idx;
+    } else if (h.includes('harga')) {
+      if (colIdxHarga === -1) colIdxHarga = idx;
+    } else if (h.includes('stok') || h.includes('saldo')) {
+      if (colIdxStok === -1) colIdxStok = idx;
+    } else if (h.includes('lokasi') || h.includes('gudang')) {
+      if (colIdxLokasi === -1) colIdxLokasi = idx;
+    }
+  });
+
+  // Default fallback ke struktur kolom template resmi jika header tidak bertuliskan teks eksplisit:
+  // Kolom A (0): No.
+  // Kolom B (1): Kode Rekening
+  // Kolom C (2): Kode Barang
+  // Kolom D (3): Nama Barang (WAJIB DIBACA SEBAGAI NAMA BARANG)
+  // Kolom E (4): Spesifikasi
+  // Kolom F (5): Satuan
+  // Kolom G (6): Harga Satuan
+  // Kolom H (7): Stok Awal
+  // Kolom I (8): Lokasi Gudang
+  if (colIdxRekening === -1) colIdxRekening = 1;
+  if (colIdxKodeBarang === -1) colIdxKodeBarang = 2;
+  if (colIdxNamaBarang === -1) colIdxNamaBarang = 3; // FIX: Pastikan indeks 3 = Nama Barang
+  if (colIdxSpesifikasi === -1) colIdxSpesifikasi = 4;
+  if (colIdxSatuan === -1) colIdxSatuan = 5;
+  if (colIdxHarga === -1) colIdxHarga = 6;
+  if (colIdxStok === -1) colIdxStok = 7;
+  if (colIdxLokasi === -1) colIdxLokasi = 8;
+
+  // Baca juga data berbasis object keys dari SheetJS
+  const rawObjects: Record<string, any>[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+
   const data: Barang[] = [];
   const errors: string[] = [];
+  const dataRows = rawAoa.slice(headerRowIndex + 1);
 
-  const VALID_CATEGORIES: Barang['kategori'][] = [
-    'ATK / Kertas',
-    'Kebersihan',
-    'Elektronik & Komputer',
-    'Alat Praktik/Peraga',
-    'Bahan Material',
-    'Perlengkapan Umum'
-  ];
+  dataRows.forEach((row, index) => {
+    const rowObj: Record<string, any> = rawObjects[index] || {};
+    const rowNum = headerRowIndex + index + 2;
 
-  rawRows.forEach((row, index) => {
-    // Map normalized keys
-    const normalizedRow: Record<string, any> = {};
-    Object.keys(row).forEach(k => {
-      normalizedRow[normalizeKey(k)] = row[k];
-    });
+    // TANGANI BAIK PEMBACAAN BERBASIS HEADER TEXT MAUPUN INDEKS KOLOM ARRAY:
+    // Kolom B (Indeks 1) : Kode Rekening / Kategori [kode_rekening]
+    const kodeRekeningRaw = (
+      rowObj['Kode Rekening'] ??
+      rowObj['kode_rekening'] ??
+      rowObj['kode rekening'] ??
+      rowObj['Kategori'] ??
+      rowObj['kategori'] ??
+      row[colIdxRekening] ??
+      row[1] ??
+      ''
+    );
+    const kodeRekening = String(kodeRekeningRaw).trim();
 
-    const getVal = (candidates: string[]): string => {
-      for (const c of candidates) {
-        if (normalizedRow[c] !== undefined && String(normalizedRow[c]).trim() !== '') {
-          return String(normalizedRow[c]).trim();
-        }
-      }
-      for (const [key, value] of Object.entries(normalizedRow)) {
-        if (candidates.some(c => key.includes(c)) && String(value).trim() !== '') {
-          return String(value).trim();
-        }
-      }
-      return '';
-    };
+    // Kolom C (Indeks 2) : Kode Barang / Kode Aset [kode_barang]
+    const kodeBarangRaw = (
+      rowObj['Kode Barang'] ??
+      rowObj['kode_barang'] ??
+      rowObj['kode barang'] ??
+      rowObj['Kode Aset'] ??
+      rowObj['kode_aset'] ??
+      rowObj['kd barang'] ??
+      row[colIdxKodeBarang] ??
+      row[2] ??
+      ''
+    );
+    const kodeBarang = String(kodeBarangRaw).trim();
 
-    const rowNum = index + 2;
+    // Kolom D (Indeks 3) : Nama Barang [nama_barang] (WAJIB DIBACA SEBAGAI NAMA BARANG, TIDAK TERTUKAR DENGAN KODE BARANG)
+    const namaBarangRaw = (
+      rowObj['Nama Barang'] ??
+      rowObj['nama_barang'] ??
+      rowObj['nama barang'] ??
+      rowObj['Uraian Barang'] ??
+      rowObj['uraian barang'] ??
+      rowObj['Nama Item'] ??
+      row[colIdxNamaBarang] ??
+      row[3] ??
+      ''
+    );
+    const namaBarang = String(namaBarangRaw).trim();
 
-    const namaBarang = getVal(['nama barang', 'barang', 'uraian barang', 'nama item', 'item', 'nama']);
-    if (!namaBarang) {
-      // If line is empty, skip quietly, or report if other fields exist
-      const hasAnyField = Object.values(normalizedRow).some(v => String(v).trim() !== '');
-      if (hasAnyField) {
-        errors.push(`Baris ${rowNum}: Nama barang kosong.`);
-      }
+    // Kolom E (Indeks 4) : Spesifikasi / Merk [spesifikasi]
+    const spesifikasiRaw = (
+      rowObj['Spesifikasi'] ??
+      rowObj['spesifikasi'] ??
+      rowObj['Merk'] ??
+      rowObj['merk'] ??
+      rowObj['Spek'] ??
+      rowObj['keterangan'] ??
+      row[colIdxSpesifikasi] ??
+      row[4] ??
+      ''
+    );
+    const spesifikasi = String(spesifikasiRaw).trim() || '-';
+
+    // Kolom F (Indeks 5) : Satuan [satuan]
+    const satuanRaw = (
+      rowObj['Satuan'] ??
+      rowObj['satuan'] ??
+      rowObj['Unit'] ??
+      rowObj['unit'] ??
+      row[colIdxSatuan] ??
+      row[5] ??
+      'Pcs'
+    );
+    const satuan = String(satuanRaw).trim() || 'Pcs';
+
+    // Kolom G (Indeks 6) : Harga Satuan (Rp) [harga_satuan]
+    const hargaSatuanRaw = (
+      rowObj['Harga Satuan'] ??
+      rowObj['harga_satuan'] ??
+      rowObj['Harga Satuan (Rp)'] ??
+      rowObj['harga satuan'] ??
+      rowObj['Harga'] ??
+      row[colIdxHarga] ??
+      row[6] ??
+      0
+    );
+    const hargaSatuan = parseNominal(hargaSatuanRaw);
+
+    // Kolom H (Indeks 7) : Stok Awal (Opsional)
+    const stokAwalRaw = (
+      rowObj['Stok Awal'] ??
+      rowObj['stok_awal'] ??
+      rowObj['Saldo Awal'] ??
+      row[colIdxStok] ??
+      row[7] ??
+      0
+    );
+    const stokAwal = parseNominal(stokAwalRaw);
+
+    // Kolom I (Indeks 8) : Lokasi Gudang (Opsional)
+    const lokasiGudangRaw = (
+      rowObj['Lokasi Gudang'] ??
+      rowObj['lokasi_gudang'] ??
+      rowObj['Lokasi'] ??
+      row[colIdxLokasi] ??
+      row[8] ??
+      'Gudang Utama'
+    );
+    const lokasiGudang = String(lokasiGudangRaw).trim() || 'Gudang Utama';
+
+    // Abaikan baris kosong
+    if (!namaBarang && !kodeBarang && !kodeRekening && !spesifikasiRaw) {
       return;
     }
 
-    const kodeBarang = getVal(['kode barang', 'kode', 'kd barang', 'kode register']) || '1.01.03.01.99';
-    
-    // NUSP generation if not specified
-    const generatedNusp = `${String(currentCount + data.length + 1).padStart(4, '0')}/${new Date().getFullYear()}`;
-    const nusp = getVal(['nusp', 'nomor urut pendaftaran', 'no register', 'register']) || generatedNusp;
+    if (!namaBarang) {
+      errors.push(`Baris ${rowNum}: Nama barang kosong.`);
+      return;
+    }
 
-    const kodeRekening = getVal(['kode rekening', 'rekening', 'kd rekening', 'kode akun']) || '5.1.02.01.01.0024';
-    const namaRekening = getVal(['nama rekening belanja', 'nama rekening', 'uraian rekening', 'rekening belanja']) || 
-      getNamaRekeningByKode(kodeRekening);
-
-    const spesifikasi = getVal(['spesifikasi', 'spek', 'keterangan', 'deskripsi', 'merk', 'ukuran']) || '-';
+    const kodeBarangFinal = kodeBarang || '1.01.03.01.99';
+    const kodeRekeningFinal = kodeRekening || '5.1.02.01.01.0025';
+    const namaRekening = getNamaRekeningByKode(kodeRekeningFinal);
 
     // Jenis Aset (BHP vs Belanja Modal)
-    const rawJenis = getVal(['jenis aset', 'jenis barang', 'jenis', 'tipe aset', 'tipe barang', 'tipe']);
     let jenisBarang: 'BHP' | 'Belanja Modal' = 'BHP';
-    if (rawJenis && (rawJenis.toLowerCase().includes('modal') || rawJenis.toLowerCase().includes('aset') || rawJenis.toLowerCase().includes('tetap'))) {
-      jenisBarang = 'Belanja Modal';
-    } else if (kodeRekening.startsWith('5.2')) {
+    if (kodeRekeningFinal.startsWith('5.2')) {
       jenisBarang = 'Belanja Modal';
     }
-    
-    // Single Source of Truth: 1 Kategori Barang = 1 Kode Rekening Belanja
-    const kategori: string = namaRekening;
 
-    const satuan = getVal(['satuan', 'unit', 'kemasan']) || 'Pcs';
-
-    // Numbers
-    const rawHarga = getVal(['harga satuan rp', 'harga satuan', 'harga', 'tarif', 'unit price']);
-    const hargaSatuan = parseNumber(rawHarga, 0);
-
-    const rawStokAwal = getVal(['stok awal', 'saldo awal', 'jumlah awal']);
-    const stokAwal = parseNumber(rawStokAwal, 0);
-
-    const rawStokSekarang = getVal(['stok sekarang', 'stok akhir', 'sisa stok', 'stok', 'qty', 'jumlah']);
-    const stokSekarang = rawStokSekarang ? parseNumber(rawStokSekarang, stokAwal) : (stokAwal > 0 ? stokAwal : 0);
-
-    const lokasiGudang = getVal(['lokasi gudang', 'lokasi', 'gudang', 'rak', 'tempat simpan']) || 'Gudang Utama';
+    // NUSP otomatis jika tidak ditentukan
+    const generatedNusp = `${String(currentCount + data.length + 1).padStart(4, '0')}/${new Date().getFullYear()}`;
 
     data.push({
       id: `brg-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`,
-      kodeBarang,
-      nusp,
-      kodeRekening,
+      kodeBarang: kodeBarangFinal,
+      nusp: generatedNusp,
+      kodeRekening: kodeRekeningFinal,
       namaRekening,
       namaBarang,
       spesifikasi,
-      kategori,
+      kategori: namaRekening,
       satuan,
       hargaSatuan,
       stokAwal,
-      stokSekarang,
+      stokSekarang: stokAwal,
       lokasiGudang,
       jenisBarang
     });
@@ -396,259 +539,161 @@ export async function parseExcelBarang(
 }
 
 // -------------------------------------------------------------
-// FILTER-AWARE EXCEL EXPORT FUNCTIONS (EXCELJS)
+// FILTER-AWARE ASYNC EXCEL EXPORT (HIGH-PERFORMANCE / CHUNKING)
 // -------------------------------------------------------------
 
+export type ExportProgressCallback = (percent: number, statusText: string) => void;
+
 /**
- * Export Master Barang to stylized, filter-aware .xlsx spreadsheet
- * Columns: No, Jenis Aset, Kode Barang, NUSP, Nama & Spesifikasi Barang, Kode Rekening, Kategori, Satuan, Stok, Harga
+ * Asynchronous, Chunked, Non-blocking Export Master Barang to .xlsx
+ * Uses pure JSON-to-Sheet conversion to prevent UI freezes & browser "not responding" errors.
  */
-export async function exportMasterBarangToExcel(barangList: Barang[]): Promise<void> {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'SIMBA - Sistem Manajemen Inventaris Sekolah';
-  workbook.created = new Date();
+export async function exportMasterBarangToExcel(
+  barangList: Barang[],
+  onProgress?: ExportProgressCallback,
+  customFileName?: string
+): Promise<void> {
+  // 1. Initial yield to allow React to paint loading UI and disable button
+  onProgress?.(5, 'Menyiapkan data inventaris...');
+  await new Promise((resolve) => setTimeout(resolve, 80));
 
-  const worksheet = workbook.addWorksheet('Master Barang', {
-    views: [{ showGridLines: true }]
-  });
+  const total = barangList.length;
+  const CHUNK_SIZE = 200;
+  const formattedData: Record<string, any>[] = [];
 
-  // Define Columns
-  worksheet.columns = [
-    { header: 'No', key: 'no', width: 6 },
-    { header: 'Jenis Aset', key: 'jenisBarang', width: 15 },
-    { header: 'Kode Barang', key: 'kodeBarang', width: 18 },
-    { header: 'NUSP', key: 'nusp', width: 14 },
-    { header: 'Nama & Spesifikasi Barang', key: 'namaSpesifikasi', width: 38 },
-    { header: 'Kode Rekening', key: 'kodeRekening', width: 20 },
-    { header: 'Kategori', key: 'kategori', width: 22 },
-    { header: 'Satuan', key: 'satuan', width: 12 },
-    { header: 'Stok', key: 'stok', width: 12 },
-    { header: 'Harga Satuan (Rp)', key: 'harga', width: 18 }
+  // 2. Process in chunks to prevent locking main thread
+  for (let i = 0; i < total; i += CHUNK_SIZE) {
+    const chunk = barangList.slice(i, i + CHUNK_SIZE);
+    
+    chunk.forEach((b, cIdx) => {
+      const idx = i + cIdx;
+      const stokAwal = Number(b.stokAwal || 0);
+      const stokSekarang = Number(b.stokSekarang ?? stokAwal);
+      const hargaSatuan = Number(b.hargaSatuan || 0);
+      const totalNilai = stokSekarang * hargaSatuan;
+
+      formattedData.push({
+        'No': idx + 1,
+        'Jenis Aset': b.jenisBarang || 'BHP',
+        'Kode Rekening': String(b.kodeRekening || '').trim(),
+        'Kategori / Nama Rekening': b.kategori || b.namaRekening || '-',
+        'Kode Barang': String(b.kodeBarang || '').trim(),
+        'NUSP': String(b.nusp || '-').trim(),
+        'Nama Barang': b.namaBarang || '',
+        'Spesifikasi': b.spesifikasi || '-',
+        'Satuan': b.satuan || 'Pcs',
+        'Stok Awal': stokAwal,
+        'Stok Sekarang': stokSekarang,
+        'Harga Satuan (Rp)': hargaSatuan,
+        'Total Nilai Persediaan (Rp)': totalNilai,
+        'Lokasi Gudang': b.lokasiGudang || '-'
+      });
+    });
+
+    const percent = Math.min(75, Math.round(10 + ((i + chunk.length) / (total || 1)) * 65));
+    onProgress?.(percent, `Menata data (${Math.min(i + chunk.length, total)}/${total})...`);
+    
+    // Non-blocking yield to browser event loop
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  // 3. Compile worksheet using high-performance SheetJS json_to_sheet (no DOM parsing)
+  onProgress?.(80, 'Mengompilasi worksheet Excel...');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  const worksheet = XLSX.utils.json_to_sheet(formattedData);
+
+  // Set explicit column widths for clean readability
+  worksheet['!cols'] = [
+    { wch: 6 },  // No
+    { wch: 14 }, // Jenis Aset
+    { wch: 22 }, // Kode Rekening
+    { wch: 28 }, // Kategori / Nama Rekening
+    { wch: 18 }, // Kode Barang
+    { wch: 14 }, // NUSP
+    { wch: 34 }, // Nama Barang
+    { wch: 24 }, // Spesifikasi
+    { wch: 10 }, // Satuan
+    { wch: 12 }, // Stok Awal
+    { wch: 14 }, // Stok Sekarang
+    { wch: 18 }, // Harga Satuan
+    { wch: 24 }, // Total Nilai
+    { wch: 16 }  // Lokasi Gudang
   ];
 
-  // Style Header Row
-  const headerRow = worksheet.getRow(1);
-  headerRow.height = 28;
-  headerRow.eachCell((cell) => {
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF059669' } // Emerald 600
-    };
-    cell.font = {
-      name: 'Calibri',
-      size: 11,
-      bold: true,
-      color: { argb: 'FFFFFFFF' }
-    };
-    cell.alignment = {
-      vertical: 'middle',
-      horizontal: 'center',
-      wrapText: true
-    };
-    cell.border = {
-      top: { style: 'thin', color: { argb: 'FF047857' } },
-      left: { style: 'thin', color: { argb: 'FF047857' } },
-      bottom: { style: 'medium', color: { argb: 'FF064E3B' } },
-      right: { style: 'thin', color: { argb: 'FF047857' } }
-    };
-  });
+  // 4. Build workbook
+  onProgress?.(90, 'Membangun workbook .xlsx...');
+  await new Promise((resolve) => setTimeout(resolve, 30));
 
-  // Populate Data Rows
-  barangList.forEach((b, idx) => {
-    const namaDanSpek = b.spesifikasi && b.spesifikasi !== '-' && b.spesifikasi !== b.kodeBarang
-      ? `${b.namaBarang} (${b.spesifikasi})`
-      : b.namaBarang;
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Master_Barang');
 
-    const row = worksheet.addRow({
-      no: idx + 1,
-      jenisBarang: b.jenisBarang || 'BHP',
-      kodeBarang: b.kodeBarang || '-',
-      nusp: b.nusp || '-',
-      namaSpesifikasi: namaDanSpek,
-      kodeRekening: b.kodeRekening || '-',
-      kategori: b.kategori || '-',
-      satuan: b.satuan || 'Pcs',
-      stok: b.stokSekarang ?? b.stokAwal ?? 0,
-      harga: b.hargaSatuan || 0
-    });
+  // 5. Trigger download without blocking browser
+  onProgress?.(98, 'Mengunduh file Excel...');
+  await new Promise((resolve) => setTimeout(resolve, 30));
 
-    row.height = 20;
-
-    row.getCell('no').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('jenisBarang').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('kodeBarang').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('nusp').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('namaSpesifikasi').alignment = { vertical: 'middle', horizontal: 'left' };
-    row.getCell('kodeRekening').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('kategori').alignment = { vertical: 'middle', horizontal: 'left' };
-    row.getCell('satuan').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('stok').alignment = { vertical: 'middle', horizontal: 'right' };
-    row.getCell('stok').numFmt = '#,##0';
-    row.getCell('harga').alignment = { vertical: 'middle', horizontal: 'right' };
-    row.getCell('harga').numFmt = '#,##0';
-
-    const isEven = idx % 2 === 1;
-    row.eachCell({ includeEmpty: true }, (cell) => {
-      cell.font = { name: 'Calibri', size: 10 };
-      if (isEven) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF8FAFC' }
-        };
-      }
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-      };
-    });
-  });
-
-  // Adjust auto width dynamically
-  worksheet.columns.forEach((column) => {
-    let maxLen = 0;
-    column.eachCell?.({ includeEmpty: true }, (cell) => {
-      const valStr = cell.value ? String(cell.value) : '';
-      if (valStr.length > maxLen) {
-        maxLen = valStr.length;
-      }
-    });
-    column.width = Math.max(column.width || 10, Math.min(maxLen + 4, 50));
-  });
-
-  // Download Trigger
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const dateStr = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `Master_Barang_${dateStr}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
+  const fileName = customFileName || `Master_Barang_${dateStr}.xlsx`;
+  
+  XLSX.writeFile(workbook, fileName, { compression: true });
+  onProgress?.(100, 'Selesai!');
 }
 
 /**
- * Export Master Pegawai to stylized, filter-aware .xlsx spreadsheet
- * Columns: No, Nama Pegawai & Gelar, NIP, Pangkat/Golongan, Jabatan Kedinasan, Unit Kerja
+ * Asynchronous, Chunked, Non-blocking Export Master Pegawai to .xlsx
  */
-export async function exportMasterPegawaiToExcel(pejabatList: Pejabat[]): Promise<void> {
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'SIMBA - Sistem Manajemen Inventaris Sekolah';
-  workbook.created = new Date();
+export async function exportMasterPegawaiToExcel(
+  pejabatList: Pejabat[],
+  onProgress?: ExportProgressCallback,
+  customFileName?: string
+): Promise<void> {
+  onProgress?.(10, 'Menyiapkan data pegawai...');
+  await new Promise((resolve) => setTimeout(resolve, 80));
 
-  const worksheet = workbook.addWorksheet('Master Pegawai', {
-    views: [{ showGridLines: true }]
-  });
+  const total = pejabatList.length;
+  const CHUNK_SIZE = 200;
+  const formattedData: Record<string, any>[] = [];
 
-  // Define Columns
-  worksheet.columns = [
-    { header: 'No', key: 'no', width: 6 },
-    { header: 'Nama Pegawai & Gelar', key: 'nama', width: 34 },
-    { header: 'NIP', key: 'nip', width: 24 },
-    { header: 'Pangkat / Golongan', key: 'pangkatGolongan', width: 26 },
-    { header: 'Jabatan Kedinasan', key: 'jabatan', width: 30 },
-    { header: 'Unit Kerja', key: 'unitKerja', width: 26 }
+  for (let i = 0; i < total; i += CHUNK_SIZE) {
+    const chunk = pejabatList.slice(i, i + CHUNK_SIZE);
+    chunk.forEach((p, cIdx) => {
+      const idx = i + cIdx;
+      formattedData.push({
+        'No': idx + 1,
+        'Nama Pegawai & Gelar': p.nama || '-',
+        'NIP': p.nip || '-',
+        'Pangkat / Golongan': p.pangkatGolongan || '-',
+        'Jabatan Kedinasan': p.jabatan || '-',
+        'Unit Kerja': p.unitKerja || '-'
+      });
+    });
+
+    const percent = Math.min(80, Math.round(15 + ((i + chunk.length) / (total || 1)) * 65));
+    onProgress?.(percent, `Menata data (${Math.min(i + chunk.length, total)}/${total})...`);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  onProgress?.(85, 'Mengompilasi worksheet Excel...');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+
+  const worksheet = XLSX.utils.json_to_sheet(formattedData);
+  worksheet['!cols'] = [
+    { wch: 6 },  // No
+    { wch: 34 }, // Nama Pegawai
+    { wch: 24 }, // NIP
+    { wch: 26 }, // Pangkat / Golongan
+    { wch: 30 }, // Jabatan Kedinasan
+    { wch: 26 }  // Unit Kerja
   ];
 
-  // Style Header Row
-  const headerRow = worksheet.getRow(1);
-  headerRow.height = 28;
-  headerRow.eachCell((cell) => {
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF059669' } // Emerald 600
-    };
-    cell.font = {
-      name: 'Calibri',
-      size: 11,
-      bold: true,
-      color: { argb: 'FFFFFFFF' }
-    };
-    cell.alignment = {
-      vertical: 'middle',
-      horizontal: 'center',
-      wrapText: true
-    };
-    cell.border = {
-      top: { style: 'thin', color: { argb: 'FF047857' } },
-      left: { style: 'thin', color: { argb: 'FF047857' } },
-      bottom: { style: 'medium', color: { argb: 'FF064E3B' } },
-      right: { style: 'thin', color: { argb: 'FF047857' } }
-    };
-  });
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Master_Pegawai');
 
-  // Populate Data Rows
-  pejabatList.forEach((p, idx) => {
-    const row = worksheet.addRow({
-      no: idx + 1,
-      nama: p.nama || '-',
-      nip: p.nip || '-',
-      pangkatGolongan: p.pangkatGolongan || '-',
-      jabatan: p.jabatan || '-',
-      unitKerja: p.unitKerja || '-'
-    });
+  onProgress?.(95, 'Mengunduh file Excel...');
+  await new Promise((resolve) => setTimeout(resolve, 30));
 
-    row.height = 20;
-
-    row.getCell('no').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('nama').alignment = { vertical: 'middle', horizontal: 'left' };
-    row.getCell('nip').alignment = { vertical: 'middle', horizontal: 'center' };
-    row.getCell('pangkatGolongan').alignment = { vertical: 'middle', horizontal: 'left' };
-    row.getCell('jabatan').alignment = { vertical: 'middle', horizontal: 'left' };
-    row.getCell('unitKerja').alignment = { vertical: 'middle', horizontal: 'left' };
-
-    const isEven = idx % 2 === 1;
-    row.eachCell({ includeEmpty: true }, (cell) => {
-      cell.font = { name: 'Calibri', size: 10 };
-      if (isEven) {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFF8FAFC' }
-        };
-      }
-      cell.border = {
-        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
-        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
-      };
-    });
-  });
-
-  // Adjust auto width dynamically
-  worksheet.columns.forEach((column) => {
-    let maxLen = 0;
-    column.eachCell?.({ includeEmpty: true }, (cell) => {
-      const valStr = cell.value ? String(cell.value) : '';
-      if (valStr.length > maxLen) {
-        maxLen = valStr.length;
-      }
-    });
-    column.width = Math.max(column.width || 10, Math.min(maxLen + 4, 50));
-  });
-
-  // Download Trigger
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  });
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const dateStr = new Date().toISOString().slice(0, 10);
-  a.href = url;
-  a.download = `Master_Pegawai_${dateStr}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
+  const fileName = customFileName || `Master_Pegawai_${dateStr}.xlsx`;
+  XLSX.writeFile(workbook, fileName, { compression: true });
+  onProgress?.(100, 'Selesai!');
 }

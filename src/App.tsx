@@ -15,7 +15,7 @@ import { AppSidebar } from './components/layout/AppSidebar';
 import { AppTopbar } from './components/layout/AppTopbar';
 import { NumberingSettingsModal } from './components/NumberingSettingsModal';
 import { PenerimaanForm } from './components/PenerimaanForm';
-import { ResetTransaksiModal } from './components/ResetTransaksiModal';
+import { ResetScopeOptions, ResetTransaksiModal } from './components/ResetTransaksiModal';
 import { SchemaAndScriptModal } from './components/SchemaAndScriptModal';
 import { StaffPermintaanNPBView } from './components/StaffPermintaanNPBView';
 import { TransactionForm } from './components/TransactionForm';
@@ -325,8 +325,33 @@ export default function App() {
     }, 4000);
   };
 
+  useEffect(() => {
+    const handleCustomToast = (e: any) => {
+      if (e?.detail) {
+        showToast(String(e.detail));
+      }
+    };
+    window.addEventListener('simba:toast', handleCustomToast);
+    return () => window.removeEventListener('simba:toast', handleCustomToast);
+  }, []);
+
   // Handler: Save or Update Disbursement Transaction (NPB/SPB/SPPB/BAST)
   const handleSaveTransaksi = (trxData: TransaksiPengeluaran) => {
+    // Validasi Ketat: Jangan pernah mengizinkan stok menjadi negatif (Ketentuan Bagian F)
+    for (const item of trxData.items) {
+      const b = masterBarang.find(mb => mb.id === item.barangId);
+      if (b) {
+        const previousIssued = editingTransaksi 
+          ? (editingTransaksi.items.find(it => it.barangId === b.id)?.usulanJumlah || 0)
+          : 0;
+        const availableStock = b.stokSekarang + previousIssued;
+        if (item.usulanJumlah > availableStock) {
+          alert('Stok tidak mencukupi. Jumlah pengeluaran melebihi stok tersedia.');
+          return;
+        }
+      }
+    }
+
     if (editingTransaksi) {
       // EDIT MODE: Re-calculate stock difference automatically
       const oldTrx = editingTransaksi;
@@ -654,33 +679,58 @@ export default function App() {
     setActiveTab('generator');
   };
 
-  // Fitur Keamanan & Pembersihan Data (Reset Transaksi) - Khusus Admin
-  const handleResetTransaksi = (restoreToStokAwal: boolean) => {
+  // Fitur Keamanan & Pembersihan Data (Reset Transaksi / Reset Scope Data) - Khusus Admin
+  const handleResetTransaksi = (options: ResetScopeOptions) => {
     if (currentUser.role !== 'admin') {
-      alert('Akses Ditolak: Fitur kosongkan transaksi hanya dapat dijalankan oleh Admin sistem.');
+      alert('Akses Ditolak: Fitur kosongkan data hanya dapat dijalankan oleh Admin sistem.');
       return;
     }
 
-    // 1. Kosongkan seluruh transaksi pengeluaran dan penerimaan
-    setTransaksiList([]);
-    setPenerimaanList([]);
-    setSelectedTransaksiId('');
+    const clearedItems: string[] = [];
 
-    // 2. Jika opsi restore stok dipilih, kembalikan stok fisik ke stok awal
-    if (restoreToStokAwal) {
-      setMasterBarang(prev =>
-        prev.map(b => ({
-          ...b,
-          stokSekarang: b.stokAwal
-        }))
-      );
+    // 1. Penyaluran (NPB, SPB, SPPB, BAST)
+    if (options.deletePenyaluran) {
+      setTransaksiList([]);
+      setSelectedTransaksiId('');
+      clearedItems.push('Riwayat Penyaluran');
     }
 
-    showToast(
-      restoreToStokAwal
-        ? 'Seluruh riwayat transaksi telah dikosongkan dan stok barang dikembalikan ke stok awal. Data master barang & rekening tetap aman.'
-        : 'Seluruh riwayat transaksi pengeluaran & penerimaan berhasil dikosongkan. Data master barang tetap aman.'
-    );
+    // 2. Penerimaan / Barang Masuk BOS
+    if (options.deletePenerimaan) {
+      setPenerimaanList([]);
+      clearedItems.push('Faktur Penerimaan BOS');
+    }
+
+    // 3. Mutasi Stok & Master Data Barang
+    if (options.deleteMasterBarang) {
+      setMasterBarang([]);
+      clearedItems.push('Master Data Barang & NUSP');
+    } else if (options.deleteMutasiStok || options.deletePenyaluran || options.deletePenerimaan) {
+      if (options.restoreStockToInitial) {
+        setMasterBarang(prev =>
+          prev.map(b => ({
+            ...b,
+            stokSekarang: b.stokAwal
+          }))
+        );
+        clearedItems.push('Stok Fisik Dikembalikan ke Stok Awal');
+      } else {
+        clearedItems.push('Stok Berjalan Dipertahankan');
+      }
+    }
+
+    // 4. Master Data Pegawai
+    if (options.deleteMasterPegawai) {
+      setPejabatList([]);
+      clearedItems.push('Master Data Pegawai');
+    }
+
+    // Master Kode Rekening Belanja (40 item resmi) TETAP AMAN / Permanen (Read-only)
+    const summaryMsg = clearedItems.length > 0 
+      ? `Pengosongan data berhasil: ${clearedItems.join(', ')}. Master Kode Rekening Belanja (40 item resmi) tetap aman terlindungi.`
+      : 'Tidak ada modul data yang dipilih untuk dikosongkan.';
+
+    showToast(summaryMsg);
   };
 
   // User Management Handlers
@@ -1142,6 +1192,7 @@ export default function App() {
                   onUpdateBarang={handleUpdateBarang}
                   onDeleteBarang={handleDeleteBarang}
                   onImportBarang={handleImportBarang}
+                  showToast={showToast}
                   kategoriList={kategoriList}
                   onUpdateKategoriList={handleUpdateKategoriList}
                   onMigrateUnmappedCategories={handleMigrateUnmappedCategories}
@@ -1284,13 +1335,15 @@ export default function App() {
         onClose={() => setIsSchemaModalOpen(false)}
       />
 
-      {/* MODAL KEAMANAN: Kosongkan Riwayat Transaksi (Khusus Admin Berizin PIN) */}
+      {/* MODAL KEAMANAN: Kosongkan Riwayat Transaksi / Reset Scope Data (Khusus Admin Berizin PIN) */}
       <ResetTransaksiModal
         isOpen={isResetTransaksiOpen}
         onClose={() => setIsResetTransaksiOpen(false)}
         onConfirmReset={handleResetTransaksi}
         transaksiCount={transaksiList.length}
         penerimaanCount={penerimaanList.length}
+        barangCount={masterBarang.length}
+        pegawaiCount={pejabatList.length}
         currentUser={currentUser}
         onOpenAuditLog={() => setIsAuditLogOpen(true)}
       />

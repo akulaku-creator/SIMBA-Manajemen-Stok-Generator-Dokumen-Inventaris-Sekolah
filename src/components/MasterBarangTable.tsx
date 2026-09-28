@@ -43,6 +43,7 @@ interface Props {
   kategoriList?: KategoriBarangItem[];
   onUpdateKategoriList?: (list: KategoriBarangItem[]) => void;
   onMigrateUnmappedCategories?: (targetCategoryName?: string) => void;
+  showToast?: (message: string) => void;
 }
 
 export const MasterBarangTable: React.FC<Props> = ({
@@ -53,7 +54,8 @@ export const MasterBarangTable: React.FC<Props> = ({
   onImportBarang,
   onViewKartuBarang,
   onViewKartuPersediaan,
-  onMigrateUnmappedCategories
+  onMigrateUnmappedCategories,
+  showToast
 }) => {
   const [search, setSearch] = useState('');
   const [filterJenis, setFilterJenis] = useState<'Semua' | 'BHP' | 'Belanja Modal'>('Semua');
@@ -117,6 +119,10 @@ export const MasterBarangTable: React.FC<Props> = ({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Async Export Excel State (Loading, Progress Bar & Double-Click Prevention)
+  const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false);
+  const [exportProgress, setExportProgress] = useState<{ percent: number; statusText: string } | null>(null);
 
   // Auto-generate Kode Barang toggle
   const [autoGenerateKode, setAutoGenerateKode] = useState<boolean>(true);
@@ -222,6 +228,32 @@ export const MasterBarangTable: React.FC<Props> = ({
       return matchSearch && matchJenis && matchCat && matchCatSearch;
     });
   }, [barangList, search, filterJenis, filterKategori, categorySearch]);
+
+  // Async Export Excel Handler (Non-blocking & Progress-aware)
+  const handleExportExcelAsync = async () => {
+    if (isExportingExcel) return;
+    try {
+      setIsExportingExcel(true);
+      setExportProgress({ percent: 5, statusText: 'Memulai ekspor...' });
+      
+      // Jeda agar browser sempat merefleksikan perubahan UI
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      await exportMasterBarangToExcel(filtered, (percent, statusText) => {
+        setExportProgress({ percent, statusText });
+      });
+
+      if (showToast) {
+        showToast(`Berhasil mengekspor ${filtered.length} data barang ke file Excel (.xlsx).`);
+      }
+    } catch (err) {
+      console.error('Gagal melakukan ekspor Excel:', err);
+      alert('Terjadi kesalahan saat mengunduh berkas Excel. Silakan coba kembali.');
+    } finally {
+      setIsExportingExcel(false);
+      setExportProgress(null);
+    }
+  };
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -1154,6 +1186,7 @@ export const MasterBarangTable: React.FC<Props> = ({
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
         existingCount={barangList.length}
+        showToast={showToast}
         onImport={(imported, mode) => {
           if (onImportBarang) {
             onImportBarang(imported, mode);
