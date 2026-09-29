@@ -444,7 +444,57 @@ export const LoginView: React.FC<Props> = ({
 
             </form>
 
-            <div className="mt-5 pt-3 border-t border-slate-200 text-center text-[10px] text-slate-500">
+            {/* Multi-Tenant Quick Demo Switcher */}
+            <div className="mt-4 pt-3 border-t border-slate-200">
+              <p className="text-[11px] font-bold text-slate-700 mb-2">
+                Pilih Akun Demo / Uji Coba Multi-Tenant:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifier('dinas');
+                    setPassword('dinas');
+                    setErrorMsg('');
+                  }}
+                  className="px-2 py-1.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg text-left text-[10px] text-rose-900 transition-colors cursor-pointer"
+                  title="Super Admin Dinas: Akses Seluruh Sekolah"
+                >
+                  <div className="font-bold">Super Admin / Dinas</div>
+                  <div className="text-[9px] text-rose-700 font-mono">dinas / dinas</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifier('admin');
+                    setPassword('admin');
+                    setErrorMsg('');
+                  }}
+                  className="px-2 py-1.5 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-left text-[10px] text-purple-900 transition-colors cursor-pointer"
+                  title="Admin Sekolah 1 (SMKN 1)"
+                >
+                  <div className="font-bold">Admin SMKN 1</div>
+                  <div className="text-[9px] text-purple-700 font-mono">admin / admin</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIdentifier('admin.cihaurbeuti');
+                    setPassword('admin');
+                    setErrorMsg('');
+                  }}
+                  className="px-2 py-1.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg text-left text-[10px] text-indigo-900 transition-colors cursor-pointer"
+                  title="Admin Sekolah 2 (SMAN 1 Cihaurbeuti - Terisolasi)"
+                >
+                  <div className="font-bold">Admin Cihaurbeuti</div>
+                  <div className="text-[9px] text-indigo-700 font-mono">admin.cihaurbeuti</div>
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 text-center text-[10px] text-slate-500">
               Setiap aktivitas login dan penyaluran barang tercatat otomatis dalam <strong>Log Audit Keamanan</strong>.
             </div>
 

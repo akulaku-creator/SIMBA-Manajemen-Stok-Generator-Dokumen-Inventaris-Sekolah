@@ -33,12 +33,15 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
   onConfirmDelete
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const isAdmin = currentUser.role === 'admin';
+  const [confirmInput, setConfirmInput] = useState('');
+  const isAllowed = currentUser.role === 'admin' || currentUser.role === 'super_admin';
 
   if (!isOpen) return null;
 
+  const isConfirmed = confirmInput.trim().toUpperCase() === 'HAPUS';
+
   const handleConfirm = () => {
-    if (!isAdmin || isProcessing) return;
+    if (!isAllowed || !isConfirmed || isProcessing) return;
     setIsProcessing(true);
     setTimeout(() => {
       onConfirmDelete();
@@ -63,7 +66,7 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
               </div>
               <div>
                 <span className="inline-block text-[10px] font-mono tracking-wider font-semibold uppercase px-2 py-0.5 rounded bg-rose-950/50 border border-white/20 text-rose-200 mb-1">
-                  Protokol Keamanan &amp; Reversi Saldo
+                  Protokol Keamanan &amp; Reversi Saldo Multi-Tenant
                 </span>
                 <h3 className="text-base font-bold text-white">
                   {isPenyaluran 
@@ -86,13 +89,13 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
         <div className="p-6 space-y-4">
           
           {/* Role Check Warning */}
-          {!isAdmin ? (
+          {!isAllowed ? (
             <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-3">
               <AlertOctagon className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-rose-900 mb-0.5">Akses Dibatasi (Bukan Administrator)</p>
+                <p className="font-bold text-rose-900 mb-0.5">Akses Dibatasi (Bukan Administrator / Dinas)</p>
                 <p>
-                  Akun Anda saat ini memiliki peran <strong>{currentUser.role.toUpperCase()}</strong>. Fitur penghapusan transaksi dan pembalikan (reversi) saldo gudang hanya dapat dilakukan oleh pengguna ber-role <strong>Administrator</strong>.
+                  Akun Anda saat ini memiliki peran <strong>{currentUser.role.toUpperCase()}</strong>. Fitur penghapusan transaksi dan pembalikan (reversi) saldo gudang hanya dapat dilakukan oleh pengguna ber-role <strong>Administrator Sekolah</strong> atau <strong>Super Admin Dinas</strong>.
                 </p>
               </div>
             </div>
@@ -215,11 +218,27 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
             </div>
           )}
 
+          {/* Safety Confirmation Input */}
+          {isAllowed && (
+            <div className="bg-rose-50/70 border border-rose-200/80 rounded-xl p-3.5 space-y-2">
+              <label className="block text-xs font-semibold text-rose-950">
+                Ketik <span className="font-mono bg-rose-200 text-rose-900 px-1.5 py-0.5 rounded font-bold">HAPUS</span> untuk mengonfirmasi tindakan berisiko tinggi ini:
+              </label>
+              <input
+                type="text"
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                placeholder="Ketik HAPUS di sini..."
+                className="w-full px-3 py-2 bg-white border border-rose-300 rounded-lg text-xs font-mono font-bold text-rose-900 placeholder:text-slate-400 placeholder:font-normal focus:ring-2 focus:ring-rose-500 focus:outline-hidden"
+              />
+            </div>
+          )}
+
           {/* Audit trail notice */}
           <div className="text-[11px] text-slate-500 bg-slate-100/70 p-2.5 rounded-lg border border-slate-200 flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-slate-400 shrink-0" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              Tindakan ini akan dicatat ke dalam <strong>Security Audit Log</strong> dengan identitas <strong>{currentUser.nama}</strong>.
+              Tindakan ini akan dicatat ke dalam <strong>Security Audit Log Multi-Tenant</strong> dengan identitas <strong>{currentUser.nama}</strong> (@{currentUser.username}).
             </span>
           </div>
 
@@ -231,7 +250,7 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
             type="button"
             onClick={onClose}
             disabled={isProcessing}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-xl transition-colors"
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer"
           >
             Batal
           </button>
@@ -239,8 +258,8 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={!isAdmin || isProcessing}
-            className="px-5 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-98 disabled:opacity-50 disabled:pointer-events-none rounded-xl shadow-xs flex items-center gap-2 transition-all"
+            disabled={!isAllowed || !isConfirmed || isProcessing}
+            className="px-5 py-2.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer"
           >
             {isProcessing ? (
               <>

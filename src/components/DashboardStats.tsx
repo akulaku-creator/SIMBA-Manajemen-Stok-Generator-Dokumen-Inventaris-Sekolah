@@ -4,6 +4,7 @@ import {
   ArrowUpDown,
   ArrowUpRight, 
   Boxes, 
+  Building2,
   Calendar,
   CheckCircle2,
   ChevronDown,
@@ -52,6 +53,7 @@ interface Props {
   onEditPenerimaan: (penerimaan: TransaksiPenerimaan) => void;
   onDeletePenerimaan: (penerimaan: TransaksiPenerimaan) => void;
   onSelectPenerimaanForPrint?: (penerimaan: TransaksiPenerimaan) => void;
+  onOpenDinasModule?: () => void;
 }
 
 const MONTH_NAMES = [
@@ -83,7 +85,8 @@ export const DashboardStats: React.FC<Props> = ({
   onDeleteTransaksi,
   onEditPenerimaan,
   onDeletePenerimaan,
-  onSelectPenerimaanForPrint
+  onSelectPenerimaanForPrint,
+  onOpenDinasModule
 }) => {
   const isAdmin = currentUser.role === 'admin';
 
@@ -378,6 +381,18 @@ export const DashboardStats: React.FC<Props> = ({
               <PackagePlus className="w-4 h-4 text-emerald-600" />
               <span>Catat Penerimaan (BOS)</span>
             </button>
+
+            {onOpenDinasModule && (currentUser.role === 'super_admin' || currentUser.role === 'admin') && (
+              <button
+                type="button"
+                onClick={onOpenDinasModule}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-blue-200/80 bg-blue-50/80 hover:bg-blue-100 text-blue-900 text-xs font-bold shadow-2xs hover:shadow-xs transition-all cursor-pointer"
+                title="Buka Modul Pengawasan Dinas & Laporan Mutasi Gabungan"
+              >
+                <Building2 className="w-4 h-4 text-blue-700" />
+                <span>Modul Dinas</span>
+              </button>
+            )}
 
             <button
               type="button"

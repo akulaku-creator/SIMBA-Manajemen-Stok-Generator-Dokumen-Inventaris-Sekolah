@@ -2,7 +2,22 @@ import { AppUser } from '../types';
 
 export const DEFAULT_USERS: AppUser[] = [
   {
+    id: 'user-dinas-1',
+    sekolah_id: undefined, // Dinas / Super Admin: Cross-school access
+    nama: 'Drs. H. Mulyadi, M.M.',
+    username: 'dinas',
+    role: 'super_admin',
+    pin: '123456',
+    password: 'dinas',
+    nip: '19700101 199503 1 002',
+    jabatan: 'Koordinator Aset & Sarpras Dinas Pendidikan',
+    unitKerja: 'Dinas Pendidikan Provinsi',
+    email: 'dinas@disdik.jabarprov.go.id',
+    avatarColor: 'bg-red-600'
+  },
+  {
     id: 'user-admin-1',
+    sekolah_id: 'sekolah-smkn1-kota',
     nama: 'Ratna Indrawati, S.Kom.',
     username: 'admin',
     role: 'admin',
@@ -16,6 +31,7 @@ export const DEFAULT_USERS: AppUser[] = [
   },
   {
     id: 'user-operator-1',
+    sekolah_id: 'sekolah-smkn1-kota',
     nama: 'Rina Kartikasari, S.AP.',
     username: 'operator',
     role: 'operator',
@@ -29,6 +45,7 @@ export const DEFAULT_USERS: AppUser[] = [
   },
   {
     id: 'user-guru-1',
+    sekolah_id: 'sekolah-smkn1-kota',
     nama: 'Budi Santoso, S.Pd.',
     username: 'budi.guru',
     role: 'pengguna',
@@ -42,6 +59,7 @@ export const DEFAULT_USERS: AppUser[] = [
   },
   {
     id: 'user-guru-2',
+    sekolah_id: 'sekolah-smkn1-kota',
     nama: 'Siti Rahmawati, S.Pd.',
     username: 'siti.guru',
     role: 'pengguna',
@@ -52,5 +70,19 @@ export const DEFAULT_USERS: AppUser[] = [
     unitKerja: 'Bidang Pembelajaran & Wali Kelas',
     email: 'siti.rahmawati@smkn1.sch.id',
     avatarColor: 'bg-amber-600'
+  },
+  {
+    id: 'user-admin-chrbt',
+    sekolah_id: 'sekolah-sman1-cihaurbeuti',
+    nama: 'Dedi Kurniawan, S.Pd.',
+    username: 'admin.cihaurbeuti',
+    role: 'admin',
+    pin: '123456',
+    password: 'admin',
+    nip: '19850912 201001 1 011',
+    jabatan: 'Pengurus Barang & Sarpras SMAN 1 Cihaurbeuti',
+    unitKerja: 'Subbag TU & Aset SMAN 1 Cihaurbeuti',
+    email: 'dedi@sman1cihaurbeuti.sch.id',
+    avatarColor: 'bg-indigo-600'
   }
 ];

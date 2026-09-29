@@ -1,10 +1,12 @@
 import {
   Boxes,
+  Building2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Database,
   FileSpreadsheet,
+  Globe2,
   History,
   LayoutDashboard,
   LogIn,
@@ -43,6 +45,7 @@ interface SidebarProps {
   onOpenLoginModal?: () => void;
   onLogout?: () => void;
   onOpenResetTransaksi?: () => void;
+  onOpenMasterSekolah?: () => void;
 }
 
 export const AppSidebar: React.FC<SidebarProps> = ({
@@ -61,10 +64,12 @@ export const AppSidebar: React.FC<SidebarProps> = ({
   onOpenUserManagement,
   onOpenLoginModal,
   onLogout,
-  onOpenResetTransaksi
+  onOpenResetTransaksi,
+  onOpenMasterSekolah
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
-  const isAdmin = currentUser.role === 'admin';
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
+  const isSuperAdmin = currentUser.role === 'super_admin';
 
   const menuItems = [
     {
@@ -88,6 +93,17 @@ export const AppSidebar: React.FC<SidebarProps> = ({
         onCloseMobile();
       },
       isActive: activeTab === 'generator'
+    },
+    {
+      id: 'dinas',
+      label: 'Modul Dinas',
+      icon: Building2,
+      badge: isSuperAdmin ? 'Dinas' : 'Mutasi',
+      onClick: () => {
+        onTabChange('dinas');
+        onCloseMobile();
+      },
+      isActive: activeTab === 'dinas'
     },
     {
       id: 'barang',
@@ -146,19 +162,37 @@ export const AppSidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'audit',
-      label: 'Audit Log',
-      icon: History,
-      badge: isAdmin ? 'Admin' : null,
+      label: 'Audit & Keamanan',
+      icon: ShieldCheck,
+      badge: isSuperAdmin ? 'Dinas' : (isAdmin ? 'Admin' : null),
       onClick: () => {
         if (onOpenAuditLog) onOpenAuditLog();
         onCloseMobile();
       },
       isActive: false
-    }
+    },
+    ...((isAdmin || isSuperAdmin) && onOpenMasterSekolah ? [{
+      id: 'sekolah',
+      label: 'Data Sekolah',
+      icon: School,
+      badge: isSuperAdmin ? 'Dinas' : 'Master',
+      onClick: () => {
+        onOpenMasterSekolah();
+        onCloseMobile();
+      },
+      isActive: false
+    }] : [])
   ];
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
+      case 'super_admin':
+        return (
+          <span className="inline-flex items-center gap-1 bg-rose-500/20 text-rose-300 border border-rose-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
+            <Globe2 className="w-3 h-3 text-rose-400" />
+            Dinas / Super Admin
+          </span>
+        );
       case 'admin':
         return (
           <span className="inline-flex items-center gap-1 bg-purple-500/20 text-purple-300 border border-purple-400/40 text-[10px] font-bold px-2 py-0.5 rounded-full">
@@ -348,6 +382,20 @@ export const AppSidebar: React.FC<SidebarProps> = ({
                 >
                   <UserCog className="w-3.5 h-3.5 text-purple-400" />
                   <span>Manajemen Pengguna</span>
+                </button>
+              )}
+
+              {isSuperAdmin && onOpenMasterSekolah && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsProfileMenuOpen(false);
+                    onOpenMasterSekolah();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition-colors text-left cursor-pointer"
+                >
+                  <School className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Manajemen Sekolah (Dinas)</span>
                 </button>
               )}
 

@@ -1,6 +1,7 @@
 import { 
   AlertCircle, 
   AlertOctagon, 
+  Building2,
   Check, 
   CheckCircle2, 
   Database, 
@@ -38,6 +39,7 @@ interface Props {
   pegawaiCount?: number;
   onConfirmReset: (options: ResetScopeOptions) => void;
   currentUser: AppUser;
+  schoolName?: string;
   onOpenAuditLog?: () => void;
 }
 
@@ -50,6 +52,7 @@ export const ResetTransaksiModal: React.FC<Props> = ({
   pegawaiCount = 0,
   onConfirmReset,
   currentUser,
+  schoolName,
   onOpenAuditLog
 }) => {
   // Checkbox Scope Selections
@@ -69,7 +72,7 @@ export const ResetTransaksiModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const isAdmin = currentUser.role === 'admin';
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
   const hasAnyScope = chkTransaksiPenyaluran || chkTransaksiPenerimaan || chkMutasiStok || chkMasterBarang || chkMasterPegawai;
   const isTransactionRelatedSelected = chkTransaksiPenyaluran || chkTransaksiPenerimaan || chkMutasiStok;
   
@@ -141,9 +144,11 @@ export const ResetTransaksiModal: React.FC<Props> = ({
         username: currentUser.username,
         userName: currentUser.nama,
         userRole: currentUser.role,
+        sekolah_id: currentUser.sekolah_id,
+        nama_sekolah: schoolName,
         action: 'RESET_TRANSAKSI',
-        title: 'Pengosongan Data Berhasil Dieksekusi',
-        details: `Admin ${currentUser.nama} (@${currentUser.username}) mengosongkan data scope: [${scopeDetails.join(', ')}]. Perlakuan stok: ${stockTreatment}. Master Rekening Belanja tetap aman. Alasan: "${alasanReset.trim()}".`,
+        title: `Pengosongan Data [${schoolName || 'Satuan Pendidikan'}]`,
+        details: `Admin ${currentUser.nama} (@${currentUser.username}) mengosongkan data scope sekolah [${schoolName || '-'}]: [${scopeDetails.join(', ')}]. Perlakuan stok: ${stockTreatment}. Master Rekening Belanja tetap aman. Alasan: "${alasanReset.trim()}".`,
         status: 'SUCCESS',
         meta: {
           scopePenyaluran: chkTransaksiPenyaluran,
@@ -206,6 +211,18 @@ export const ResetTransaksiModal: React.FC<Props> = ({
 
         <div className="p-6 space-y-4 text-xs text-slate-700 max-h-[78vh] overflow-y-auto">
           
+          {/* Multi-Tenant Scope Banner */}
+          <div className="bg-blue-50 border border-blue-200/80 rounded-xl p-3 flex items-start gap-2.5 text-xs text-blue-900">
+            <Building2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Konteks Satuan Pendidikan: </span>
+              <span className="font-extrabold text-blue-950">{schoolName || 'Satuan Pendidikan Terpilih'}</span>
+              <p className="text-[11px] text-blue-700 mt-0.5">
+                Pengosongan data ini hanya berlaku secara lokal pada sekolah ini. Data sekolah lain dan 40 Rekening Belanja Resmi daerah tetap aman terlindungi.
+              </p>
+            </div>
+          </div>
+
           {/* NON-ADMIN BLOCKED WARNING */}
           {!isAdmin && (
             <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 flex gap-3 text-red-900">

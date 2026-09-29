@@ -1,3 +1,31 @@
+export interface Sekolah {
+  id: string; // e.g. 'sekolah-smkn1-kota', 'sekolah-sman1-cihaurbeuti', 'sekolah-smkn2-bandung'
+  nama: string; // Nama Satuan Pendidikan
+  nama_sekolah?: string; // Alias nama_sekolah sesuai spesifikasi
+  npsn: string; // 8 digit NPSN resmi
+  alamat?: string;
+  desa_kelurahan?: string;
+  kecamatan?: string;
+  kabupaten_kota?: string;
+  kota?: string; // Kompatibilitas mundur
+  provinsi?: string;
+  kode_pos?: string;
+  logo?: string; // Path atau data URI logo
+  kop_surat?: string; // Format teks kop surat atau deskripsi kop
+  email?: string;
+  telepon?: string;
+  status?: 'Negeri' | 'Swasta' | 'aktif' | 'nonaktif' | string;
+  jenjang?: 'SD' | 'SMP' | 'SMA' | 'SMK';
+  website?: string;
+  kepalaSekolahNama?: string;
+  kepalaSekolahNip?: string;
+  isActive?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type PaperSize = 'A4' | 'F4';
 
 /**
@@ -65,16 +93,19 @@ export type JabatanKedinasan = typeof DAFTAR_JABATAN_KEDINASAN[number];
 
 export interface Pejabat {
   id: string;
+  sekolah_id?: string;
   nama: string;
   nip: string;
   pangkatGolongan: string; // e.g. "Pembina / IV a", "Penata Muda / III a"
   jabatan: string; // e.g. "Kepala Sekolah", "Wakasek", "Pengurus Barang Pembantu"
   unitKerja?: string;
   role?: string;
+  peran?: string;
 }
 
 export interface Barang {
   id: string;
+  sekolah_id?: string;
   kodeBarang: string; // e.g. "1.01.03.01.01" atau "1.03.02.01.01"
   nusp: string; // Nomor Urut Pendaftaran Barang, e.g. "0001/2026"
   namaBarang: string;
@@ -108,6 +139,7 @@ export interface PengajuanItem {
 
 export interface TransaksiPengeluaran {
   id: string;
+  sekolah_id?: string;
   nomorUrut: number;
   tanggal: string; // YYYY-MM-DD
   unitPemohon: string; // e.g. "Subbag Tata Usaha / Lab IPA"
@@ -149,6 +181,7 @@ export interface ItemPenerimaan {
 
 export interface TransaksiPenerimaan {
   id: string;
+  sekolah_id?: string;
   tanggal: string; // YYYY-MM-DD
   noBukti: string; // e.g. "BOS-REG/09/2026/041"
   sumberDana: 'BOS Reguler' | 'BOS Kinerja' | 'BPOPP / APBD' | 'Komite / Hibah';
@@ -160,6 +193,7 @@ export interface TransaksiPenerimaan {
 }
 
 export interface KopSuratConfig {
+  sekolah_id?: string;
   pemerintahDaerah: string; // e.g. "PEMERINTAH PROVINSI JAWA TIMUR"
   dinasPendidikan: string;  // e.g. "DINAS PENDIDIKAN"
   cabangDinas: string;      // e.g. "CABANG DINAS PENDIDIKAN WILAYAH SURABAYA"
@@ -185,6 +219,7 @@ export interface KopSuratConfig {
 }
 
 export interface NumberingPatternConfig {
+  sekolah_id?: string;
   schoolCode: string;
   patternNPB: string;  // e.g. "{NO}/NPB/{SEKOLAH}/{BULAN_ROMAN}/{TAHUN}"
   patternSPB: string;  // e.g. "421.3/{NO}/SPB-{SEKOLAH}/{BULAN_ROMAN}/{TAHUN}"
@@ -207,10 +242,11 @@ export interface StockOpnameCategorySummary {
   sisaFisikNilai: number;
 }
 
-export type UserRole = 'admin' | 'operator' | 'pengguna';
+export type UserRole = 'super_admin' | 'admin' | 'operator' | 'pengguna';
 
 export interface AppUser {
   id: string;
+  sekolah_id?: string; // undefined or 'all' for super_admin (Dinas)
   nama: string;
   username: string;
   role: UserRole;
@@ -234,13 +270,29 @@ export type AuditAction =
   | 'EDIT_PENERIMAAN'
   | 'HAPUS_PENERIMAAN'
   | 'REVERSI_STOK'
+  | 'TAMBAH_BARANG'
+  | 'EDIT_BARANG'
+  | 'HAPUS_BARANG'
+  | 'TAMBAH_SEKOLAH'
+  | 'UPDATE_SEKOLAH'
+  | 'HAPUS_SEKOLAH'
   | 'UPDATE_USER' 
   | 'HAPUS_USER' 
   | 'UPDATE_KOP' 
-  | 'UPDATE_NOMOR';
+  | 'UPDATE_NOMOR'
+  | 'SWITCH_SEKOLAH'
+  | 'EXPORT_DATA'
+  | 'RESTORE_DATABASE'
+  | 'SECURITY_CHECK'
+  | 'VERIFIKASI_DOKUMEN'
+  | 'ANOMALY_DETECTED';
+
+export type AuditSeverity = 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface AuditLog {
   id: string;
+  sekolah_id?: string;
+  nama_sekolah?: string;
   timestamp: string; // ISO string
   formattedDate: string; // Indonesian formatted date/time
   userId: string;
@@ -251,6 +303,9 @@ export interface AuditLog {
   title: string;
   details: string;
   status: 'SUCCESS' | 'WARNING' | 'FAILED';
+  severity?: AuditSeverity;
+  ipAddress?: string;
+  deviceInfo?: string;
   meta?: Record<string, unknown>;
 }
 

@@ -27,7 +27,7 @@ import {
 import React, { useState } from 'react';
 import { AppUser, PaperSize, UserRole } from '../types';
 
-export type MainTab = 'dashboard' | 'generator' | 'barang' | 'pejabat';
+export type MainTab = 'dashboard' | 'generator' | 'barang' | 'pejabat' | 'dinas';
 
 interface Props {
   activeTab: MainTab;
