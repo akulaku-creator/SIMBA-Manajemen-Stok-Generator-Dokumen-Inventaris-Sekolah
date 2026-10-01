@@ -3,7 +3,7 @@ import { AppUser } from '../types';
 export const DEFAULT_USERS: AppUser[] = [
   {
     id: 'user-dinas-1',
-    sekolah_id: undefined, // Dinas / Super Admin: Cross-school access
+    sekolah_id: 'dinas_prov', // Dinas / Super Admin: Cross-school access
     nama: 'Drs. H. Mulyadi, M.M.',
     username: 'dinas',
     role: 'super_admin',
@@ -84,5 +84,33 @@ export const DEFAULT_USERS: AppUser[] = [
     unitKerja: 'Subbag TU & Aset SMAN 1 Cihaurbeuti',
     email: 'dedi@sman1cihaurbeuti.sch.id',
     avatarColor: 'bg-indigo-600'
+  },
+  {
+    id: 'user-op-chrbt',
+    sekolah_id: 'sekolah-sman1-cihaurbeuti',
+    nama: 'Asep Saepudin, A.Md.',
+    username: 'operator.cihaurbeuti',
+    role: 'operator',
+    pin: '123456',
+    password: 'operator',
+    nip: '19900415 201802 1 004',
+    jabatan: 'Operator Pengurus Barang Pembantu',
+    unitKerja: 'Pengelola Aset & Inventaris',
+    email: 'asep@sman1cihaurbeuti.sch.id',
+    avatarColor: 'bg-emerald-600'
+  },
+  {
+    id: 'user-guru-chrbt',
+    sekolah_id: 'sekolah-sman1-cihaurbeuti',
+    nama: 'Hj. Neneng Hasanah, S.Pd., M.M.',
+    username: 'neneng.guru',
+    role: 'pengguna',
+    pin: '123456',
+    password: 'guru',
+    nip: '19860714 201201 2 008',
+    jabatan: 'Guru Pembina & Penanggung Jawab Lab',
+    unitKerja: 'Laboratorium Sains & Bahasa',
+    email: 'neneng@sman1cihaurbeuti.sch.id',
+    avatarColor: 'bg-blue-600'
   }
 ];

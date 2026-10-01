@@ -3,6 +3,7 @@ import { Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengelua
 import { formatRupiah, formatTanggalIndonesia, getKalimatStockOpname, terbilang } from '../../utils/numberGenerator';
 import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
+import { SignatoryStockOpname } from './SignatoryBlocks';
 
 interface Props {
   masterBarang: Barang[];
@@ -283,35 +284,12 @@ export const DocStockOpname: React.FC<Props> = ({
         Demikian Berita Acara Inventaris Fisik Persediaan (Stock Opname) ini dibuat dengan sebenarnya dalam rangkap 3 (tiga) untuk dipergunakan sebagai bahan pertanggungjawaban pengelolaan aset, penyusunan Laporan Keuangan Sekolah, serta rekonsiliasi persediaan ke Dinas Pendidikan.
       </p>
 
-      {/* Blok Tanda Tangan Resmi Berjejer */}
-      <div className="doc-signature-block avoid-break">
-        <div className="grid grid-cols-2 text-center">
-          {/* Kolom Kiri: Pihak Kedua */}
-          <div>
-            <p className="font-semibold text-slate-900">PIHAK KEDUA,</p>
-            <p className="font-bold text-slate-900 uppercase">PENGURUS BARANG PEMBANTU</p>
-            <p className="text-[8pt] text-slate-600 italic">Pengelola Fisik Persediaan</p>
-            <div className="doc-signature-space" />
-            <p className="font-bold underline uppercase tracking-wide">{pengurusBarang.nama}</p>
-            <p className="font-mono text-[8pt]">NIP. {pengurusBarang.nip}</p>
-            <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pengurusBarang.pangkatGolongan}</p>
-          </div>
-
-          {/* Kolom Kanan: Pihak Pertama */}
-          <div>
-            <p>
-              {kopConfig.kotaSurat}, {formatTanggalIndonesia(cutoffDateString)}
-            </p>
-            <p className="font-semibold text-slate-900 uppercase">MENGETAHUI:</p>
-            <p className="font-bold text-slate-900 uppercase">KEPALA SEKOLAH</p>
-            <p className="text-[8pt] text-slate-600 italic">Kuasa Pengguna Barang</p>
-            <div className="doc-signature-space" />
-            <p className="font-bold underline uppercase tracking-wide">{kepsek.nama}</p>
-            <p className="font-mono text-[8pt]">NIP. {kepsek.nip}</p>
-            <p className="text-[8pt] text-slate-600">Pangkat/Gol: {kepsek.pangkatGolongan}</p>
-          </div>
-        </div>
-      </div>
+      {/* Blok Tanda Tangan Resmi: Tim Pemeriksa Fisik, Pengurus Barang Persediaan, & Kepala Sekolah (Mengetahui) */}
+      <SignatoryStockOpname
+        pejabatList={pejabatList}
+        kopConfig={kopConfig}
+        tanggalSurat={cutoffDateString}
+      />
     </div>
   );
 };

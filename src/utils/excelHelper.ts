@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
-import { Barang, Pejabat } from '../types';
+import { Barang, Pejabat, TransaksiPengeluaran } from '../types';
 import { getNamaRekeningByKode } from '../data/kodeRekeningData';
 
 /**
@@ -696,4 +696,107 @@ export async function exportMasterPegawaiToExcel(
   const fileName = customFileName || `Master_Pegawai_${dateStr}.xlsx`;
   XLSX.writeFile(workbook, fileName, { compression: true });
   onProgress?.(100, 'Selesai!');
+}
+
+/**
+ * Export Transaksi Penyaluran ke Format Excel (.xlsx) Resmi SIMBA
+ * Mengikuti Filter Aktif (Requirement 13 & 14)
+ */
+export function exportTransaksiToExcel(
+  transaksiList: TransaksiPengeluaran[],
+  pemohonMap: Record<string, { nama: string; jabatan?: string }>,
+  options: {
+    sekolahName: string;
+    periodeText: string;
+    exportDate?: string;
+  }
+): void {
+  const exportDate = options.exportDate || new Date().toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
+  // Informasi Filter pada Header Excel (Requirement 14)
+  const headerInfo = [
+    ['LAPORAN REKAPITULASI PENYALURAN BARANG PERSEDIAAN'],
+    ['Sistem Informasi Manajemen Barang & Aset Sekolah (SIMBA)'],
+    [''],
+    ['Satuan Pendidikan', `: ${options.sekolahName}`],
+    ['Periode', `: ${options.periodeText}`],
+    ['Tanggal Export', `: ${exportDate}`],
+    ['Jumlah Transaksi', `: ${transaksiList.length} berkas`],
+    ['']
+  ];
+
+  const tableHeaders = [
+    'No',
+    'Tanggal',
+    'Nomor Dokumen',
+    'Unit Pemohon',
+    'Nama Pemohon',
+    'Keperluan',
+    'Barang',
+    'Jumlah',
+    'Satuan',
+    'Total Nilai (Rp)',
+    'Status'
+  ];
+
+  const dataRows: any[][] = [];
+  transaksiList.forEach((t, idx) => {
+    const pemohon = pemohonMap[t.pemohonId];
+    const namaPemohon = pemohon?.nama || (t.pemohonId && !t.pemohonId.startsWith('p-') && !t.pemohonId.startsWith('pej-') ? t.pemohonId : '-') || '-';
+    const barangSummary = t.items.map(it => `${it.namaBarang} (${it.usulanJumlah} ${it.satuan})`).join('; ');
+    const totalVolume = t.items.reduce((s, it) => s + (Number(it.usulanJumlah) || 0), 0);
+    const satuanSummary = Array.from(new Set(t.items.map(it => it.satuan))).join(', ') || 'Item';
+    const totalNilai = t.items.reduce((s, it) => s + ((Number(it.usulanJumlah) || 0) * (Number(it.hargaSatuan) || 0)), 0);
+    const docNo = t.noSPB || t.noBAST || t.noNPB || `Reg #${t.nomorUrut}`;
+    const rawStatus = (t.status as string) || 'disalurkan';
+    const statusText = rawStatus === 'disalurkan' || rawStatus === 'disetujui' || rawStatus === 'selesai'
+      ? 'Selesai' 
+      : rawStatus === 'diajukan' || rawStatus === 'diproses'
+        ? 'Diproses'
+        : (rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1));
+
+    dataRows.push([
+      idx + 1,
+      t.tanggal,
+      docNo,
+      t.unitPemohon,
+      namaPemohon,
+      t.keperluanUmum,
+      barangSummary,
+      totalVolume,
+      satuanSummary,
+      totalNilai,
+      statusText
+    ]);
+  });
+
+  const fullSheetData = [...headerInfo, tableHeaders, ...dataRows];
+  const worksheet = XLSX.utils.aoa_to_sheet(fullSheetData);
+
+  worksheet['!cols'] = [
+    { wch: 6 },  // No
+    { wch: 14 }, // Tanggal
+    { wch: 34 }, // Nomor Dokumen
+    { wch: 28 }, // Unit Pemohon
+    { wch: 28 }, // Nama Pemohon
+    { wch: 35 }, // Keperluan
+    { wch: 45 }, // Barang
+    { wch: 12 }, // Jumlah
+    { wch: 14 }, // Satuan
+    { wch: 20 }, // Total Nilai
+    { wch: 14 }  // Status
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Rekap_Penyaluran');
+
+  const safeSekolah = (options.sekolahName || 'Sekolah').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 16);
+  const safeDate = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(workbook, `SIMBA_Penyaluran_${safeSekolah}_${safeDate}.xlsx`);
 }

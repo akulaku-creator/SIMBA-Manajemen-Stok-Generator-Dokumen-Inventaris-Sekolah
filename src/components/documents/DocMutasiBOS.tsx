@@ -15,8 +15,9 @@ import React, { useMemo, useState } from 'react';
 import { Barang, KopSuratConfig, Pejabat, TAHUN_ANGGARAN_OPTIONS, TransaksiPenerimaan, TransaksiPengeluaran } from '../../types';
 import { downloadBOSExcelFile } from '../../utils/excelBosGenerator';
 import { calculateMutasiBOSData, NAMA_BULAN } from '../../utils/mutasiBosEngine';
-import { formatRupiah, formatTanggalIndonesia, renderMutasiCell, renderSaldoAwalCell } from '../../utils/numberGenerator';
+import { formatRupiah } from '../../utils/numberGenerator';
 import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { SignatorySheetBOS } from './SignatoryBlocks';
 
 interface Props {
   masterBarang: Barang[];
@@ -128,8 +129,15 @@ export const DocMutasiBOS: React.FC<Props> = ({
       <style>{`
         @media print {
           @page {
-            size: 330mm 215mm landscape; /* F4 / Legal Landscape */
-            margin: 0 !important;
+            size: A4 landscape;
+            margin: 10mm 12mm 10mm 12mm;
+          }
+          .page-landscape {
+            size: A4 landscape;
+            margin: 10mm 12mm 10mm 12mm;
+          }
+          .signature-block, tr {
+            page-break-inside: avoid !important;
           }
           html, body {
             margin: 0 !important;
@@ -610,26 +618,12 @@ export const DocMutasiBOS: React.FC<Props> = ({
           </table>
         </div>
 
-        {/* Tanda Tangan Resmi Pejabat (Footer Laporan) */}
-        <div className="mt-8 pt-4 border-t border-slate-200 grid grid-cols-2 text-xs text-slate-800 break-inside-avoid">
-          {/* Kolom Kiri: Kepala Sekolah */}
-          <div className="text-center space-y-1">
-            <p className="font-semibold text-slate-600">Mengetahui,</p>
-            <p className="font-bold uppercase text-slate-900">{kepsek.jabatan}</p>
-            <div className="h-16"></div>
-            <p className="font-bold underline text-slate-900">{kepsek.nama}</p>
-            <p className="text-[11px] text-slate-600">NIP. {kepsek.nip}</p>
-          </div>
-
-          {/* Kolom Kanan: Pengurus Barang Pembantu */}
-          <div className="text-center space-y-1">
-            <p className="text-slate-600">{kopConfig.kotaSurat || 'Bekasi'}, 31 Desember {selectedYear}</p>
-            <p className="font-bold uppercase text-slate-900">{pengurusBarang.jabatan}</p>
-            <div className="h-16"></div>
-            <p className="font-bold underline text-slate-900">{pengurusBarang.nama}</p>
-            <p className="text-[11px] text-slate-600">NIP. {pengurusBarang.nip}</p>
-          </div>
-        </div>
+        {/* Tanda Tangan Resmi Pejabat (Footer Laporan SHEET-BOS: 3 Kolom) */}
+        <SignatorySheetBOS
+          pejabatList={pejabatList}
+          kopConfig={kopConfig}
+          tanggalSurat={`${selectedYear}-12-31`}
+        />
       </div>
     </div>
   );

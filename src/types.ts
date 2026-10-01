@@ -86,10 +86,14 @@ export const DAFTAR_JABATAN_KEDINASAN = [
   'Wakasek',
   'Caraka',
   'Satpam',
-  'Pengurus Barang Pembantu'
+  'Pengurus Barang Pembantu',
+  'Bendahara BOS',
+  'Tim Pemeriksa Fisik'
 ] as const;
 
 export type JabatanKedinasan = typeof DAFTAR_JABATAN_KEDINASAN[number];
+
+export type StatusJabatan = 'Definitif' | 'Plt.' | 'Plh.';
 
 export interface Pejabat {
   id: string;
@@ -97,10 +101,11 @@ export interface Pejabat {
   nama: string;
   nip: string;
   pangkatGolongan: string; // e.g. "Pembina / IV a", "Penata Muda / III a"
-  jabatan: string; // e.g. "Kepala Sekolah", "Wakasek", "Pengurus Barang Pembantu"
+  jabatan: string; // e.g. "Kepala Sekolah", "Wakasek", "Pengurus Barang Pembantu", "Bendahara BOS"
   unitKerja?: string;
   role?: string;
   peran?: string;
+  statusJabatan?: StatusJabatan;
 }
 
 export interface Barang {

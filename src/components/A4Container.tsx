@@ -32,11 +32,11 @@ export const A4Container: React.FC<A4ContainerProps> = ({
 
   const sizeClass = isF4
     ? isLandscape
-      ? 'f4-landscape'
-      : 'f4-portrait'
+      ? 'f4-landscape page-landscape'
+      : 'f4-portrait page-portrait'
     : isLandscape
-      ? 'a4-landscape'
-      : 'a4-portrait';
+      ? 'a4-landscape page-landscape'
+      : 'a4-portrait page-portrait';
 
   const breakClass = breakAfter ? 'break-after-page page-break-after' : '';
 

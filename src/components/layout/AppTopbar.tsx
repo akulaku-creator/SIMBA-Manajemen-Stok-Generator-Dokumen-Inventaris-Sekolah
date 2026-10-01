@@ -56,7 +56,7 @@ export const AppTopbar: React.FC<TopbarProps> = ({
   onOpenMasterSekolah,
   onOpenAuditLog
 }) => {
-  const isSuperAdmin = currentUser.role === 'super_admin';
+  const isSuperAdmin = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || currentUser?.sekolah_id === 'dinas_prov';
   const currentSekolah = sekolahList.find(s => s.id === currentSekolahId);
 
   const getTabTitle = (tab: MainTab) => {
@@ -150,16 +150,16 @@ export const AppTopbar: React.FC<TopbarProps> = ({
                     <button
                       type="button"
                       onClick={onOpenAuditLog}
-                      className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300 transition-colors cursor-pointer"
-                      title="Status Isolasi Data Multi-Tenant Aktif - Klik untuk Buka Audit & Keamanan"
+                      className="inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 transition-colors cursor-pointer"
+                      title="Status Keamanan Multi-Tenant Aktif - Klik untuk Buka Audit & Keamanan"
                     >
                       <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                      <span className="font-semibold">Terisolasi</span>
+                      <span className="font-semibold">Data Sekolah Aktif</span>
                     </button>
                   ) : (
-                    <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200" title="Isolasi Data Mandiri Aktif">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200" title="Isolasi Data Mandiri Aktif">
                       <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                      <span>Terisolasi</span>
+                      <span>Data Sekolah Aktif</span>
                     </span>
                   )}
                   {currentUser.role === 'admin' && onOpenMasterSekolah && (
@@ -178,7 +178,7 @@ export const AppTopbar: React.FC<TopbarProps> = ({
           </div>
         </div>
 
-        {/* Right Section: Quick CTAs, Paper Size & Status */}
+        {/* Right Section: Global Actions (Paper Size, Penerimaan BOS, Profile) */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           
           {/* Paper Size Quick Selector (A4 / F4) */}
@@ -211,7 +211,7 @@ export const AppTopbar: React.FC<TopbarProps> = ({
             </div>
           )}
 
-          {/* Secondary CTA: Catat Penerimaan (BOS) */}
+          {/* Global Action: Catat Penerimaan (BOS) */}
           <button
             type="button"
             onClick={onOpenNewPenerimaan}
@@ -222,21 +222,12 @@ export const AppTopbar: React.FC<TopbarProps> = ({
             <span>Penerimaan (BOS)</span>
           </button>
 
-          {/* Primary CTA: Buat Pengajuan Baru */}
-          <button
-            type="button"
-            onClick={onOpenNewTransaksi}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs hover:shadow-sm transition-all cursor-pointer"
-            title="Buat Transaksi Pengajuan Penyaluran Barang Baru"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span className="hidden xs:inline">Buat Pengajuan</span>
-            <span className="xs:hidden">Pengajuan</span>
-          </button>
-
           {/* User Avatar badge */}
           <div className="flex items-center gap-2 pl-1 sm:pl-2 sm:border-l sm:border-slate-200">
-            <div className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-2xs ring-2 ring-blue-500/20">
+            <div 
+              className="w-8 h-8 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs shadow-2xs ring-2 ring-blue-500/20"
+              title={`${currentUser.nama} (${currentUser.role})`}
+            >
               {currentUser.nama ? currentUser.nama.slice(0, 2).toUpperCase() : 'RF'}
             </div>
           </div>

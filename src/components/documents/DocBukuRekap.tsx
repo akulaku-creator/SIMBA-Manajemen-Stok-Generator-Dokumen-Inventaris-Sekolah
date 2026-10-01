@@ -3,6 +3,7 @@ import { Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengelua
 import { formatRupiah, formatTanggalIndonesia } from '../../utils/numberGenerator';
 import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
+import { SignatoryBukuPersediaan } from './SignatoryBlocks';
 
 interface Props {
   transaksiPengeluaranList: TransaksiPengeluaran[];
@@ -244,31 +245,10 @@ export const DocBukuRekap: React.FC<Props> = ({
       </div>
 
       {/* Legal Signatures */}
-      <div className="doc-signature-block avoid-break">
-        <div className="grid grid-cols-2 text-center">
-          <div>
-            <p className="font-semibold">Mengetahui,</p>
-            <p className="font-bold text-slate-900 uppercase">Kepala {kopConfig.namaSekolah}</p>
-            <p className="text-[8pt] text-slate-600 italic">Kuasa Pengguna Barang</p>
-            <div className="doc-signature-space" />
-            <p className="font-bold underline uppercase tracking-wide">{kepsek.nama}</p>
-            <p className="font-mono text-[8pt]">NIP. {kepsek.nip}</p>
-            <p className="text-[8pt] text-slate-600">Pangkat/Gol: {kepsek.pangkatGolongan}</p>
-          </div>
-
-          <div>
-            <p>
-              {kopConfig.kotaSurat}, {formatTanggalIndonesia(new Date().toISOString().split('T')[0])}
-            </p>
-            <p className="font-bold text-slate-900 uppercase">Pengurus Barang Pembantu</p>
-            <p className="text-[8pt] text-slate-600 italic">Pengelola Aset Sekolah</p>
-            <div className="doc-signature-space" />
-            <p className="font-bold underline uppercase tracking-wide">{pengurusBarang.nama}</p>
-            <p className="font-mono text-[8pt]">NIP. {pengurusBarang.nip}</p>
-            <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pengurusBarang.pangkatGolongan}</p>
-          </div>
-        </div>
-      </div>
+      <SignatoryBukuPersediaan
+        pejabatList={pejabatList}
+        kopConfig={kopConfig}
+      />
     </div>
   );
 };

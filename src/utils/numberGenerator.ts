@@ -115,15 +115,32 @@ export function terbilang(n: number): string {
 }
 
 /**
- * Format currency to IDR
+ * Safe numeric normalizer to prevent NaN, null, undefined, Infinity or invalid string conversions
  */
-export function formatRupiah(amount: number): string {
+export function safeNumber(val: any, fallback: number = 0): number {
+  if (val === null || val === undefined || val === '') return fallback;
+  if (typeof val === 'number') {
+    return isNaN(val) || !isFinite(val) ? fallback : val;
+  }
+  if (typeof val === 'string') {
+    const clean = val.replace(/[^0-9.-]/g, '');
+    const parsed = Number(clean);
+    return isNaN(parsed) || !isFinite(parsed) ? fallback : parsed;
+  }
+  return fallback;
+}
+
+/**
+ * Format currency to IDR with robust safety against NaN / undefined / null
+ */
+export function formatRupiah(amount: number | string | undefined | null): string {
+  const safe = safeNumber(amount, 0);
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
-  }).format(amount);
+  }).format(safe);
 }
 
 export interface RenderMutasiCellResult {
@@ -150,10 +167,10 @@ export function renderSaldoAwalCell(
   hargaSatuan: number | string | undefined | null,
   jumlah: number | string | undefined | null
 ): RenderMutasiCellResult {
-  const numVol = volume ? Number(volume) : 0;
+  const numVol = safeNumber(volume, 0);
   const isExist = Boolean(numVol > 0);
-  const numHarga = hargaSatuan !== undefined && hargaSatuan !== null ? Number(hargaSatuan) : 0;
-  const numJumlah = jumlah ? Number(jumlah) : 0;
+  const numHarga = safeNumber(hargaSatuan, 0);
+  const numJumlah = safeNumber(jumlah, 0);
 
   const volFormatted = isExist ? numVol.toLocaleString('id-ID') : '';
   const satFormatted = satuan || '';
@@ -188,10 +205,10 @@ export function renderMutasiCell(
   hargaSatuan: number | string | undefined | null,
   jumlah: number | string | undefined | null
 ): RenderMutasiCellResult {
-  const numVol = volume ? Number(volume) : 0;
+  const numVol = safeNumber(volume, 0);
   const hasMutation = Boolean(numVol > 0);
-  const numHarga = hargaSatuan ? Number(hargaSatuan) : 0;
-  const numJumlah = jumlah ? Number(jumlah) : 0;
+  const numHarga = safeNumber(hargaSatuan, 0);
+  const numJumlah = safeNumber(jumlah, 0);
 
   const volFormatted = hasMutation ? numVol.toLocaleString('id-ID') : '';
   const satFormatted = hasMutation ? (satuan || '') : '';

@@ -10,6 +10,7 @@ import {
 import { formatRupiah, formatTanggalIndonesia, MONTHS_ID } from '../../utils/numberGenerator';
 import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
+import { SignatoryKartuBarang } from './SignatoryBlocks';
 
 export interface DocKartuPersediaanProps {
   barang: Barang;
@@ -815,42 +816,12 @@ export const DocKartuPersediaan: React.FC<DocKartuPersediaanProps> = ({
         </div>
       </div>
 
-      {/* Footer Tanda Tangan */}
-      <div className="mt-6 pt-3 text-xs leading-normal avoid-break">
-        <div className="flex justify-between items-start">
-          {/* Mengetahui: Kuasa Pengguna Barang / Atasan Langsung */}
-          <div className="text-center w-72">
-            <div className="font-medium text-slate-700">Mengetahui,</div>
-            <div className="font-bold text-slate-900 mb-16">
-              Kuasa Pengguna Barang / Atasan Langsung
-            </div>
-            <div className="font-bold underline text-slate-900 uppercase">{kepsek.nama}</div>
-            <div className="text-[11px] text-slate-600 font-mono">
-              NIP. {kepsek.nip && kepsek.nip !== '-' ? kepsek.nip : '..........................'}
-            </div>
-            {kepsek.pangkatGolongan && (
-              <div className="text-[10px] text-slate-500">{kepsek.pangkatGolongan}</div>
-            )}
-          </div>
-
-          {/* Pengurus/Penyimpan Barang */}
-          <div className="text-center w-72">
-            <div className="text-slate-700">
-              {kopConfig.kabupatenKota || 'Ciamis'}, {currentDateString}
-            </div>
-            <div className="font-bold text-slate-900 mb-16">
-              Pengurus/Penyimpan Barang
-            </div>
-            <div className="font-bold underline text-slate-900 uppercase">{pengurusBarang.nama}</div>
-            <div className="text-[11px] text-slate-600 font-mono">
-              NIP. {pengurusBarang.nip && pengurusBarang.nip !== '-' ? pengurusBarang.nip : '..........................'}
-            </div>
-            {pengurusBarang.pangkatGolongan && (
-              <div className="text-[10px] text-slate-500">{pengurusBarang.pangkatGolongan}</div>
-            )}
-          </div>
-        </div>
-      </div>
+      {/* Footer Tanda Tangan: Pengurus / Penyimpan Barang Persediaan */}
+      <SignatoryKartuBarang
+        pejabatList={pejabatList}
+        kopConfig={kopConfig}
+        className="mt-6 pt-3"
+      />
     </div>
   );
 };

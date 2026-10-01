@@ -69,7 +69,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
-  const isSuperAdmin = currentUser.role === 'super_admin';
+  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || currentUser?.sekolah_id === 'dinas_prov';
 
   const menuItems = [
     {
@@ -94,17 +94,18 @@ export const AppSidebar: React.FC<SidebarProps> = ({
       },
       isActive: activeTab === 'generator'
     },
-    {
+    /* HANYA MUNCUL JIKA USER ADALAH SUPER ADMIN DINAS */
+    ...(isDinasUser ? [{
       id: 'dinas',
       label: 'Modul Dinas',
       icon: Building2,
-      badge: isSuperAdmin ? 'Dinas' : 'Mutasi',
+      badge: 'MUTASI',
       onClick: () => {
         onTabChange('dinas');
         onCloseMobile();
       },
       isActive: activeTab === 'dinas'
-    },
+    }] : []),
     {
       id: 'barang',
       label: 'Master Barang',
@@ -131,7 +132,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({
       id: 'sheets',
       label: 'Sheets Sync',
       icon: FileSpreadsheet,
-      badge: 'Live',
+      badge: 'LIVE',
       onClick: () => {
         if (onOpenGoogleSheets) onOpenGoogleSheets();
         onCloseMobile();
@@ -164,18 +165,19 @@ export const AppSidebar: React.FC<SidebarProps> = ({
       id: 'audit',
       label: 'Audit & Keamanan',
       icon: ShieldCheck,
-      badge: isSuperAdmin ? 'Dinas' : (isAdmin ? 'Admin' : null),
+      badge: isDinasUser ? 'DINAS' : (isAdmin ? 'ADMIN' : null),
       onClick: () => {
         if (onOpenAuditLog) onOpenAuditLog();
         onCloseMobile();
       },
       isActive: false
     },
-    ...((isAdmin || isSuperAdmin) && onOpenMasterSekolah ? [{
+    /* HANYA MUNCUL JIKA USER ADALAH SUPER ADMIN DINAS */
+    ...(isDinasUser && onOpenMasterSekolah ? [{
       id: 'sekolah',
       label: 'Data Sekolah',
       icon: School,
-      badge: isSuperAdmin ? 'Dinas' : 'Master',
+      badge: 'MASTER',
       onClick: () => {
         onOpenMasterSekolah();
         onCloseMobile();
@@ -385,7 +387,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({
                 </button>
               )}
 
-              {isSuperAdmin && onOpenMasterSekolah && (
+              {isDinasUser && onOpenMasterSekolah && (
                 <button
                   type="button"
                   onClick={() => {

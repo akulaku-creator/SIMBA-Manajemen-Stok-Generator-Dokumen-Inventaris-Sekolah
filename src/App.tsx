@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { CheckCircle, Info, X } from 'lucide-react';
+import { CheckCircle, Info, LayoutDashboard, Lock, ShieldAlert, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { DashboardStats } from './components/DashboardStats';
 import { DocumentViewer } from './components/DocumentViewer';
@@ -22,6 +22,7 @@ import { TransactionForm } from './components/TransactionForm';
 import { UserManagementModal } from './components/UserManagementModal';
 import { MasterSekolahModal } from './components/MasterSekolahModal';
 import { ModulDinasView } from './components/ModulDinasView';
+import { RouteForbiddenView } from './components/RouteForbiddenView';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { LoginView } from './components/LoginView';
 import { AuditLogModal } from './components/AuditLogModal';
@@ -282,6 +283,7 @@ export default function App() {
     const saved = localStorage.getItem('simba_gsheet_config');
     return saved ? JSON.parse(saved) : null;
   });
+  const [forbiddenRoute, setForbiddenRoute] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Digital Document Verification Modal (QR Code Validasi)
@@ -404,16 +406,121 @@ export default function App() {
     unitKerja: 'Subbag Tata Usaha & IT'
   };
 
+  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || currentUser?.sekolah_id === 'dinas_prov';
+
   // STRICT MULTI-TENANT ISOLATION GUARD:
-  // If user is not super_admin, lock currentSekolahId to their assigned school!
+  // If user is not super_admin / dinas, lock currentSekolahId to their assigned school!
   useEffect(() => {
-    if (currentUser.role !== 'super_admin' && currentUser.sekolah_id) {
+    if (!isDinasUser && currentUser.sekolah_id) {
       if (currentSekolahId !== currentUser.sekolah_id) {
         setCurrentSekolahId(currentUser.sekolah_id);
         localStorage.setItem('simba_active_sekolah_id', currentUser.sekolah_id);
       }
     }
-  }, [currentUser, currentSekolahId]);
+  }, [currentUser, isDinasUser, currentSekolahId]);
+
+  // ROUTE CONTROLLER & RBAC URL SECURITY GUARD (Requirement 3: 403 Forbidden)
+  useEffect(() => {
+    const handleLocationChange = () => {
+      const pathname = window.location.pathname.toLowerCase();
+      const hash = window.location.hash.toLowerCase().replace('#', '');
+      
+      const isDinasTarget = pathname.includes('modul-dinas') || hash.includes('modul-dinas') || hash === 'dinas';
+      const isSekolahTarget = pathname.includes('data-sekolah') || hash.includes('data-sekolah') || hash === 'sekolah';
+
+      if (isDinasTarget || isSekolahTarget) {
+        if (!isDinasUser) {
+          const targetedRoute = isDinasTarget ? '/modul-dinas' : '/data-sekolah';
+          setForbiddenRoute(targetedRoute);
+          logAuditEvent({
+            userId: currentUser.id,
+            username: currentUser.username,
+            userName: currentUser.nama,
+            userRole: currentUser.role,
+            action: 'SECURITY_ALERT',
+            title: `Percobaan Akses Ilegal ${targetedRoute} (403 Forbidden)`,
+            details: `Pengguna ${currentUser.nama} (@${currentUser.username}) dengan role ${currentUser.role} mengakses URL ${targetedRoute} secara manual. Akses diblokir oleh Route Controller.`,
+            status: 'WARNING'
+          });
+        } else {
+          setForbiddenRoute(null);
+          if (isDinasTarget) {
+            setActiveTab('dinas');
+          } else if (isSekolahTarget) {
+            setIsMasterSekolahOpen(true);
+          }
+        }
+      } else {
+        setForbiddenRoute(null);
+        if (pathname.includes('generator') || hash === 'generator') {
+          setActiveTab('generator');
+        } else if (pathname.includes('master-barang') || hash === 'barang') {
+          setActiveTab('barang');
+        } else if (pathname.includes('master-pegawai') || hash === 'pejabat') {
+          setActiveTab('pejabat');
+        }
+      }
+    };
+
+    handleLocationChange();
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, [currentUser, isDinasUser]);
+
+  const handleTabChange = (tab: MainTab) => {
+    if (tab === 'dinas' && !isDinasUser) {
+      setForbiddenRoute('/modul-dinas');
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'SECURITY_ALERT',
+        title: 'Akses Ditolak: Rute Modul Dinas (403 Forbidden)',
+        details: `Pengguna ${currentUser.nama} (@${currentUser.username}) dengan role ${currentUser.role} dilarang mengakses Modul Dinas.`,
+        status: 'WARNING'
+      });
+      return;
+    }
+    setForbiddenRoute(null);
+    setActiveTab(tab);
+    if (window.history.pushState) {
+      const pathMap: Record<MainTab, string> = {
+        dashboard: '/',
+        generator: '/generator',
+        dinas: '/modul-dinas',
+        barang: '/master-barang',
+        pejabat: '/master-pegawai'
+      };
+      window.history.pushState(null, '', pathMap[tab] || '/');
+    }
+  };
+
+  const handleOpenMasterSekolah = () => {
+    if (!isDinasUser) {
+      setForbiddenRoute('/data-sekolah');
+      logAuditEvent({
+        userId: currentUser.id,
+        username: currentUser.username,
+        userName: currentUser.nama,
+        userRole: currentUser.role,
+        action: 'SECURITY_ALERT',
+        title: 'Akses Ditolak: Rute Master Sekolah (403 Forbidden)',
+        details: `Pengguna ${currentUser.nama} (@${currentUser.username}) dilarang membuka Master Data Sekolah.`,
+        status: 'WARNING'
+      });
+      return;
+    }
+    setForbiddenRoute(null);
+    setIsMasterSekolahOpen(true);
+    if (window.history.pushState) {
+      window.history.pushState(null, '', '/data-sekolah');
+    }
+  };
 
   // Active School Tenant Object
   const activeSekolah = useMemo(() => {
@@ -1445,7 +1552,7 @@ export default function App() {
       <div className="no-print">
         <AppSidebar
           activeTab={activeTab}
-          onTabChange={setActiveTab}
+          onTabChange={handleTabChange}
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
           isMobileOpen={isMobileSidebarOpen}
@@ -1463,7 +1570,7 @@ export default function App() {
           onOpenLoginModal={() => setIsLoginModalOpen(true)}
           onLogout={handleLogout}
           onOpenResetTransaksi={() => setIsResetTransaksiOpen(true)}
-          onOpenMasterSekolah={() => setIsMasterSekolahOpen(true)}
+          onOpenMasterSekolah={isDinasUser ? handleOpenMasterSekolah : undefined}
         />
       </div>
 
@@ -1489,15 +1596,29 @@ export default function App() {
             sekolahList={sekolahList}
             currentSekolahId={currentSekolahId}
             onSelectSekolah={handleSelectSekolah}
-            onOpenMasterSekolah={() => setIsMasterSekolahOpen(true)}
+            onOpenMasterSekolah={isDinasUser ? handleOpenMasterSekolah : undefined}
             onOpenAuditLog={() => setIsAuditLogOpen(true)}
           />
         </div>
 
         {/* Main Container */}
         <main className="flex-1 w-full">
-        {/* ROLE 1: Pengguna (Staf/Guru) - Tampilan antarmuka ringkas khusus Permintaan Barang (NPB) */}
-        {currentUser.role === 'pengguna' ? (
+        {/* PROTEKSI KEAMANAN ROUTE: 403 Forbidden Screen jika rute dinas diakses oleh akun sekolah */}
+        {forbiddenRoute ? (
+          <RouteForbiddenView
+            targetRoute={forbiddenRoute}
+            currentUser={currentUser}
+            schoolName={activeSekolah.nama}
+            onBackToDashboard={() => {
+              setForbiddenRoute(null);
+              setActiveTab('dashboard');
+              setIsMasterSekolahOpen(false);
+              if (window.history.pushState) {
+                window.history.pushState(null, '', '/');
+              }
+            }}
+          />
+        ) : currentUser.role === 'pengguna' ? (
           <StaffPermintaanNPBView
             currentUser={currentUser}
             masterBarang={scopedBarang}
@@ -1536,7 +1657,9 @@ export default function App() {
                     setGeneratorInitialDocType('buku_penerimaan');
                     setActiveTab('generator');
                   }}
-                  onOpenDinasModule={() => setActiveTab('dinas')}
+                  onOpenDinasModule={() => handleTabChange('dinas')}
+                  kopConfig={activeKopConfig}
+                  schoolName={activeSekolah.nama}
                 />
               </div>
             )}
@@ -1565,17 +1688,32 @@ export default function App() {
 
             {/* TAB DINAS: Modul Pengawasan & Laporan Mutasi Gabungan Seluruh Satuan Pendidikan (Langkah 4) */}
             {activeTab === 'dinas' && (
-              <ModulDinasView
-                sekolahList={sekolahList}
-                allMasterBarang={masterBarang}
-                allTransaksi={transaksiList}
-                allPenerimaan={penerimaanList}
-                allPejabat={pejabatList}
-                currentUser={currentUser}
-                onSelectSekolah={handleSelectSekolah}
-                paperSize={paperSize}
-                showToast={showToast}
-              />
+              isDinasUser ? (
+                <ModulDinasView
+                  sekolahList={sekolahList}
+                  allMasterBarang={masterBarang}
+                  allTransaksi={transaksiList}
+                  allPenerimaan={penerimaanList}
+                  allPejabat={pejabatList}
+                  currentUser={currentUser}
+                  onSelectSekolah={handleSelectSekolah}
+                  paperSize={paperSize}
+                  showToast={showToast}
+                />
+              ) : (
+                <RouteForbiddenView
+                  targetRoute="/modul-dinas"
+                  currentUser={currentUser}
+                  schoolName={activeSekolah.nama}
+                  onBackToDashboard={() => {
+                    setForbiddenRoute(null);
+                    setActiveTab('dashboard');
+                    if (window.history.pushState) {
+                      window.history.pushState(null, '', '/');
+                    }
+                  }}
+                />
+              )
             )}
 
             {/* TAB 3: Master Barang & NUSP (Admin & Operator) */}
@@ -1770,12 +1908,21 @@ export default function App() {
         onUpdateUser={handleUpdateUser}
         onDeleteUser={handleDeleteUser}
         onSwitchUser={handleSwitchUser}
+        sekolahList={sekolahList}
+        currentSekolahId={currentSekolahId}
+        onSelectSekolah={handleSelectSekolah}
+        currentUser={currentUser}
       />
 
       {/* MODAL: Master Data Satuan Pendidikan / Sekolah (Multi-Tenant Langkah 3) */}
       <MasterSekolahModal
-        isOpen={isMasterSekolahOpen}
-        onClose={() => setIsMasterSekolahOpen(false)}
+        isOpen={isMasterSekolahOpen && isDinasUser}
+        onClose={() => {
+          setIsMasterSekolahOpen(false);
+          if (window.location.pathname.includes('data-sekolah') && window.history.pushState) {
+            window.history.pushState(null, '', '/');
+          }
+        }}
         sekolahList={sekolahList}
         currentSekolahId={currentSekolahId}
         onAddSekolah={handleAddSekolah}

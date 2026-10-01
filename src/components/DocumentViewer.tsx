@@ -223,7 +223,13 @@ export const DocumentViewer: React.FC<Props> = ({
 
   const activeBarang = masterBarang.find(b => b.id === selectedBarangId) || masterBarang[0];
 
-  const isLandscape = docType === 'buku_penerimaan' || docType === 'buku_pengeluaran' || docType === 'buku_rekap' || docType === 'kartu_persediaan' || docType === 'mutasi_bos';
+  const isLandscape = 
+    docType === 'buku_penerimaan' || 
+    docType === 'buku_pengeluaran' || 
+    docType === 'buku_rekap' || 
+    docType === 'kartu_barang' || 
+    docType === 'kartu_persediaan' || 
+    docType === 'mutasi_bos';
   const isBOSSheet = docType === 'mutasi_bos';
 
   const docConfig = ALL_DOCUMENTS_CATALOG.find(d => d.id === docType) || ALL_DOCUMENTS_CATALOG[0];
@@ -264,7 +270,7 @@ export const DocumentViewer: React.FC<Props> = ({
 
   return (
     <div className="w-full flex flex-col items-center bg-slate-50/50 min-h-screen">
-      {/* Dynamic Print CSS for active Paper Size & Orientation (Zero Margin @page Reset) */}
+      {/* Dynamic Print CSS for active Paper Size & Orientation */}
       <style>{`
         @media print {
           @page {
@@ -273,7 +279,22 @@ export const DocumentViewer: React.FC<Props> = ({
                 ? paperSize === 'A4' ? 'A4 landscape' : '330mm 215mm landscape'
                 : paperSize === 'A4' ? 'A4 portrait' : '215mm 330mm portrait'
             };
-            margin: 0 !important;
+            margin: ${
+              isLandscape
+                ? '10mm 12mm 10mm 12mm'
+                : '12mm 15mm 12mm 15mm'
+            } !important;
+          }
+          .page-landscape {
+            size: A4 landscape;
+            margin: 10mm 12mm 10mm 12mm;
+          }
+          .page-portrait {
+            size: A4 portrait;
+            margin: 12mm 15mm 12mm 15mm;
+          }
+          .signature-block, tr {
+            page-break-inside: avoid !important;
           }
           html, body {
             margin: 0 !important;

@@ -506,6 +506,20 @@ table {
     break-after: page !important;
   }
 
+  /* Pengaturan Ukuran Halaman & Margin Cetak Baku */
+  .page-landscape {
+    size: A4 landscape;
+    margin: 10mm 12mm 10mm 12mm;
+  }
+  .page-portrait {
+    size: A4 portrait;
+    margin: 12mm 15mm 12mm 15mm;
+  }
+  .signature-block, tr {
+    page-break-inside: avoid !important; /* Cegah tanda tangan terpotong antar halaman */
+    break-inside: avoid !important;
+  }
+
   /* Prevent awkward page break splits */
   .avoid-break,
   .page-break-inside-avoid,
@@ -513,7 +527,8 @@ table {
   .doc-header-kop,
   .doc-title-block,
   .doc-meta-block,
-  .doc-signature-block {
+  .doc-signature-block,
+  .signature-block {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

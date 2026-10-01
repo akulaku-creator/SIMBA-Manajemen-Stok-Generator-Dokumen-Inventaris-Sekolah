@@ -11,6 +11,7 @@ import { formatTanggalIndonesia, MONTHS_ID } from '../../utils/numberGenerator';
 import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
 import { isDateBeforePeriod, isDateInPeriod } from './DocKartuPersediaan';
+import { SignatoryKartuBarang } from './SignatoryBlocks';
 
 export interface DocKartuBarangProps {
   barang: Barang;
@@ -386,43 +387,12 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
         </table>
       </div>
 
-      {/* Signatures Section */}
-      <div className="doc-signature-block avoid-break mt-8 pt-4">
-        <div className="flex justify-end text-xs mb-2">
-          <span>{kopConfig.kotaSurat || 'Bekasi'}, {currentDateString}</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-8 text-xs text-center">
-          {/* Left: Kuasa Pengguna Barang */}
-          <div className="flex flex-col justify-between h-32">
-            <div>
-              <p className="font-semibold text-slate-700">Mengetahui,</p>
-              <p className="font-bold uppercase text-slate-900">Kuasa Pengguna Barang / Atasan Langsung</p>
-            </div>
-            <div>
-              <p className="font-bold underline uppercase text-slate-900">{kepsek.nama}</p>
-              <p className="text-[11px] font-mono text-slate-600">NIP. {kepsek.nip || '..........................'}</p>
-              {kepsek.pangkatGolongan && (
-                <p className="text-[10px] text-slate-500">{kepsek.pangkatGolongan}</p>
-              )}
-            </div>
-          </div>
-
-          {/* Right: Pengurus/Penyimpan Barang */}
-          <div className="flex flex-col justify-between h-32">
-            <div>
-              <p className="font-bold uppercase text-slate-900">Pengurus/Penyimpan Barang</p>
-            </div>
-            <div>
-              <p className="font-bold underline uppercase text-slate-900">{pengurusBarang.nama}</p>
-              <p className="text-[11px] font-mono text-slate-600">NIP. {pengurusBarang.nip || '..........................'}</p>
-              {pengurusBarang.pangkatGolongan && (
-                <p className="text-[10px] text-slate-500">{pengurusBarang.pangkatGolongan}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Signatures Section: Pengurus / Penyimpan Barang Persediaan */}
+      <SignatoryKartuBarang
+        pejabatList={pejabatList}
+        kopConfig={kopConfig}
+        className="mt-6 pt-2"
+      />
     </div>
   );
 };
