@@ -30,7 +30,8 @@ import { DocMutasiBOS } from './documents/DocMutasiBOS';
 import { DocRekapKodering } from './documents/DocRekapKodering';
 import { ExcelImportBOSModal } from './ExcelImportBOSModal';
 import { downloadBOSExcelFile } from '../utils/excelBosGenerator';
-import { MONTHS_ID } from '../utils/numberGenerator';
+import { formatTanggalIndonesia, MONTHS_ID } from '../utils/numberGenerator';
+import { resolveKepalaSekolah, resolvePengurusBarang, resolveWakasekSarpras } from '../utils/pejabatResolver';
 
 interface Props {
   transaksiList: TransaksiPengeluaran[];
@@ -116,6 +117,22 @@ export const DocumentViewer: React.FC<Props> = ({
       return p;
     });
   }, [pejabatList, selectedKepalaSekolahId, selectedPengurusBarangId]);
+
+  const effectivePejabatSettings = useMemo(() => {
+    const kepsek = resolveKepalaSekolah(effectivePejabatList);
+    const pengurus = resolvePengurusBarang(effectivePejabatList);
+    return {
+      kepalaSekolah: kepsek,
+      pengurusBarang: pengurus,
+      lokasi: kopConfig.kotaSurat || 'Ciamis',
+      namaSekolah: kopConfig.namaSekolah
+    };
+  }, [effectivePejabatList, kopConfig]);
+
+  const sharedDataDokumen = useMemo(() => ({
+    lokasi: kopConfig.kotaSurat || 'Ciamis',
+    tanggalCetak: formatTanggalIndonesia(new Date().toISOString().split('T')[0])
+  }), [kopConfig.kotaSurat]);
 
   useEffect(() => {
     if (initialDocType) {
@@ -293,8 +310,14 @@ export const DocumentViewer: React.FC<Props> = ({
             size: A4 portrait;
             margin: 12mm 15mm 12mm 15mm;
           }
+          .bast-opname-container {
+            width: 100%;
+            font-family: "Times New Roman", Times, serif;
+          }
+          .signature-section,
           .signature-block, tr {
             page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           html, body {
             margin: 0 !important;
@@ -512,6 +535,16 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={{
+                    kepalaSekolah: resolveKepalaSekolah(effectivePejabatList),
+                    wakasekSarpras: resolveWakasekSarpras(effectivePejabatList),
+                    pengurusBarang: resolvePengurusBarang(effectivePejabatList),
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
                   selectedMonth={selectedMonth === -1 ? 11 : selectedMonth}
                   selectedYear={selectedYear}
                 />
@@ -533,6 +566,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{ pejabat: effectivePejabatList }}
                   selectedMonth={selectedMonth}
                   selectedYear={selectedYear}
                   minRows={minRows}

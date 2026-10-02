@@ -9,6 +9,9 @@ interface Props {
   transaksiPenerimaanList: TransaksiPenerimaan[];
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  settings?: any;
+  pejabatSettings?: any;
+  dataDokumen?: any;
   selectedMonth?: number; // 0-11 or undefined for all
   selectedYear?: number;
   minRows?: number;
@@ -18,6 +21,9 @@ export const DocBukuPenerimaan: React.FC<Props> = ({
   transaksiPenerimaanList,
   kopConfig,
   pejabatList,
+  settings,
+  pejabatSettings,
+  dataDokumen,
   selectedMonth,
   selectedYear = new Date().getFullYear(),
   minRows = 14
@@ -178,6 +184,9 @@ export const DocBukuPenerimaan: React.FC<Props> = ({
       <SignatoryBukuPersediaan
         pejabatList={pejabatList}
         kopConfig={kopConfig}
+        settings={settings}
+        pejabatSettings={pejabatSettings}
+        dataDokumen={dataDokumen}
       />
     </div>
   );

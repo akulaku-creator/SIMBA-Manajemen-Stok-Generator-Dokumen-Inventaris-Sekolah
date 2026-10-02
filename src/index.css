@@ -515,6 +515,12 @@ table {
     size: A4 portrait;
     margin: 12mm 15mm 12mm 15mm;
   }
+  .bast-opname-container {
+    width: 100%;
+    font-family: "Times New Roman", Times, serif;
+  }
+  .signature-section,
+  .signature-area,
   .signature-block, tr {
     page-break-inside: avoid !important; /* Cegah tanda tangan terpotong antar halaman */
     break-inside: avoid !important;

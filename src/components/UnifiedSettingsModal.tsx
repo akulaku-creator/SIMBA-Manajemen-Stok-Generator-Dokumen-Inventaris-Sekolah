@@ -237,14 +237,14 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
     unitKerja: 'Pengelola Aset & Inventaris'
   };
 
-  const sarpras = pejabatData.find(p => p.role === 'sarpras' || p.jabatan?.toLowerCase().includes('sarpras') || p.jabatan?.toLowerCase().includes('sarana') || p.id === 'pejabat-sarpras') || pejabatData[1] || {
+  const sarpras = pejabatData.find(p => p.role === 'sarpras' || p.role === 'wakasek_sarpras' || p.jabatan?.toLowerCase().includes('sarpras') || p.jabatan?.toLowerCase().includes('sarana') || p.jabatan?.toLowerCase().includes('wakasek') || p.id === 'pejabat-sarpras') || pejabatData[1] || {
     id: 'pejabat-sarpras',
     nama: '',
     nip: '',
     pangkatGolongan: '',
-    jabatan: 'Wakasek Sarana Prasarana',
+    jabatan: 'Wakasek Sarpras',
     statusJabatan: 'Definitif',
-    unitKerja: 'Wakasek Bidang Sarpras'
+    unitKerja: 'Pengelola Fisik Persediaan'
   };
 
   const bendahara = pejabatData.find(p => p.role === 'bendahara_bos' || p.role === 'bendahara' || p.jabatan?.toLowerCase().includes('bendahara') || p.id === 'pejabat-bendahara' || p.id?.includes('bendahara')) || {
@@ -255,6 +255,17 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
     jabatan: 'Bendahara BOS',
     statusJabatan: 'Definitif',
     unitKerja: 'Pengelola Keuangan BOS'
+  };
+
+  // Helper Preview Teks Tanda Tangan Cetak (Handling Definitif / Plt. / Plh.)
+  const getPreviewTandaTangan = (pejabat: Pejabat, defaultRole: string, includeSchool = false) => {
+    const status = pejabat.statusJabatan || 'Definitif';
+    const prefix = status !== 'Definitif' ? (status.endsWith('.') ? `${status} ` : `${status}. `) : '';
+    let baseRole = pejabat.jabatan || defaultRole;
+    if (includeSchool && (baseRole.toLowerCase().includes('kepala sekolah') || baseRole.toLowerCase() === 'kepala')) {
+      baseRole = `Kepala ${kopData.namaSekolah || 'SMAN 1 CIHAURBEUTI'}`;
+    }
+    return `${prefix}${baseRole}`.trim();
   };
 
   if (!isOpen) return null;
@@ -1181,6 +1192,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={kepsek.nip}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
@@ -1192,27 +1204,10 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={kepsek.pangkatGolongan}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
-                    <select
-                      id="select_jabatan_kedinasan_kepsek"
-                      value={kepsek.jabatan || ''}
-                      onChange={e => handleUpdatePejabatField(kepsek.id, 'jabatan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                    >
-                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
-                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
-                        <option key={jab} value={jab}>{jab}</option>
-                      ))}
-                      {kepsek.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(kepsek.jabatan as any) && (
-                        <option value={kepsek.jabatan}>{kepsek.jabatan}</option>
-                      )}
-                    </select>
                   </div>
 
                   <div>
@@ -1227,15 +1222,20 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       <option value="Plt.">Plt. (Pelaksana Tugas)</option>
                       <option value="Plh.">Plh. (Pelaksana Harian)</option>
                     </select>
-                    {kepsek.statusJabatan && kepsek.statusJabatan !== 'Definitif' && (
-                      <p className="text-[10px] text-purple-700 mt-1 italic font-medium">
-                        Cetak: {kepsek.statusJabatan} Kepala {kopData.namaSekolah || 'Sekolah'}
-                      </p>
-                    )}
+                  </div>
+
+                  {/* Preview Teks Tanda Tangan Cetak */}
+                  <div className="bg-slate-100/90 rounded-lg p-2.5 border border-slate-200 space-y-1">
+                    <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      Preview Teks Tanda Tangan Cetak:
+                    </span>
+                    <p className="text-xs font-bold text-purple-900 bg-white px-2 py-1.5 rounded border border-slate-200/80 shadow-2xs">
+                      {getPreviewTandaTangan(kepsek, 'Kepala Sekolah', true)}
+                    </p>
                   </div>
                 </div>
 
-                {/* 2. Pengurus Barang Pembantu */}
+                {/* 2. Pengurus Barang (Penyalur) */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/60 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
@@ -1275,6 +1275,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={pengurusBarang.nip}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
@@ -1286,27 +1287,10 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={pengurusBarang.pangkatGolongan}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
-                    <select
-                      id="select_jabatan_kedinasan_pengurus"
-                      value={pengurusBarang.jabatan || ''}
-                      onChange={e => handleUpdatePejabatField(pengurusBarang.id, 'jabatan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                    >
-                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
-                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
-                        <option key={jab} value={jab}>{jab}</option>
-                      ))}
-                      {pengurusBarang.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(pengurusBarang.jabatan as any) && (
-                        <option value={pengurusBarang.jabatan}>{pengurusBarang.jabatan}</option>
-                      )}
-                    </select>
                   </div>
 
                   <div>
@@ -1322,17 +1306,27 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       <option value="Plh.">Plh. (Pelaksana Harian)</option>
                     </select>
                   </div>
+
+                  {/* Preview Teks Tanda Tangan Cetak */}
+                  <div className="bg-slate-100/90 rounded-lg p-2.5 border border-slate-200 space-y-1">
+                    <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      Preview Teks Tanda Tangan Cetak:
+                    </span>
+                    <p className="text-xs font-bold text-blue-900 bg-white px-2 py-1.5 rounded border border-slate-200/80 shadow-2xs">
+                      {getPreviewTandaTangan(pengurusBarang, 'Pengurus Barang')}
+                    </p>
+                  </div>
                 </div>
 
-                {/* 3. Petugas Sarpras */}
+                {/* 3. Wakasek Sarpras */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/60 space-y-3">
                   <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                     <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
                       <UserCheck className="w-4 h-4 text-emerald-600" />
-                      Petugas Sarpras (Pemeriksa)
+                      Wakasek Sarpras
                     </span>
                     <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md font-semibold">
-                      Pemeriksa Teknis
+                      Pengelola Fisik Persediaan
                     </span>
                   </div>
 
@@ -1364,6 +1358,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={sarpras.nip}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
@@ -1375,27 +1370,10 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={sarpras.pangkatGolongan}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
-                    <select
-                      id="select_jabatan_kedinasan_sarpras"
-                      value={sarpras.jabatan || ''}
-                      onChange={e => handleUpdatePejabatField(sarpras.id, 'jabatan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                    >
-                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
-                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
-                        <option key={jab} value={jab}>{jab}</option>
-                      ))}
-                      {sarpras.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(sarpras.jabatan as any) && (
-                        <option value={sarpras.jabatan}>{sarpras.jabatan}</option>
-                      )}
-                    </select>
                   </div>
 
                   <div>
@@ -1410,6 +1388,16 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       <option value="Plt.">Plt. (Pelaksana Tugas)</option>
                       <option value="Plh.">Plh. (Pelaksana Harian)</option>
                     </select>
+                  </div>
+
+                  {/* Preview Teks Tanda Tangan Cetak */}
+                  <div className="bg-slate-100/90 rounded-lg p-2.5 border border-slate-200 space-y-1">
+                    <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      Preview Teks Tanda Tangan Cetak:
+                    </span>
+                    <p className="text-xs font-bold text-emerald-900 bg-white px-2 py-1.5 rounded border border-slate-200/80 shadow-2xs">
+                      {getPreviewTandaTangan(sarpras, 'Wakasek Sarpras')}
+                    </p>
                   </div>
                 </div>
 
@@ -1453,6 +1441,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={bendahara.nip}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
@@ -1464,27 +1453,10 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       type="text"
                       value={bendahara.pangkatGolongan}
                       readOnly
+                      disabled
                       className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
                       placeholder="Terisi otomatis dari Master Pegawai"
                     />
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
-                    <select
-                      id="select_jabatan_kedinasan_bendahara"
-                      value={bendahara.jabatan || ''}
-                      onChange={e => handleUpdatePejabatField(bendahara.id, 'jabatan', e.target.value)}
-                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
-                    >
-                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
-                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
-                        <option key={jab} value={jab}>{jab}</option>
-                      ))}
-                      {bendahara.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(bendahara.jabatan as any) && (
-                        <option value={bendahara.jabatan}>{bendahara.jabatan}</option>
-                      )}
-                    </select>
                   </div>
 
                   <div>
@@ -1499,6 +1471,16 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       <option value="Plt.">Plt. (Pelaksana Tugas)</option>
                       <option value="Plh.">Plh. (Pelaksana Harian)</option>
                     </select>
+                  </div>
+
+                  {/* Preview Teks Tanda Tangan Cetak */}
+                  <div className="bg-slate-100/90 rounded-lg p-2.5 border border-slate-200 space-y-1">
+                    <span className="block text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
+                      Preview Teks Tanda Tangan Cetak:
+                    </span>
+                    <p className="text-xs font-bold text-amber-900 bg-white px-2 py-1.5 rounded border border-slate-200/80 shadow-2xs">
+                      {getPreviewTandaTangan(bendahara, 'Bendahara BOS')}
+                    </p>
                   </div>
                 </div>
 

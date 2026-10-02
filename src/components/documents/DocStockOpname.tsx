@@ -1,41 +1,82 @@
 import React, { useMemo } from 'react';
 import { Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../../types';
-import { formatRupiah, formatTanggalIndonesia, getKalimatStockOpname, terbilang } from '../../utils/numberGenerator';
-import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { formatRupiah, formatTanggalIndonesia, MONTHS_ID, terbilang } from '../../utils/numberGenerator';
+import { ResolvedOfficial, resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
-import { SignatoryStockOpname } from './SignatoryBlocks';
+import { SignatorySection, SignatoryStockOpname } from './SignatoryBlocks';
 
 interface Props {
-  masterBarang: Barang[];
-  transaksiPenerimaanList: TransaksiPenerimaan[];
-  transaksiPengeluaranList: TransaksiPengeluaran[];
-  kopConfig: KopSuratConfig;
-  pejabatList: Pejabat[];
+  masterBarang?: Barang[];
+  transaksiPenerimaanList?: TransaksiPenerimaan[];
+  transaksiPengeluaranList?: TransaksiPengeluaran[];
+  kopConfig?: KopSuratConfig;
+  pejabatList?: Pejabat[];
+  settings?: {
+    pejabat?: {
+      kepalaSekolah?: Pejabat | ResolvedOfficial;
+      pengurusBarang?: Pejabat | ResolvedOfficial;
+    } | Pejabat[];
+    namaSekolah?: string;
+  };
+  pejabatSettings?: {
+    kepalaSekolah?: Pejabat | ResolvedOfficial;
+    pengurusBarang?: Pejabat | ResolvedOfficial;
+    namaSekolah?: string;
+    lokasi?: string;
+  };
+  dataOpname?: {
+    noSurat?: string;
+    hari?: string;
+    tanggalTeks?: string;
+    lokasi?: string;
+    tanggalCetak?: string;
+  };
   selectedMonth?: number; // 0-11 (Jan=0, Dec=11)
   selectedYear?: number;
   nomorDokumen?: string;
 }
 
 export const DocStockOpname: React.FC<Props> = ({
-  masterBarang,
-  transaksiPenerimaanList,
-  transaksiPengeluaranList,
-  kopConfig,
-  pejabatList,
+  masterBarang = [],
+  transaksiPenerimaanList = [],
+  transaksiPengeluaranList = [],
+  kopConfig = {
+    namaSekolah: 'SMAN 1 CIHAURBEUTI',
+    instansiUtama: 'PEMERINTAH DAERAH PROVINSI JAWA BARAT',
+    namaDinas: 'DINAS PENDIDIKAN',
+    cabangDinas: 'CABANG DINAS PENDIDIKAN WILAYAH XIII',
+    alamat: 'Jl. Raya Panumbangan No. 34 Cihaurbeuti Ciamis 46262',
+    kotaSurat: 'Ciamis',
+    tampilkanLogoProvinsi: true,
+    tampilkanLogoSekolah: true
+  } as unknown as KopSuratConfig,
+  pejabatList = [],
+  settings,
+  pejabatSettings,
+  dataOpname,
   selectedMonth = new Date().getMonth(),
   selectedYear = new Date().getFullYear(),
   nomorDokumen
 }) => {
-  const kepsek = resolveKepalaSekolah(pejabatList);
-  const pengurusBarang = resolvePengurusBarang(pejabatList);
+  const effectiveList: Pejabat[] = Array.isArray(pejabatSettings?.kepalaSekolah)
+    ? (pejabatSettings?.kepalaSekolah as any)
+    : Array.isArray(settings?.pejabat)
+    ? settings.pejabat
+    : Array.isArray(pejabatList) && pejabatList.length > 0
+    ? pejabatList
+    : [];
+
+  const kepsek = (pejabatSettings?.kepalaSekolah as ResolvedOfficial) ||
+    (settings?.pejabat && !Array.isArray(settings.pejabat) ? (settings.pejabat.kepalaSekolah as ResolvedOfficial) : undefined) ||
+    resolveKepalaSekolah(effectiveList);
+
+  const pengurusBarang = (pejabatSettings?.pengurusBarang as ResolvedOfficial) ||
+    (settings?.pejabat && !Array.isArray(settings.pejabat) ? (settings.pejabat.pengurusBarang as ResolvedOfficial) : undefined) ||
+    resolvePengurusBarang(effectiveList);
 
   // Determine last day of selected month/year
   const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0);
   const cutoffDateString = lastDayOfMonth.toISOString().split('T')[0];
-
-  // Opening sentence with formal terbilang:
-  // e.g. "Pada hari ini Senin tanggal Tiga Puluh Satu Bulan Agustus Tahun Dua Ribu Dua Puluh Enam..."
-  const kalimatPembuka = getKalimatStockOpname(cutoffDateString, kopConfig.namaSekolah);
 
   // Calculate stock opname per item up to the cutoff date (Eksklusi Belanja Modal: Hanya BHP)
   const stockOpnameItems = useMemo(() => {
@@ -120,10 +161,18 @@ export const DocStockOpname: React.FC<Props> = ({
   const grandTotalKeluar = summaryByKodeRekening.reduce((sum, g) => sum + g.keluarNilai, 0);
 
   const defaultDocNumber = `028/009/BAST-SO-BOS/${['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII'][selectedMonth]}/${selectedYear}`;
-  const noSurat = nomorDokumen || defaultDocNumber;
+  const noSurat = dataOpname?.noSurat || nomorDokumen || defaultDocNumber;
+
+  const hariNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+  const dayName = hariNames[lastDayOfMonth.getDay()];
+  const dayDate = lastDayOfMonth.getDate();
+  const yearNum = lastDayOfMonth.getFullYear();
+  const monthName = MONTHS_ID[selectedMonth] || 'Desember';
+  const defaultTanggalTeks = `${terbilang(dayDate).trim()} Bulan ${monthName} Tahun ${terbilang(yearNum).trim()}`;
+  const namaSekolahAktif = pejabatSettings?.namaSekolah || kopConfig?.namaSekolah || 'SMAN 1 CIHAURBEUTI';
 
   return (
-    <div className="doc-content font-serif text-black select-text">
+    <div className="bast-opname-container doc-content font-serif text-black select-text">
       {/* Kop Surat Resmi (Preserved Proportion) */}
       <div className="doc-header-kop avoid-break">
         <KopSuratView config={kopConfig} />
@@ -137,71 +186,9 @@ export const DocStockOpname: React.FC<Props> = ({
           <p className="font-mono text-slate-700">Nomor: {noSurat}</p>
         </div>
 
-        {/* Kalimat Pembuka Formal Terbilang Tanggal */}
-        <p className="doc-desc">
-          {kalimatPembuka}
-        </p>
-
-        {/* Identitas Pihak I & II (Spasi Rapat) */}
-        <div className="my-1 pl-2 space-y-1 text-[8pt]">
-          {/* Pihak 1 */}
-          <div className="grid grid-cols-[20px_130px_10px_1fr] items-start">
-            <span className="font-bold">1.</span>
-            <span className="font-medium text-slate-700">Nama Lengkap</span>
-            <span>:</span>
-            <span className="font-bold text-slate-900">{kepsek.nama}</span>
-
-            <span></span>
-            <span className="text-slate-600">NIP</span>
-            <span>:</span>
-            <span className="font-mono">{kepsek.nip}</span>
-
-            <span></span>
-            <span className="text-slate-600">Pangkat / Golongan</span>
-            <span>:</span>
-            <span>{kepsek.pangkatGolongan}</span>
-
-            <span></span>
-            <span className="text-slate-600">Jabatan</span>
-            <span>:</span>
-            <span className="font-semibold">{kepsek.jabatan} (selaku Kuasa Pengguna Barang)</span>
-          </div>
-
-          <p className="text-[7.5pt] italic text-slate-600 pl-5">
-            Selanjutnya disebut sebagai <strong>PIHAK PERTAMA</strong>.
-          </p>
-
-          {/* Pihak 2 */}
-          <div className="grid grid-cols-[20px_130px_10px_1fr] items-start pt-0.5">
-            <span className="font-bold">2.</span>
-            <span className="font-medium text-slate-700">Nama Lengkap</span>
-            <span>:</span>
-            <span className="font-bold text-slate-900">{pengurusBarang.nama}</span>
-
-            <span></span>
-            <span className="text-slate-600">NIP</span>
-            <span>:</span>
-            <span className="font-mono">{pengurusBarang.nip}</span>
-
-            <span></span>
-            <span className="text-slate-600">Pangkat / Golongan</span>
-            <span>:</span>
-            <span>{pengurusBarang.pangkatGolongan}</span>
-
-            <span></span>
-            <span className="text-slate-600">Jabatan</span>
-            <span>:</span>
-            <span className="font-semibold">{pengurusBarang.jabatan} (Pengelola Persediaan)</span>
-          </div>
-
-          <p className="text-[7.5pt] italic text-slate-600 pl-5">
-            Selanjutnya disebut sebagai <strong>PIHAK KEDUA</strong>.
-          </p>
-        </div>
-
-        {/* Narasi Pelaksanaan Stock Opname */}
-        <p className="doc-desc">
-          Menyatakan dengan sebenarnya bahwa <strong>PIHAK KEDUA</strong> dengan disaksikan dan diperiksa bersama oleh <strong>PIHAK PERTAMA</strong> telah melaksanakan Pemeriksaan dan Inventarisasi Fisik Persediaan (Stock Opname) Barang Milik Daerah bersumber dari Dana Bantuan Operasional Sekolah (BOS) posisi per <strong>{formatTanggalIndonesia(cutoffDateString)}</strong>, dengan rincian rekapitulasi nilai fisik persediaan per Kode Rekening Belanja Standar sebagai berikut:
+        {/* Pembuka Narasi */}
+        <p className="mb-3 text-justify doc-desc leading-relaxed">
+          Pada hari ini <strong>{dataOpname?.hari || dayName}</strong> tanggal <strong>{dataOpname?.tanggalTeks || defaultTanggalTeks}</strong>, bertempat di <strong>{namaSekolahAktif}</strong>, kami yang bertanda tangan di bawah ini telah melaksanakan Pemeriksaan Fisik Persediaan (Stock Opname) Barang Milik Daerah bersumber dari Dana Bantuan Operasional Sekolah (BOS) posisi per <strong>{formatTanggalIndonesia(cutoffDateString)}</strong>, dengan rincian rekapitulasi nilai fisik persediaan per Kode Rekening Belanja Standar sebagai berikut:
         </p>
       </div>
 
@@ -284,12 +271,17 @@ export const DocStockOpname: React.FC<Props> = ({
         Demikian Berita Acara Inventaris Fisik Persediaan (Stock Opname) ini dibuat dengan sebenarnya dalam rangkap 3 (tiga) untuk dipergunakan sebagai bahan pertanggungjawaban pengelolaan aset, penyusunan Laporan Keuangan Sekolah, serta rekonsiliasi persediaan ke Dinas Pendidikan.
       </p>
 
-      {/* Blok Tanda Tangan Resmi: Tim Pemeriksa Fisik, Pengurus Barang Persediaan, & Kepala Sekolah (Mengetahui) */}
+      {/* Blok Tanda Tangan (2 Kolom Utama): Mengetahui Kepala Sekolah & Pengurus Barang (Penyalur) */}
       <SignatoryStockOpname
         pejabatList={pejabatList}
         kopConfig={kopConfig}
+        settings={settings}
+        pejabatSettings={pejabatSettings}
+        dataOpname={dataOpname}
         tanggalSurat={cutoffDateString}
       />
     </div>
   );
 };
+
+export const BastStockOpnamePrint = DocStockOpname;

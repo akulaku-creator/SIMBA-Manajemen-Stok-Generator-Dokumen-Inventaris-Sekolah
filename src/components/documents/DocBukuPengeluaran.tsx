@@ -1,14 +1,26 @@
 import React from 'react';
 import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatRupiah, formatTanggalIndonesia, MONTHS_ID } from '../../utils/numberGenerator';
-import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { ResolvedOfficial } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
-import { SignatoryBukuPersediaan } from './SignatoryBlocks';
+import { SignatoryBukuPengeluaran } from './SignatoryBlocks';
 
 interface Props {
   transaksiPengeluaranList: TransaksiPengeluaran[];
   kopConfig: KopSuratConfig;
-  pejabatList: Pejabat[];
+  pejabatList?: Pejabat[];
+  settings?: {
+    pejabat?: {
+      kepalaSekolah?: Pejabat | ResolvedOfficial;
+      pengurusBarang?: Pejabat | ResolvedOfficial;
+    } | Pejabat[];
+  };
+  pejabat?: {
+    kepalaSekolah?: Pejabat | ResolvedOfficial;
+    pengurusBarang?: Pejabat | ResolvedOfficial;
+  };
+  pejabatSettings?: any;
+  dataDokumen?: any;
   selectedMonth?: number; // 0-11 or undefined for all
   selectedYear?: number;
   minRows?: number;
@@ -17,13 +29,15 @@ interface Props {
 export const DocBukuPengeluaran: React.FC<Props> = ({
   transaksiPengeluaranList,
   kopConfig,
-  pejabatList,
+  pejabatList = [],
+  settings,
+  pejabat,
+  pejabatSettings,
+  dataDokumen,
   selectedMonth,
   selectedYear = new Date().getFullYear(),
   minRows = 14
 }) => {
-  const kepsek = resolveKepalaSekolah(pejabatList);
-  const pengurusBarang = resolvePengurusBarang(pejabatList);
 
   // Filter transactions by month/year if selected
   const filteredTrx = transaksiPengeluaranList.filter(trx => {
@@ -170,10 +184,14 @@ export const DocBukuPengeluaran: React.FC<Props> = ({
         </table>
       </div>
 
-      {/* Signatures */}
-      <SignatoryBukuPersediaan
+      {/* Signatures: BUKU-02 (Kiri: Mengetahui Kepala Satuan Pendidikan / Kepala Sekolah, Kanan: Pengurus Barang / Penyalur) */}
+      <SignatoryBukuPengeluaran
         pejabatList={pejabatList}
         kopConfig={kopConfig}
+        settings={settings}
+        pejabat={pejabat}
+        pejabatSettings={pejabatSettings}
+        dataDokumen={dataDokumen}
       />
     </div>
   );

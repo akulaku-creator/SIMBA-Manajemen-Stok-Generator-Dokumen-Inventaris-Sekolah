@@ -11,6 +11,9 @@ interface Props {
   masterBarang: Barang[];
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  settings?: any;
+  pejabatSettings?: any;
+  dataDokumen?: any;
   minRows?: number;
 }
 
@@ -39,6 +42,9 @@ export const DocBukuRekap: React.FC<Props> = ({
   masterBarang,
   kopConfig,
   pejabatList,
+  settings,
+  pejabatSettings,
+  dataDokumen,
   minRows = 16
 }) => {
   const kepsek = resolveKepalaSekolah(pejabatList);
@@ -248,6 +254,9 @@ export const DocBukuRekap: React.FC<Props> = ({
       <SignatoryBukuPersediaan
         pejabatList={pejabatList}
         kopConfig={kopConfig}
+        settings={settings}
+        pejabatSettings={pejabatSettings}
+        dataDokumen={dataDokumen}
       />
     </div>
   );

@@ -19,6 +19,9 @@ export interface DocKartuBarangProps {
   transaksiPengeluaranList: TransaksiPengeluaran[];
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  settings?: any;
+  pejabatSettings?: any;
+  dataDokumen?: any;
   periodFilter: KartuBarangPeriodFilter;
   minRows?: number;
   isLast?: boolean;
@@ -61,6 +64,9 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
   transaksiPengeluaranList,
   kopConfig,
   pejabatList,
+  settings,
+  pejabatSettings,
+  dataDokumen,
   periodFilter,
   minRows = 12,
   isLast = false
@@ -391,6 +397,9 @@ export const DocKartuBarang: React.FC<DocKartuBarangProps> = ({
       <SignatoryKartuBarang
         pejabatList={pejabatList}
         kopConfig={kopConfig}
+        settings={settings}
+        pejabatSettings={pejabatSettings}
+        dataDokumen={dataDokumen}
         className="mt-6 pt-2"
       />
     </div>

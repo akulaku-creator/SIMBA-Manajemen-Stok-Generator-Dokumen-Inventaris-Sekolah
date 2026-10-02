@@ -18,6 +18,9 @@ export interface DocKartuPersediaanProps {
   transaksiPengeluaranList: TransaksiPengeluaran[];
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  settings?: any;
+  pejabatSettings?: any;
+  dataDokumen?: any;
   periodFilter?: KartuBarangPeriodFilter;
   selectedMonth?: number;
   selectedYear?: number;
@@ -464,6 +467,9 @@ export const DocKartuPersediaan: React.FC<DocKartuPersediaanProps> = ({
   transaksiPengeluaranList,
   kopConfig,
   pejabatList,
+  settings,
+  pejabatSettings,
+  dataDokumen,
   periodFilter,
   selectedMonth,
   selectedYear,
@@ -820,6 +826,9 @@ export const DocKartuPersediaan: React.FC<DocKartuPersediaanProps> = ({
       <SignatoryKartuBarang
         pejabatList={pejabatList}
         kopConfig={kopConfig}
+        settings={settings}
+        pejabatSettings={pejabatSettings}
+        dataDokumen={dataDokumen}
         className="mt-6 pt-3"
       />
     </div>
