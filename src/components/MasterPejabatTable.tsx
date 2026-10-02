@@ -33,6 +33,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
     nip: '',
     pangkatGolongan: '',
     jabatan: '',
+    statusJabatan: 'Definitif',
     unitKerja: ''
   });
 
@@ -42,6 +43,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
       p.nama.toLowerCase().includes(q) ||
       p.nip.toLowerCase().includes(q) ||
       p.jabatan.toLowerCase().includes(q) ||
+      (p.statusJabatan && p.statusJabatan.toLowerCase().includes(q)) ||
       (p.unitKerja && p.unitKerja.toLowerCase().includes(q)) ||
       (p.pangkatGolongan && p.pangkatGolongan.toLowerCase().includes(q))
     );
@@ -76,6 +78,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
       nip: '',
       pangkatGolongan: 'Penata Muda / III a',
       jabatan: '',
+      statusJabatan: 'Definitif',
       unitKerja: ''
     });
     setIsModalOpen(true);
@@ -83,7 +86,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
 
   const handleOpenEdit = (pejabat: Pejabat) => {
     setEditingId(pejabat.id);
-    setFormData({ ...pejabat });
+    setFormData({ ...pejabat, statusJabatan: pejabat.statusJabatan || 'Definitif' });
     setIsModalOpen(true);
   };
 
@@ -94,6 +97,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
     if (editingId) {
       onUpdatePejabat({
         ...(formData as Pejabat),
+        statusJabatan: formData.statusJabatan || 'Definitif',
         id: editingId
       });
     } else {
@@ -103,6 +107,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
         nip: formData.nip || '-',
         pangkatGolongan: formData.pangkatGolongan || '-',
         jabatan: formData.jabatan || '',
+        statusJabatan: formData.statusJabatan || 'Definitif',
         unitKerja: formData.unitKerja || ''
       };
       onAddPejabat(newPejabat);
@@ -243,9 +248,16 @@ export const MasterPejabatTable: React.FC<Props> = ({
                     <td className="p-3.5 font-mono text-[11px] text-slate-700">{p.nip}</td>
                     <td className="p-3.5 text-slate-700">{p.pangkatGolongan}</td>
                     <td className="p-3.5">
-                      <span className="font-semibold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded text-[11px] border border-slate-200">
-                        {p.jabatan}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded text-[11px] border border-slate-200">
+                          {p.jabatan}
+                        </span>
+                        {p.statusJabatan && p.statusJabatan !== 'Definitif' && (
+                          <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded">
+                            {p.statusJabatan}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-3.5 text-slate-600">{p.unitKerja || '-'}</td>
                     <td className="p-3.5 text-center">
@@ -379,6 +391,26 @@ export const MasterPejabatTable: React.FC<Props> = ({
                     <option value={formData.jabatan}>{formData.jabatan}</option>
                   )}
                 </select>
+              </div>
+
+              <div className="mb-3">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Status Jabatan (Definitif / Plt. / Plh.)
+                </label>
+                <select
+                  value={formData.statusJabatan || 'Definitif'}
+                  onChange={(e) => setFormData({ ...formData, statusJabatan: e.target.value as any })}
+                  className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 bg-white text-slate-900 font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden"
+                >
+                  <option value="Definitif">Definitif (Pejabat Definitif)</option>
+                  <option value="Plt.">Plt. (Pelaksana Tugas)</option>
+                  <option value="Plh.">Plh. (Pelaksana Harian)</option>
+                </select>
+                {formData.statusJabatan && formData.statusJabatan !== 'Definitif' && (
+                  <p className="text-[10px] text-amber-700 mt-1 italic">
+                    Format otomatis pada dokumen cetak: <strong>{formData.statusJabatan} {formData.jabatan || 'Kepala Sekolah'}</strong>
+                  </p>
+                )}
               </div>
 
               <div>

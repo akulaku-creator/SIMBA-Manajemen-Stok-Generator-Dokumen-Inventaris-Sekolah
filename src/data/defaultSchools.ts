@@ -161,7 +161,28 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
       nip: '19870512 201101 1 007',
       pangkatGolongan: 'Penata / III c',
       jabatan: 'Pengurus Barang Pembantu',
+      statusJabatan: 'Definitif',
       unitKerja: 'Pengelola Persediaan Barang'
+    },
+    {
+      id: 'pejabat-chrbt-bendahara-bos',
+      sekolah_id: 'sekolah-sman1-cihaurbeuti',
+      nama: 'Yanti Rohmayanti, S.Pd.',
+      nip: '19810815 200604 2 011',
+      pangkatGolongan: 'Penata Tingkat I / III d',
+      jabatan: 'Bendahara BOS',
+      statusJabatan: 'Definitif',
+      unitKerja: 'Pengelola Keuangan SMAN 1 Cihaurbeuti'
+    },
+    {
+      id: 'pejabat-chrbt-tim-pemeriksa',
+      sekolah_id: 'sekolah-sman1-cihaurbeuti',
+      nama: 'Dedi Kusmayadi, S.Pd.',
+      nip: '19790412 200501 1 008',
+      pangkatGolongan: 'Penata / III c',
+      jabatan: 'Tim Pemeriksa Fisik',
+      statusJabatan: 'Definitif',
+      unitKerja: 'Pemeriksa Fisik Barang Persediaan'
     }
   ],
   'sekolah-smkn2-bandung': [
@@ -172,6 +193,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
       nip: '19710815 199702 1 003',
       pangkatGolongan: 'Pembina Utama Muda / IV c',
       jabatan: 'Kepala Sekolah',
+      statusJabatan: 'Definitif',
       unitKerja: 'Pimpinan SMKN 2 Bandung'
     },
     {
@@ -181,6 +203,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
       nip: '19800612 200801 1 015',
       pangkatGolongan: 'Penata Tingkat I / III d',
       jabatan: 'Wakasek Sarana Prasarana',
+      statusJabatan: 'Definitif',
       unitKerja: 'Sarpras SMKN 2 Bandung'
     },
     {
@@ -190,7 +213,28 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
       nip: '19910405 201503 2 004',
       pangkatGolongan: 'Pengatur Tingkat I / II d',
       jabatan: 'Pengurus Barang Pembantu',
+      statusJabatan: 'Definitif',
       unitKerja: 'Pengelola Persediaan Barang'
+    },
+    {
+      id: 'pejabat-bdg-bendahara-bos',
+      sekolah_id: 'sekolah-smkn2-bandung',
+      nama: 'Eni Suryani, S.E.',
+      nip: '19830520 200801 2 009',
+      pangkatGolongan: 'Penata / III c',
+      jabatan: 'Bendahara BOS',
+      statusJabatan: 'Definitif',
+      unitKerja: 'Pengelola Keuangan SMKN 2 Bandung'
+    },
+    {
+      id: 'pejabat-bdg-tim-pemeriksa',
+      sekolah_id: 'sekolah-smkn2-bandung',
+      nama: 'Cecep Sunandar, S.ST.',
+      nip: '19821104 200902 1 005',
+      pangkatGolongan: 'Penata / III c',
+      jabatan: 'Tim Pemeriksa Fisik',
+      statusJabatan: 'Definitif',
+      unitKerja: 'Tim Pemeriksa Fisik Barang'
     }
   ]
 };

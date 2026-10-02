@@ -217,31 +217,44 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   const previewBAST = parseDynamicNumber(numberingData.patternBAST, activeBASTCounter, today, numberingData.schoolCode, 'BAST', kopData.namaSekolah);
 
   // Find key officials
-  const kepsek = pejabatData.find(p => p.jabatan.toLowerCase().includes('kepala sekolah') || p.id === 'pejabat-kepsek') || pejabatData[0] || {
+  const kepsek = pejabatData.find(p => p.role === 'kepala_sekolah' || p.jabatan?.toLowerCase().includes('kepala sekolah') || p.id === 'pejabat-kepsek') || pejabatData[0] || {
     id: 'pejabat-kepsek',
     nama: '',
     nip: '',
     pangkatGolongan: '',
     jabatan: 'Kepala Sekolah',
+    statusJabatan: 'Definitif',
     unitKerja: 'Pimpinan Lembaga'
   };
 
-  const pengurusBarang = pejabatData.find(p => p.jabatan.toLowerCase().includes('pengurus barang') || p.id === 'pejabat-pengurus-barang') || pejabatData[2] || {
+  const pengurusBarang = pejabatData.find(p => p.role === 'pengurus_barang' || p.jabatan?.toLowerCase().includes('pengurus barang') || p.id === 'pejabat-pengurus-barang') || pejabatData[2] || {
     id: 'pejabat-pengurus-barang',
     nama: '',
     nip: '',
     pangkatGolongan: '',
     jabatan: 'Pengurus Barang Pembantu',
+    statusJabatan: 'Definitif',
     unitKerja: 'Pengelola Aset & Inventaris'
   };
 
-  const sarpras = pejabatData.find(p => p.jabatan.toLowerCase().includes('sarpras') || p.jabatan.toLowerCase().includes('sarana') || p.id === 'pejabat-sarpras') || pejabatData[1] || {
+  const sarpras = pejabatData.find(p => p.role === 'sarpras' || p.jabatan?.toLowerCase().includes('sarpras') || p.jabatan?.toLowerCase().includes('sarana') || p.id === 'pejabat-sarpras') || pejabatData[1] || {
     id: 'pejabat-sarpras',
     nama: '',
     nip: '',
     pangkatGolongan: '',
     jabatan: 'Wakasek Sarana Prasarana',
+    statusJabatan: 'Definitif',
     unitKerja: 'Wakasek Bidang Sarpras'
+  };
+
+  const bendahara = pejabatData.find(p => p.role === 'bendahara_bos' || p.role === 'bendahara' || p.jabatan?.toLowerCase().includes('bendahara') || p.id === 'pejabat-bendahara' || p.id?.includes('bendahara')) || {
+    id: 'pejabat-bendahara',
+    nama: '',
+    nip: '',
+    pangkatGolongan: '',
+    jabatan: 'Bendahara BOS',
+    statusJabatan: 'Definitif',
+    unitKerja: 'Pengelola Keuangan BOS'
   };
 
   if (!isOpen) return null;
@@ -259,6 +272,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           nip: field === 'nip' ? value : '',
           pangkatGolongan: field === 'pangkatGolongan' ? value : '',
           jabatan: field === 'jabatan' ? value : '',
+          statusJabatan: field === 'statusJabatan' ? (value as any) : 'Definitif',
           unitKerja: field === 'unitKerja' ? value : ''
         }];
       }
@@ -280,6 +294,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           nip: selected.nip,
           pangkatGolongan: selected.pangkatGolongan,
           jabatan: selected.jabatan,
+          statusJabatan: selected.statusJabatan || 'Definitif',
           unitKerja: selected.unitKerja || p.unitKerja
         } : p);
       } else {
@@ -289,6 +304,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           nip: selected.nip,
           pangkatGolongan: selected.pangkatGolongan,
           jabatan: selected.jabatan,
+          statusJabatan: selected.statusJabatan || 'Definitif',
           unitKerja: selected.unitKerja || ''
         }];
       }
@@ -1123,7 +1139,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                 </div>
               </div>
 
-              <div className="p-5 grid grid-cols-1 lg:grid-cols-3 gap-4 text-xs">
+              <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
                 
                 {/* 1. Kepala Sekolah */}
                 <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/60 space-y-3">
@@ -1197,6 +1213,25 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                         <option value={kepsek.jabatan}>{kepsek.jabatan}</option>
                       )}
                     </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">Status Jabatan</label>
+                    <select
+                      id="select_status_jabatan_kepsek"
+                      value={kepsek.statusJabatan || 'Definitif'}
+                      onChange={e => handleUpdatePejabatField(kepsek.id, 'statusJabatan', e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                    >
+                      <option value="Definitif">Definitif (Pejabat Definitif)</option>
+                      <option value="Plt.">Plt. (Pelaksana Tugas)</option>
+                      <option value="Plh.">Plh. (Pelaksana Harian)</option>
+                    </select>
+                    {kepsek.statusJabatan && kepsek.statusJabatan !== 'Definitif' && (
+                      <p className="text-[10px] text-purple-700 mt-1 italic font-medium">
+                        Cetak: {kepsek.statusJabatan} Kepala {kopData.namaSekolah || 'Sekolah'}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -1273,6 +1308,20 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       )}
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">Status Jabatan</label>
+                    <select
+                      id="select_status_jabatan_pengurus"
+                      value={pengurusBarang.statusJabatan || 'Definitif'}
+                      onChange={e => handleUpdatePejabatField(pengurusBarang.id, 'statusJabatan', e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    >
+                      <option value="Definitif">Definitif (Pejabat Definitif)</option>
+                      <option value="Plt.">Plt. (Pelaksana Tugas)</option>
+                      <option value="Plh.">Plh. (Pelaksana Harian)</option>
+                    </select>
+                  </div>
                 </div>
 
                 {/* 3. Petugas Sarpras */}
@@ -1346,6 +1395,109 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       {sarpras.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(sarpras.jabatan as any) && (
                         <option value={sarpras.jabatan}>{sarpras.jabatan}</option>
                       )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">Status Jabatan</label>
+                    <select
+                      id="select_status_jabatan_sarpras"
+                      value={sarpras.statusJabatan || 'Definitif'}
+                      onChange={e => handleUpdatePejabatField(sarpras.id, 'statusJabatan', e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                    >
+                      <option value="Definitif">Definitif (Pejabat Definitif)</option>
+                      <option value="Plt.">Plt. (Pelaksana Tugas)</option>
+                      <option value="Plh.">Plh. (Pelaksana Harian)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 4. Bendahara BOS / APBD */}
+                <div className="border border-slate-200 rounded-xl p-4 bg-slate-50/60 space-y-3">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5 text-xs">
+                      <UserCheck className="w-4 h-4 text-amber-600" />
+                      Bendahara BOS (Keuangan)
+                    </span>
+                    <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-md font-semibold">
+                      Pengelola BOS
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">
+                      Nama Lengkap &amp; Gelar
+                    </label>
+                    <select
+                      id="select_pejabat_bendahara"
+                      value={pejabatData.find(p => p.nama === bendahara.nama)?.id || ''}
+                      onChange={e => handleSelectPejabatForRole(bendahara.id, e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-2 bg-white font-semibold text-xs text-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih dari Master Pegawai --</option>
+                      {pejabatData.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.nama} ({p.jabatan || 'Pegawai'})
+                        </option>
+                      ))}
+                      {bendahara.nama && !pejabatData.some(p => p.nama === bendahara.nama) && (
+                        <option value={bendahara.id}>{bendahara.nama} (Pegawai Terpilih)</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 font-semibold mb-1">NIP (Terisi Otomatis)</label>
+                    <input
+                      type="text"
+                      value={bendahara.nip}
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 font-mono text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 font-semibold mb-1">Pangkat / Golongan (Terisi Otomatis)</label>
+                    <input
+                      type="text"
+                      value={bendahara.pangkatGolongan}
+                      readOnly
+                      className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 bg-slate-100/90 text-xs text-slate-700 cursor-not-allowed select-all"
+                      placeholder="Terisi otomatis dari Master Pegawai"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">Jabatan Resmi / Kedinasan</label>
+                    <select
+                      id="select_jabatan_kedinasan_bendahara"
+                      value={bendahara.jabatan || ''}
+                      onChange={e => handleUpdatePejabatField(bendahara.id, 'jabatan', e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    >
+                      <option value="" disabled>-- Pilih Jabatan Kedinasan --</option>
+                      {DAFTAR_JABATAN_KEDINASAN.map(jab => (
+                        <option key={jab} value={jab}>{jab}</option>
+                      ))}
+                      {bendahara.jabatan && !DAFTAR_JABATAN_KEDINASAN.includes(bendahara.jabatan as any) && (
+                        <option value={bendahara.jabatan}>{bendahara.jabatan}</option>
+                      )}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1">Status Jabatan</label>
+                    <select
+                      id="select_status_jabatan_bendahara"
+                      value={bendahara.statusJabatan || 'Definitif'}
+                      onChange={e => handleUpdatePejabatField(bendahara.id, 'statusJabatan', e.target.value)}
+                      className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-xs text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    >
+                      <option value="Definitif">Definitif (Pejabat Definitif)</option>
+                      <option value="Plt.">Plt. (Pelaksana Tugas)</option>
+                      <option value="Plh.">Plh. (Pelaksana Harian)</option>
                     </select>
                   </div>
                 </div>

@@ -29,6 +29,40 @@ interface Props {
   onOpenImportModal?: () => void;
 }
 
+function renderSaldoAwalCell(volume: number, satuan: string, hargaSatuan: number, jumlahRp: number) {
+  if (volume <= 0 && jumlahRp <= 0) {
+    return {
+      displayVolume: '',
+      displaySatuan: '',
+      displayHarga: '',
+      displayJumlah: ''
+    };
+  }
+  return {
+    displayVolume: volume > 0 ? volume : '',
+    displaySatuan: volume > 0 ? satuan : '',
+    displayHarga: volume > 0 && hargaSatuan > 0 ? formatRupiah(hargaSatuan) : '',
+    displayJumlah: jumlahRp > 0 ? formatRupiah(jumlahRp) : ''
+  };
+}
+
+function renderMutasiCell(volume: number, satuan: string, hargaSatuan: number, jumlahRp: number) {
+  if (volume <= 0 && jumlahRp <= 0) {
+    return {
+      displayVolume: '',
+      displaySatuan: '',
+      displayHarga: '',
+      displayJumlah: ''
+    };
+  }
+  return {
+    displayVolume: volume > 0 ? volume : '',
+    displaySatuan: volume > 0 ? satuan : '',
+    displayHarga: volume > 0 && hargaSatuan > 0 ? formatRupiah(hargaSatuan) : '',
+    displayJumlah: jumlahRp > 0 ? formatRupiah(jumlahRp) : ''
+  };
+}
+
 export const DocMutasiBOS: React.FC<Props> = ({
   masterBarang,
   transaksiPengeluaranList,

@@ -89,6 +89,24 @@ export const DEFAULT_PEJABAT: Pejabat[] = [
     pangkatGolongan: 'Penata / III c',
     jabatan: 'Koordinator Kurikulum & Asesmen',
     unitKerja: 'Bidang Kurikulum'
+  },
+  {
+    id: 'pejabat-bendahara-bos',
+    nama: 'Sri Wahyuni, S.E., M.Ak.',
+    nip: '19840916 200902 2 004',
+    pangkatGolongan: 'Penata Tingkat I / III d',
+    jabatan: 'Bendahara BOS',
+    statusJabatan: 'Definitif',
+    unitKerja: 'Pengelola Keuangan BOS / APBD'
+  },
+  {
+    id: 'pejabat-tim-pemeriksa',
+    nama: 'Ir. H. Gunawan Wibisono, M.T.',
+    nip: '19760714 200212 1 003',
+    pangkatGolongan: 'Pembina / IV a',
+    jabatan: 'Tim Pemeriksa Fisik',
+    statusJabatan: 'Definitif',
+    unitKerja: 'Tim Pemeriksa Barang Persediaan'
   }
 ];
 

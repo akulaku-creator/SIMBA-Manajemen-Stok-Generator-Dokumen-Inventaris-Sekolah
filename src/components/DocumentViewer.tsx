@@ -505,7 +505,7 @@ export const DocumentViewer: React.FC<Props> = ({
                 />
               )}
 
-              {docType === 'bast_stock_opname' && (
+              {(docType === 'bast_stock_opname' || docType === 'ba_so') && (
                 <DocStockOpname
                   masterBarang={masterBarang}
                   transaksiPenerimaanList={transaksiPenerimaanList}
