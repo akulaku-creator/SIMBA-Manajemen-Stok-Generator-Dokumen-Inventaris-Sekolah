@@ -48,6 +48,7 @@ import {
   TransaksiPengeluaran
 } from '../types';
 import { DinasMutasiBhpReport } from './dinas/DinasMutasiBhpReport';
+import { LaporanDinasKodering } from './dinas/LaporanDinasKodering';
 import { formatRupiah, formatTanggalIndonesia, safeNumber } from '../utils/numberGenerator';
 
 interface Props {
@@ -182,7 +183,7 @@ export const ModulDinasView: React.FC<Props> = ({
   const [filterJenis, setFilterJenis] = useState<'all' | 'BHP' | 'Belanja Modal'>('all');
   const [filterKodering, setFilterKodering] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeSubTab, setActiveSubTab] = useState<'mutasi12bulan' | 'tabel' | 'ranking' | 'cetak'>('mutasi12bulan');
+  const [activeSubTab, setActiveSubTab] = useState<'rekap_kodering' | 'mutasi12bulan' | 'tabel' | 'ranking' | 'cetak'>('rekap_kodering');
   const [isCopied, setIsCopied] = useState<boolean>(false);
 
   // Supervisi Modal State (Requirement 24.14)
@@ -801,22 +802,34 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
           <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-600 self-start flex-wrap gap-1">
             <button
               type="button"
-              onClick={() => setActiveSubTab('mutasi12bulan')}
+              onClick={() => setActiveSubTab('rekap_kodering')}
               className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeSubTab === 'mutasi12bulan'
-                  ? 'bg-white text-indigo-700 shadow-xs'
+                activeSubTab === 'rekap_kodering'
+                  ? 'bg-white text-indigo-700 shadow-xs font-bold'
                   : 'hover:text-slate-900'
               }`}
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Daftar Mutasi BHP 12 Bulan</span>
+              <FileSpreadsheet className="w-4 h-4 text-indigo-600" />
+              <span>Rekap Per Kodering (Excel Referensi)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('mutasi12bulan')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeSubTab === 'mutasi12bulan'
+                  ? 'bg-white text-indigo-700 shadow-xs font-bold'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <Layers className="w-4 h-4 text-emerald-600" />
+              <span>Daftar Mutasi BHP 12 Bulan (Barang)</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveSubTab('tabel')}
               className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeSubTab === 'tabel'
-                  ? 'bg-white text-blue-700 shadow-xs'
+                  ? 'bg-white text-blue-700 shadow-xs font-bold'
                   : 'hover:text-slate-900'
               }`}
             >
@@ -828,7 +841,7 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
               onClick={() => setActiveSubTab('ranking')}
               className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeSubTab === 'ranking'
-                  ? 'bg-white text-blue-700 shadow-xs'
+                  ? 'bg-white text-blue-700 shadow-xs font-bold'
                   : 'hover:text-slate-900'
               }`}
             >
@@ -840,7 +853,7 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
               onClick={() => setActiveSubTab('cetak')}
               className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeSubTab === 'cetak'
-                  ? 'bg-white text-blue-700 shadow-xs'
+                  ? 'bg-white text-blue-700 shadow-xs font-bold'
                   : 'hover:text-slate-900'
               }`}
             >
@@ -1009,7 +1022,24 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
         </div>
       </div>
 
-      {/* SUB-TAB 0: DAFTAR MUTASI BHP 12 BULAN KONSOLIDASI DINAS (Januari s.d. Desember) */}
+      {/* SUB-TAB 0: REKAPITULASI PER KODERING BELANJA BARANG HABIS PAKAI (EXCEL REFERENSI) */}
+      {activeSubTab === 'rekap_kodering' && (
+        <div className="no-print">
+          <LaporanDinasKodering
+            sekolahList={sekolahList}
+            allMasterBarang={allMasterBarang}
+            allTransaksi={allTransaksi}
+            allPenerimaan={allPenerimaan}
+            allPejabat={allPejabat}
+            currentUser={currentUser}
+            onSelectSekolah={onSelectSekolah}
+            paperSize={paperSize}
+            showToast={showToast}
+          />
+        </div>
+      )}
+
+      {/* SUB-TAB 1: DAFTAR MUTASI BHP 12 BULAN KONSOLIDASI DINAS (Januari s.d. Desember) */}
       {activeSubTab === 'mutasi12bulan' && (
         <div className="no-print">
           <DinasMutasiBhpReport
