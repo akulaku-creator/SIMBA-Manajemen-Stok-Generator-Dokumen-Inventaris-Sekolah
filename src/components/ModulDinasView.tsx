@@ -47,6 +47,7 @@ import {
   TransaksiPenerimaan,
   TransaksiPengeluaran
 } from '../types';
+import { DinasMutasiBhpReport } from './dinas/DinasMutasiBhpReport';
 import { formatRupiah, formatTanggalIndonesia, safeNumber } from '../utils/numberGenerator';
 
 interface Props {
@@ -181,7 +182,7 @@ export const ModulDinasView: React.FC<Props> = ({
   const [filterJenis, setFilterJenis] = useState<'all' | 'BHP' | 'Belanja Modal'>('all');
   const [filterKodering, setFilterKodering] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeSubTab, setActiveSubTab] = useState<'tabel' | 'ranking' | 'cetak'>('tabel');
+  const [activeSubTab, setActiveSubTab] = useState<'mutasi12bulan' | 'tabel' | 'ranking' | 'cetak'>('mutasi12bulan');
   const [isCopied, setIsCopied] = useState<boolean>(false);
 
   // Supervisi Modal State (Requirement 24.14)
@@ -797,7 +798,19 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
           
           {/* SubTab Navigation */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-600 self-start">
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold text-slate-600 self-start flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('mutasi12bulan')}
+              className={`px-3.5 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeSubTab === 'mutasi12bulan'
+                  ? 'bg-white text-indigo-700 shadow-xs'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>Daftar Mutasi BHP 12 Bulan</span>
+            </button>
             <button
               type="button"
               onClick={() => setActiveSubTab('tabel')}
@@ -807,8 +820,8 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
                   : 'hover:text-slate-900'
               }`}
             >
-              <FileSpreadsheet className="w-4 h-4" />
-              <span>Rekapitulasi Mutasi Data</span>
+              <Boxes className="w-4 h-4 text-blue-600" />
+              <span>Rekap Mutasi Per Periode</span>
             </button>
             <button
               type="button"
@@ -819,7 +832,7 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
                   : 'hover:text-slate-900'
               }`}
             >
-              <BarChart3 className="w-4 h-4" />
+              <BarChart3 className="w-4 h-4 text-purple-600" />
               <span>Komparasi &amp; Ranking Sekolah</span>
             </button>
             <button
@@ -831,7 +844,7 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
                   : 'hover:text-slate-900'
               }`}
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-4 h-4 text-slate-700" />
               <span>Pratinjau Cetak Dinas (A4/F4)</span>
             </button>
           </div>
@@ -995,6 +1008,21 @@ Dibuat secara otomatis melalui SIMBA (Sistem Informasi Manajemen Barang Multi-Te
           </div>
         </div>
       </div>
+
+      {/* SUB-TAB 0: DAFTAR MUTASI BHP 12 BULAN KONSOLIDASI DINAS (Januari s.d. Desember) */}
+      {activeSubTab === 'mutasi12bulan' && (
+        <div className="no-print">
+          <DinasMutasiBhpReport
+            sekolahList={sekolahList}
+            allMasterBarang={allMasterBarang}
+            allTransaksi={allTransaksi}
+            allPenerimaan={allPenerimaan}
+            allPejabat={allPejabat}
+            selectedYear={selectedYear}
+            onSelectSekolah={onSelectSekolah}
+          />
+        </div>
+      )}
 
       {/* 4. SUB-TAB 1: TABEL REKAPITULASI MUTASI LINTAS SEKOLAH (No-Print) */}
       {activeSubTab === 'tabel' && (
