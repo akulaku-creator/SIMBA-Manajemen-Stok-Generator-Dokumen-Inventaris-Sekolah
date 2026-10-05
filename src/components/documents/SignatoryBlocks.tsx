@@ -6,10 +6,65 @@ import {
   ResolvedOfficial, 
   resolveBendaharaBOS, 
   resolveKepalaSekolah, 
-  resolvePengurusBarang, 
-  resolveTimPemeriksa,
-  resolveWakasekSarpras
+  resolvePengurusBarang
 } from '../../utils/pejabatResolver';
+
+/**
+ * Force mapping pejabat: Pastikan tidak ada fallback ke Wakasek
+ * Objek penandatangan HANYA mengambil data dari:
+ * - pejabatSettings.pengurusBarang (untuk Pengurus Barang / Penyalur)
+ * - pejabatSettings.kepalaSekolah (untuk Kepala Sekolah / KPA)
+ */
+export const getSignatoryData = (pejabatSettings: any) => {
+  const kepalaSekolah = pejabatSettings?.kepalaSekolah || {};
+  // Paksa ambil pengurus barang, jika kosong fallback ke objek pengurusBarang / pengelolaPersediaan
+  const pengurusBarang = pejabatSettings?.pengurusBarang || pejabatSettings?.pengelolaPersediaan || {};
+  return { kepalaSekolah, pengurusBarang };
+};
+
+/**
+ * RenderSignatureBlock (Komponen Penandatangan Dinamis Baku 2 Kolom)
+ * - Kiri: Mengetahui / Menyetujui Kepala Sekolah (Kuasa Pengguna Anggaran)
+ * - Kanan: Pengurus Barang (Penyalur / Pengelola Persediaan)
+ */
+export const RenderSignatureBlock: React.FC<{
+  pejabatSettings?: any;
+  tanggalCetak?: string;
+  lokasi?: string;
+  className?: string;
+}> = ({ pejabatSettings, tanggalCetak, lokasi = 'Ciamis', className = '' }) => {
+  const { kepalaSekolah, pengurusBarang } = getSignatoryData(pejabatSettings);
+
+  return (
+    <div className={`grid grid-cols-2 text-center text-xs gap-4 mt-8 break-inside-avoid doc-signature-block avoid-break signature-area ${className}`}>
+      {/* KIRI: KEPALA SEKOLAH */}
+      <div>
+        <p className="font-bold uppercase text-slate-900">MENGETAHUI / MENYETUJUI,</p>
+        <p className="font-bold uppercase text-slate-900">
+          {kepalaSekolah?.statusJabatan && kepalaSekolah.statusJabatan !== 'Definitif' ? `${kepalaSekolah.statusJabatan}. ` : ''}
+          {kepalaSekolah?.jabatanKedinasan || kepalaSekolah?.jabatan || 'KEPALA SEKOLAH'}
+        </p>
+        <p className="italic text-[8pt] text-slate-600">(Kuasa Pengguna Anggaran)</p>
+        <div className="h-16 min-h-[64px]" />
+        <p className="font-bold underline uppercase text-slate-900 tracking-wide">{kepalaSekolah?.nama || '(Nama Kepala Sekolah)'}</p>
+        <p className="font-mono text-[8pt] text-slate-700">NIP. {kepalaSekolah?.nip || '-'}</p>
+      </div>
+
+      {/* KANAN: PENGURUS BARANG (TIDAK BOLEH WAKASEK) */}
+      <div>
+        <p className="text-slate-800 mb-0.5">{lokasi}, {tanggalCetak || new Date().toLocaleDateString('id-ID')}</p>
+        <p className="font-bold uppercase text-slate-900">
+          {pengurusBarang?.statusJabatan && pengurusBarang.statusJabatan !== 'Definitif' ? `${pengurusBarang.statusJabatan}. ` : ''}
+          {pengurusBarang?.jabatanKedinasan || pengurusBarang?.jabatan || 'PENGURUS BARANG'}
+        </p>
+        <p className="italic text-[8pt] text-slate-600">(Penyalur / Pengelola Persediaan)</p>
+        <div className="h-16 min-h-[64px]" />
+        <p className="font-bold underline uppercase text-slate-900 tracking-wide">{pengurusBarang?.nama || '(Nama Pengurus Barang)'}</p>
+        <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang?.nip || '-'}</p>
+      </div>
+    </div>
+  );
+};
 
 export interface BaseSignatoryProps {
   pejabatList?: Pejabat[];
@@ -77,79 +132,29 @@ export const SignatoryBukuPersediaan: React.FC<BaseSignatoryProps> = ({
     pejabatSettings?.kepalaSekolah ||
     (settings?.pejabat && !Array.isArray(settings.pejabat) ? settings.pejabat.kepalaSekolah : undefined);
 
-  const kepsek: ResolvedOfficial = rawKepsek
-    ? {
-        id: rawKepsek.id || 'pejabat-kepsek',
-        nama: rawKepsek.nama || '(Nama Kepala Sekolah)',
-        nip: rawKepsek.nip || '-',
-        pangkatGolongan: rawKepsek.pangkatGolongan || (rawKepsek as any)?.pangkat || '-',
-        jabatan: rawKepsek.jabatan || 'Kepala Sekolah',
-        statusJabatan: rawKepsek.statusJabatan,
-        unitKerja: rawKepsek.unitKerja || 'Kuasa Pengguna Barang'
-      }
-    : resolveKepalaSekolah(effectiveList);
-
   const rawPengurus =
     customPengurusBarang ||
     pejabat?.pengurusBarang ||
     pejabatSettings?.pengurusBarang ||
+    pejabatSettings?.pengelolaPersediaan ||
     (settings?.pejabat && !Array.isArray(settings.pejabat) ? settings.pejabat.pengurusBarang : undefined);
 
-  const pengurusBarang: ResolvedOfficial = rawPengurus
-    ? {
-        id: rawPengurus.id || 'pejabat-pengurus-barang',
-        nama: rawPengurus.nama || '(Nama Pengurus Barang)',
-        nip: rawPengurus.nip || '-',
-        pangkatGolongan: rawPengurus.pangkatGolongan || (rawPengurus as any)?.pangkat || '-',
-        jabatan: rawPengurus.jabatan || 'Pengurus Barang',
-        statusJabatan: rawPengurus.statusJabatan,
-        unitKerja: rawPengurus.unitKerja || 'Pengelola Persediaan Barang'
-      }
-    : resolvePengurusBarang(effectiveList);
+  const resolvedKepsek = rawKepsek || resolveKepalaSekolah(effectiveList);
+  const resolvedPengurus = rawPengurus || resolvePengurusBarang(effectiveList);
 
-  const getJabatanLabel = (p: any, defaultRole: string) => {
-    if (!p) return defaultRole;
-    const prefix = p.statusJabatan && p.statusJabatan !== 'Definitif'
-      ? `${p.statusJabatan}. `
-      : '';
-    return `${prefix}${p.jabatanKedinasan || p.jabatan || defaultRole}`.trim();
-  };
-
-  const lokasiDisplay = dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Cihaurbeuti';
+  const lokasiDisplay = dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Ciamis';
   const tanggalDisplay = dataDokumen?.tanggalCetak || formatTanggalIndonesia(tanggalSurat);
 
   return (
-    <div className={`doc-signature-block signature-block avoid-break ${className}`}>
-      <div className="grid grid-cols-2 text-center text-xs">
-        {/* Kolom 1 (Kiri): Mengetahui Kepala Sekolah */}
-        <div>
-          <p className="font-semibold text-slate-700">Mengetahui,</p>
-          <p className="font-bold text-slate-900 uppercase">{getJabatanLabel(kepsek, 'KEPALA SEKOLAH')}</p>
-          <p className="text-[8pt] text-slate-600 italic">Kuasa Pengguna Anggaran</p>
-          <div className="doc-signature-space h-16 min-h-[64px]" />
-          <p className="font-bold underline uppercase text-slate-900 tracking-wide">{kepsek.nama}</p>
-          <p className="font-mono text-[8pt] text-slate-700">NIP. {kepsek.nip}</p>
-          {((kepsek as any)?.pangkat || (kepsek.pangkatGolongan && kepsek.pangkatGolongan !== '-')) && (
-            <p className="text-[8pt] text-slate-600">{(kepsek as any)?.pangkat || kepsek.pangkatGolongan}</p>
-          )}
-        </div>
-
-        {/* Kolom 2 (Kanan): Pengurus Barang */}
-        <div>
-          <p className="text-slate-700">
-            {lokasiDisplay}, {tanggalDisplay}
-          </p>
-          <p className="font-bold text-slate-900 uppercase">{getJabatanLabel(pengurusBarang, 'PENGURUS BARANG')}</p>
-          <p className="text-[8pt] text-slate-600 italic">Pengurus Barang Persediaan</p>
-          <div className="doc-signature-space h-16 min-h-[64px]" />
-          <p className="font-bold underline uppercase text-slate-900 tracking-wide">{pengurusBarang.nama}</p>
-          <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang.nip}</p>
-          {((pengurusBarang as any)?.pangkat || (pengurusBarang.pangkatGolongan && pengurusBarang.pangkatGolongan !== '-')) && (
-            <p className="text-[8pt] text-slate-600">{(pengurusBarang as any)?.pangkat || pengurusBarang.pangkatGolongan}</p>
-          )}
-        </div>
-      </div>
-    </div>
+    <RenderSignatureBlock
+      pejabatSettings={{
+        kepalaSekolah: resolvedKepsek,
+        pengurusBarang: resolvedPengurus
+      }}
+      lokasi={lokasiDisplay}
+      tanggalCetak={tanggalDisplay}
+      className={className}
+    />
   );
 };
 
@@ -157,13 +162,9 @@ export interface SignatoryBukuPengeluaranProps extends BaseSignatoryProps {}
 
 /**
  * 1B. SignatoryBukuPengeluaran (Khusus BUKU-02: Buku Pengeluaran Barang Persediaan)
- *
  * Struktur Penandatangan BUKU-02:
  * - Sebelah Kiri (Mengetahui): Kepala Sekolah (kepalaSekolah)
  * - Sebelah Kanan: Pengurus Barang / Penyalur (pengurusBarang)
- *
- * Aturan Data: DILARANG melakukan hardcode nama atau NIP.
- * Ambil atribut penandatangan langsung dari state/database Pengaturan Pejabat Penandatangan (settings.pejabat).
  */
 export const SignatoryBukuPengeluaran: React.FC<SignatoryBukuPengeluaranProps> = ({
   pejabatList = [],
@@ -191,79 +192,29 @@ export const SignatoryBukuPengeluaran: React.FC<SignatoryBukuPengeluaranProps> =
     pejabatSettings?.kepalaSekolah ||
     (settings?.pejabat && !Array.isArray(settings.pejabat) ? settings.pejabat.kepalaSekolah : undefined);
 
-  const kepalaSekolah: ResolvedOfficial = rawKepsek
-    ? {
-        id: rawKepsek.id || 'pejabat-kepsek',
-        nama: rawKepsek.nama || '(Nama Kepala Sekolah)',
-        nip: rawKepsek.nip || '-',
-        pangkatGolongan: rawKepsek.pangkatGolongan || (rawKepsek as any)?.pangkat || '-',
-        jabatan: rawKepsek.jabatan || 'Kepala Sekolah',
-        statusJabatan: rawKepsek.statusJabatan,
-        unitKerja: rawKepsek.unitKerja || 'Kuasa Pengguna Barang'
-      }
-    : resolveKepalaSekolah(effectiveList);
-
   const rawPengurus =
     customPengurusBarang ||
     pejabat?.pengurusBarang ||
     pejabatSettings?.pengurusBarang ||
+    pejabatSettings?.pengelolaPersediaan ||
     (settings?.pejabat && !Array.isArray(settings.pejabat) ? settings.pejabat.pengurusBarang : undefined);
 
-  const pengurusBarang: ResolvedOfficial = rawPengurus
-    ? {
-        id: rawPengurus.id || 'pejabat-pengurus-barang',
-        nama: rawPengurus.nama || '(Nama Pengurus Barang)',
-        nip: rawPengurus.nip || '-',
-        pangkatGolongan: rawPengurus.pangkatGolongan || (rawPengurus as any)?.pangkat || '-',
-        jabatan: rawPengurus.jabatan || 'Pengurus Barang',
-        statusJabatan: rawPengurus.statusJabatan,
-        unitKerja: rawPengurus.unitKerja || 'Pengelola Persediaan Barang'
-      }
-    : resolvePengurusBarang(effectiveList);
+  const resolvedKepsek = rawKepsek || resolveKepalaSekolah(effectiveList);
+  const resolvedPengurus = rawPengurus || resolvePengurusBarang(effectiveList);
 
-  const getJabatanLabel = (p: any, defaultRole: string) => {
-    if (!p) return defaultRole;
-    const prefix = p.statusJabatan && p.statusJabatan !== 'Definitif'
-      ? `${p.statusJabatan}. `
-      : '';
-    return `${prefix}${p.jabatanKedinasan || p.jabatan || defaultRole}`.trim();
-  };
-
-  const kotaDisplay = dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Cihaurbeuti';
+  const lokasiDisplay = dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Ciamis';
   const tanggalDisplay = dataDokumen?.tanggalCetak || formatTanggalIndonesia(tanggalSurat);
 
   return (
-    <div className={`doc-signature-block signature-block avoid-break ${className}`}>
-      <div className="grid grid-cols-2 text-center text-xs">
-        {/* Sebelah Kiri (Mengetahui): Kepala Sekolah */}
-        <div>
-          <p className="font-semibold text-slate-700">Mengetahui,</p>
-          <p className="font-bold text-slate-900 uppercase tracking-tight">{getJabatanLabel(kepalaSekolah, 'KEPALA SEKOLAH')}</p>
-          <p className="text-[8pt] text-slate-600 italic">Kuasa Pengguna Anggaran</p>
-          <div className="doc-signature-space h-16 min-h-[64px]" />
-          <p className="font-bold underline uppercase text-slate-900 tracking-wide">{kepalaSekolah.nama}</p>
-          <p className="font-mono text-[8pt] text-slate-700">NIP. {kepalaSekolah.nip}</p>
-          {((kepalaSekolah as any)?.pangkat || (kepalaSekolah.pangkatGolongan && kepalaSekolah.pangkatGolongan !== '-')) && (
-            <p className="text-[8pt] text-slate-600">{(kepalaSekolah as any)?.pangkat || kepalaSekolah.pangkatGolongan}</p>
-          )}
-        </div>
-
-        {/* Sebelah Kanan: Pengurus Barang / Penyalur */}
-        <div>
-          <p className="text-slate-700">
-            {kotaDisplay}, {tanggalDisplay}
-          </p>
-          <p className="font-bold text-slate-900 uppercase tracking-tight">{getJabatanLabel(pengurusBarang, 'PENGURUS BARANG')}</p>
-          <p className="text-[8pt] text-slate-600 italic">Pengurus Barang / Penyalur</p>
-          <div className="doc-signature-space h-16 min-h-[64px]" />
-          <p className="font-bold underline uppercase text-slate-900 tracking-wide">{pengurusBarang.nama}</p>
-          <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang.nip}</p>
-          {((pengurusBarang as any)?.pangkat || (pengurusBarang.pangkatGolongan && pengurusBarang.pangkatGolongan !== '-')) && (
-            <p className="text-[8pt] text-slate-600">{(pengurusBarang as any)?.pangkat || pengurusBarang.pangkatGolongan}</p>
-          )}
-        </div>
-      </div>
-    </div>
+    <RenderSignatureBlock
+      pejabatSettings={{
+        kepalaSekolah: resolvedKepsek,
+        pengurusBarang: resolvedPengurus
+      }}
+      lokasi={lokasiDisplay}
+      tanggalCetak={tanggalDisplay}
+      className={className}
+    />
   );
 };
 
@@ -275,14 +226,12 @@ export interface SignatoryStockOpnameProps {
   settings?: {
     pejabat?: {
       kepalaSekolah?: Pejabat | ResolvedOfficial;
-      wakasekSarpras?: Pejabat | ResolvedOfficial;
       pengurusBarang?: Pejabat | ResolvedOfficial;
     } | Pejabat[];
     namaSekolah?: string;
   };
   pejabatSettings?: {
     kepalaSekolah?: Pejabat | ResolvedOfficial;
-    wakasekSarpras?: Pejabat | ResolvedOfficial;
     pengurusBarang?: Pejabat | ResolvedOfficial;
     namaSekolah?: string;
   };
@@ -291,7 +240,6 @@ export interface SignatoryStockOpnameProps {
     tanggalCetak?: string;
   };
   customKepalaSekolah?: ResolvedOfficial | Pejabat;
-  customWakasekSarpras?: ResolvedOfficial | Pejabat;
   customPengurusBarang?: ResolvedOfficial | Pejabat;
 }
 
@@ -322,7 +270,6 @@ export interface SignatorySectionProps {
  * Digunakan untuk BAST-OPNAME serta dokumen persediaan 2 pihak.
  */
 export const SignatorySection: React.FC<SignatorySectionProps> = ({
-  type,
   pejabatSettings,
   dataDokumen,
   pejabatList = [],
@@ -343,74 +290,27 @@ export const SignatorySection: React.FC<SignatorySectionProps> = ({
     pejabatSettings?.kepalaSekolah ||
     (settings?.pejabat && !Array.isArray(settings.pejabat) ? settings.pejabat.kepalaSekolah : undefined);
 
-  const kepalaSekolah: ResolvedOfficial = rawKepsek
-    ? {
-        id: rawKepsek.id || 'pejabat-kepsek',
-        nama: rawKepsek.nama || '(Nama Kepala Sekolah)',
-        nip: rawKepsek.nip || '-',
-        pangkatGolongan: rawKepsek.pangkatGolongan || (rawKepsek as any)?.pangkat || '-',
-        jabatan: rawKepsek.jabatan || 'Kepala Sekolah',
-        statusJabatan: rawKepsek.statusJabatan,
-        unitKerja: rawKepsek.unitKerja || 'Kuasa Pengguna Anggaran'
-      }
-    : resolveKepalaSekolah(effectiveList);
-
   const rawPengurus =
     pejabatSettings?.pengurusBarang ||
+    pejabatSettings?.pengelolaPersediaan ||
     (settings?.pejabat && !Array.isArray(settings.pejabat) ? settings.pejabat.pengurusBarang : undefined);
 
-  const pengurusBarang: ResolvedOfficial = rawPengurus
-    ? {
-        id: rawPengurus.id || 'pejabat-pengurus-barang',
-        nama: rawPengurus.nama || '(Nama Pengurus Barang)',
-        nip: rawPengurus.nip || '-',
-        pangkatGolongan: rawPengurus.pangkatGolongan || (rawPengurus as any)?.pangkat || '-',
-        jabatan: rawPengurus.jabatan || 'Pengurus Barang',
-        statusJabatan: rawPengurus.statusJabatan,
-        unitKerja: rawPengurus.unitKerja || 'Penyalur Persediaan'
-      }
-    : resolvePengurusBarang(effectiveList);
-
-  // Helper Format Status Plt / Plh / Definitif
-  const getJabatanLabel = (pejabat: any, defaultRole: string) => {
-    if (!pejabat) return defaultRole;
-    const prefix = pejabat.statusJabatan && pejabat.statusJabatan !== 'Definitif'
-      ? `${pejabat.statusJabatan}. `
-      : '';
-    return `${prefix}${pejabat.jabatanKedinasan || defaultRole}`;
-  };
+  const resolvedKepsek = rawKepsek || resolveKepalaSekolah(effectiveList);
+  const resolvedPengurus = rawPengurus || resolvePengurusBarang(effectiveList);
 
   const lokasiDisplay = dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Ciamis';
   const tanggalCetakDisplay = dataDokumen?.tanggalCetak || formatTanggalIndonesia(tanggalSurat);
 
   return (
-    <div className={`grid grid-cols-2 text-center text-xs gap-4 mt-8 break-inside-avoid doc-signature-block avoid-break signature-area ${className}`}>
-      {/* Kolom Kiri: Mengetahui Kepala Sekolah */}
-      <div>
-        <p className="font-bold uppercase text-slate-900">MENGETAHUI / MENYETUJUI,</p>
-        <p className="font-bold uppercase text-slate-900">{getJabatanLabel(kepalaSekolah, 'KEPALA SEKOLAH')}</p>
-        <p className="italic text-[8pt] text-slate-600">(Kuasa Pengguna Anggaran)</p>
-        <div className="h-16 min-h-[64px]" />
-        <p className="font-bold underline uppercase text-slate-900 tracking-wide">{kepalaSekolah?.nama || '(Nama Kepala Sekolah)'}</p>
-        <p className="font-mono text-[8pt] text-slate-700">NIP. {kepalaSekolah?.nip || '-'}</p>
-        {((kepalaSekolah as any)?.pangkat || (kepalaSekolah.pangkatGolongan && kepalaSekolah.pangkatGolongan !== '-')) && (
-          <p className="text-[8pt] text-slate-600">{(kepalaSekolah as any)?.pangkat || kepalaSekolah.pangkatGolongan}</p>
-        )}
-      </div>
-
-      {/* Kolom Kanan: Pengurus Barang */}
-      <div>
-        <p className="text-slate-800 mb-0.5">{lokasiDisplay}, {tanggalCetakDisplay}</p>
-        <p className="font-bold uppercase text-slate-900">{getJabatanLabel(pengurusBarang, 'PENGURUS BARANG')}</p>
-        <p className="italic text-[8pt] text-slate-600">(Penyalur / Pengelola Persediaan)</p>
-        <div className="h-16 min-h-[64px]" />
-        <p className="font-bold underline uppercase text-slate-900 tracking-wide">{pengurusBarang?.nama || '(Nama Pengurus Barang)'}</p>
-        <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang?.nip || '-'}</p>
-        {((pengurusBarang as any)?.pangkat || (pengurusBarang.pangkatGolongan && pengurusBarang.pangkatGolongan !== '-')) && (
-          <p className="text-[8pt] text-slate-600">{(pengurusBarang as any)?.pangkat || pengurusBarang.pangkatGolongan}</p>
-        )}
-      </div>
-    </div>
+    <RenderSignatureBlock
+      pejabatSettings={{
+        kepalaSekolah: resolvedKepsek,
+        pengurusBarang: resolvedPengurus
+      }}
+      lokasi={lokasiDisplay}
+      tanggalCetak={tanggalCetakDisplay}
+      className={className}
+    />
   );
 };
 
@@ -422,26 +322,42 @@ export const SignatorySection: React.FC<SignatorySectionProps> = ({
  * Tanda Tangan (2 Kolom Utama):
  * - Kolom Kiri: Mengetahui / Menyetujui Kepala Sekolah (Kuasa Pengguna Anggaran)
  * - Kolom Kanan: Pengurus Barang (Penyalur / Pengelola Persediaan)
- * (Perhatian: Posisi Wakasek Sarpras & Petugas Sarpras dihapus/digantikan oleh Pengurus Barang)
  */
 export const SignatoryStockOpname: React.FC<SignatoryStockOpnameProps> = (props) => {
+  const effectiveList: Pejabat[] = Array.isArray(props.pejabatSettings?.kepalaSekolah)
+    ? (props.pejabatSettings?.kepalaSekolah as any)
+    : Array.isArray(props.settings?.pejabat)
+    ? props.settings.pejabat
+    : Array.isArray(props.pejabatList) && props.pejabatList.length > 0
+    ? props.pejabatList
+    : [];
+
+  const rawKepsek =
+    props.customKepalaSekolah ||
+    props.pejabatSettings?.kepalaSekolah ||
+    (props.settings?.pejabat && !Array.isArray(props.settings.pejabat) ? props.settings.pejabat.kepalaSekolah : undefined);
+
+  const rawPengurus =
+    props.customPengurusBarang ||
+    props.pejabatSettings?.pengurusBarang ||
+    (props.pejabatSettings as any)?.pengelolaPersediaan ||
+    (props.settings?.pejabat && !Array.isArray(props.settings.pejabat) ? props.settings.pejabat.pengurusBarang : undefined);
+
+  const resolvedKepsek = rawKepsek || resolveKepalaSekolah(effectiveList);
+  const resolvedPengurus = rawPengurus || resolvePengurusBarang(effectiveList);
+
+  const lokasiDisplay = (props.pejabatSettings as any)?.lokasi || props.dataOpname?.lokasi || props.kopConfig?.kotaSurat || 'Ciamis';
+  const tanggalDisplay = props.dataOpname?.tanggalCetak || formatTanggalIndonesia(props.tanggalSurat || new Date().toISOString().split('T')[0]);
+
   return (
-    <SignatorySection
-      type="BAST-OPNAME"
+    <RenderSignatureBlock
       pejabatSettings={{
-        kepalaSekolah: props.customKepalaSekolah || props.pejabatSettings?.kepalaSekolah || (props.settings?.pejabat && !Array.isArray(props.settings.pejabat) ? props.settings.pejabat.kepalaSekolah : undefined),
-        pengurusBarang: props.customPengurusBarang || props.pejabatSettings?.pengurusBarang || (props.settings?.pejabat && !Array.isArray(props.settings.pejabat) ? props.settings.pejabat.pengurusBarang : undefined),
-        lokasi: (props.pejabatSettings as any)?.lokasi || props.dataOpname?.lokasi
+        kepalaSekolah: resolvedKepsek,
+        pengurusBarang: resolvedPengurus
       }}
-      dataDokumen={{
-        lokasi: (props.pejabatSettings as any)?.lokasi || props.dataOpname?.lokasi,
-        tanggalCetak: props.dataOpname?.tanggalCetak
-      }}
-      pejabatList={props.pejabatList}
-      kopConfig={props.kopConfig}
-      tanggalSurat={props.tanggalSurat}
+      lokasi={lokasiDisplay}
+      tanggalCetak={tanggalDisplay}
       className={props.className}
-      settings={props.settings}
     />
   );
 };
@@ -452,11 +368,13 @@ export const SignatoryStockOpname: React.FC<SignatoryStockOpnameProps> = (props)
  * - LAMPIRAN-12 (Kartu Barang)
  * - LAMPIRAN-13 (Kartu Persediaan Barang)
  * Ukuran: A4 | Orientasi: Landscape (L)
- * Tanda Tangan: Pengurus Barang Persediaan
+ * Tanda Tangan: Pengurus Barang Persediaan (TIDAK BOLEH WAKASEK)
  */
 export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
   pejabatSettings?: any;
   dataDokumen?: any;
+  lokasi?: string;
+  tanggalCetak?: string;
 }> = ({
   pejabatList = [],
   kopConfig,
@@ -466,7 +384,9 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
   pejabat,
   pejabatSettings,
   dataDokumen,
-  customPengurusBarang
+  customPengurusBarang,
+  lokasi,
+  tanggalCetak
 }) => {
   const effectiveList: Pejabat[] = Array.isArray(pejabatSettings?.pengurusBarang)
     ? (pejabatSettings?.pengurusBarang as any)
@@ -480,6 +400,7 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
     customPengurusBarang ||
     pejabat?.pengurusBarang ||
     pejabatSettings?.pengurusBarang ||
+    pejabatSettings?.pengelolaPersediaan ||
     (settings?.pejabat && !Array.isArray(settings.pejabat) ? settings.pejabat.pengurusBarang : undefined);
 
   const pengurusBarang: ResolvedOfficial = rawPengurus
@@ -488,22 +409,14 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
         nama: rawPengurus.nama || '(Nama Pengurus Barang)',
         nip: rawPengurus.nip || '-',
         pangkatGolongan: rawPengurus.pangkatGolongan || (rawPengurus as any)?.pangkat || '-',
-        jabatan: rawPengurus.jabatan || 'Pengurus Barang Persediaan',
+        jabatan: rawPengurus.jabatanKedinasan || rawPengurus.jabatan || 'Pengurus Barang',
         statusJabatan: rawPengurus.statusJabatan,
         unitKerja: rawPengurus.unitKerja || 'Pengelola Persediaan Barang'
       }
     : resolvePengurusBarang(effectiveList);
 
-  const getJabatanLabel = (p: any, defaultRole: string) => {
-    if (!p) return defaultRole;
-    const prefix = p.statusJabatan && p.statusJabatan !== 'Definitif'
-      ? `${p.statusJabatan}. `
-      : '';
-    return `${prefix}${p.jabatanKedinasan || p.jabatan || defaultRole}`.trim();
-  };
-
-  const kotaDisplay = dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Cihaurbeuti';
-  const tanggalDisplay = dataDokumen?.tanggalCetak || formatTanggalIndonesia(tanggalSurat);
+  const kotaDisplay = lokasi || dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Ciamis';
+  const tanggalDisplay = tanggalCetak || dataDokumen?.tanggalCetak || formatTanggalIndonesia(tanggalSurat);
 
   return (
     <div className={`doc-signature-block signature-block avoid-break ${className}`}>
@@ -512,14 +425,16 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
           <p className="text-slate-700">
             {kotaDisplay}, {tanggalDisplay}
           </p>
-          <p className="font-bold text-slate-900 uppercase mt-0.5">{getJabatanLabel(pengurusBarang, 'PENGURUS BARANG PERSEDIAAN')}</p>
-          <p className="text-[8pt] text-slate-600 italic">Pengurus Barang Persediaan</p>
+          <p className="font-bold text-slate-900 uppercase mt-0.5">
+            {pengurusBarang?.statusJabatan && pengurusBarang.statusJabatan !== 'Definitif' ? `${pengurusBarang.statusJabatan}. ` : ''}
+            {pengurusBarang?.jabatanKedinasan || pengurusBarang?.jabatan || 'PENGURUS BARANG'}
+          </p>
+          <p className="text-[8pt] text-slate-600 italic">(Penyalur / Pengelola Persediaan)</p>
           <div className="doc-signature-space h-16 min-h-[64px]" />
-          <p className="font-bold underline uppercase text-slate-900 tracking-wide">{pengurusBarang.nama}</p>
-          <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang.nip}</p>
-          {((pengurusBarang as any)?.pangkat || (pengurusBarang.pangkatGolongan && pengurusBarang.pangkatGolongan !== '-')) && (
-            <p className="text-[8pt] text-slate-600">{(pengurusBarang as any)?.pangkat || pengurusBarang.pangkatGolongan}</p>
-          )}
+          <p className="font-bold underline uppercase text-slate-900 tracking-wide">
+            {pengurusBarang?.nama || '(Nama Pengurus Barang)'}
+          </p>
+          <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang?.nip || '-'}</p>
         </div>
       </div>
     </div>

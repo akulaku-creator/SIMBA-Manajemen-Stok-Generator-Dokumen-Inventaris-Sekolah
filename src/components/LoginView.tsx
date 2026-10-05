@@ -1,49 +1,100 @@
-import { 
-  AlertCircle, 
-  Building2, 
-  Check, 
-  Clock, 
-  Eye, 
-  EyeOff, 
-  KeyRound, 
-  Lock, 
-  LogIn, 
-  Shield, 
-  ShieldAlert, 
-  ShieldCheck, 
-  User, 
-  X 
+import {
+  AlertCircle,
+  Eye,
+  EyeOff,
+  HelpCircle,
+  Info,
+  Lock,
+  LogIn,
+  Mail,
+  Phone,
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  User,
+  X
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
-import { AppUser } from '../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { AppUser, KopSuratConfig } from '../types';
+import { DEFAULT_USERS } from '../data/defaultUsers';
 import { logAuditEvent } from '../utils/auditLogger';
 
-interface Props {
-  userList: AppUser[];
-  onLoginSuccess: (user: AppUser, rememberMe?: boolean) => void;
-  schoolName: string;
+export interface LoginViewProps {
+  userList?: AppUser[];
+  onLoginSuccess?: (user: AppUser, rememberMe?: boolean) => void;
+  onLogin?: (user: AppUser, rememberMe?: boolean) => void;
+  schoolName?: string;
+  kopConfig?: KopSuratConfig;
+  pejabatSettings?: { namaSekolah?: string; [key: string]: any };
+  appConfig?: { schoolName?: string; [key: string]: any };
+  fiscalYear?: number | string;
   isModal?: boolean;
   onCloseModal?: () => void;
 }
 
 const MAX_ATTEMPTS = 5;
-const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 Menit (300.000 ms)
+const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 Menit (300 detik)
 const STORAGE_FAILED_KEY = 'simba_login_failed_attempts';
 const STORAGE_LOCKOUT_KEY = 'simba_login_lockout_until';
 
-export const LoginView: React.FC<Props> = ({
+export const LoginView: React.FC<LoginViewProps> = ({
   userList,
   onLoginSuccess,
-  schoolName,
+  onLogin,
+  schoolName = 'SMAN 1 CIHAURBEUTI',
+  kopConfig,
+  pejabatSettings,
+  appConfig,
+  fiscalYear,
   isModal = false,
   onCloseModal
 }) => {
-  const [identifier, setIdentifier] = useState<string>('');
+  const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
-  const [rememberMe, setRememberMe] = useState<boolean>(true);
+  const [trustDevice, setTrustDevice] = useState<boolean>(true);
   const [showPassword, setShowPassword] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
+
+  const usernameInputRef = useRef<HTMLInputElement>(null);
+
+  // Dynamic active fiscal year
+  const activeYear = useMemo(() => {
+    if (fiscalYear) return fiscalYear;
+    const stored = localStorage.getItem('simba_fiscal_year') || localStorage.getItem('simba_tahun_anggaran');
+    if (stored) return stored;
+    return new Date().getFullYear();
+  }, [fiscalYear]);
+
+  // Dynamic School Name Resolution (Anti-hardcode "SMK NEGERI 1 KOTA PENDIDIKAN", default "SMAN 1 CIHAURBEUTI")
+  const effectiveSchoolName = useMemo(() => {
+    if (pejabatSettings?.namaSekolah && pejabatSettings.namaSekolah !== 'SMK NEGERI 1 KOTA PENDIDIKAN') {
+      return pejabatSettings.namaSekolah;
+    }
+    if (appConfig?.schoolName && appConfig.schoolName !== 'SMK NEGERI 1 KOTA PENDIDIKAN') {
+      return appConfig.schoolName;
+    }
+    if (kopConfig?.namaSekolah && kopConfig.namaSekolah !== 'SMK NEGERI 1 KOTA PENDIDIKAN') {
+      return kopConfig.namaSekolah;
+    }
+    if (schoolName && schoolName !== 'SMK NEGERI 1 KOTA PENDIDIKAN') {
+      return schoolName;
+    }
+    const saved = localStorage.getItem('simba_active_school_name');
+    if (saved && saved !== 'SMK NEGERI 1 KOTA PENDIDIKAN') {
+      return saved;
+    }
+    return 'SMAN 1 CIHAURBEUTI';
+  }, [pejabatSettings, appConfig, kopConfig, schoolName]);
+
+  // Dynamic School / Dinas Logo
+  const resolvedLogoUrl = useMemo(() => {
+    if (kopConfig?.logoSekolahUrl) return kopConfig.logoSekolahUrl;
+    if (kopConfig?.logoProvinsiUrl) return kopConfig.logoProvinsiUrl;
+    if (kopConfig?.logoUrl) return kopConfig.logoUrl;
+    return null;
+  }, [kopConfig]);
 
   // Rate Limiting & Lockout States
   const [failedAttempts, setFailedAttempts] = useState<number>(() => {
@@ -58,21 +109,23 @@ export const LoginView: React.FC<Props> = ({
     return time > Date.now() ? time : null;
   });
 
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
+  const [rateLimitTime, setRateLimitTime] = useState<number>(() => {
     if (!lockoutUntil) return 0;
     return Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
   });
 
+  const isRateLimited = rateLimitTime > 0;
+
   // Countdown timer effect for lockout
   useEffect(() => {
     if (!lockoutUntil) {
-      setSecondsRemaining(0);
+      setRateLimitTime(0);
       return;
     }
 
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((lockoutUntil - Date.now()) / 1000));
-      setSecondsRemaining(remaining);
+      setRateLimitTime(remaining);
 
       if (remaining <= 0) {
         // Unlock automatically
@@ -82,44 +135,42 @@ export const LoginView: React.FC<Props> = ({
         localStorage.removeItem(STORAGE_FAILED_KEY);
         setErrorMsg('');
         clearInterval(interval);
+
+        // Fokus kursor akan kembali diaktifkan pada input username setelah hitung mundur mencapai 00:00
+        setTimeout(() => {
+          usernameInputRef.current?.focus();
+        }, 100);
       }
     }, 1000);
 
     return () => clearInterval(interval);
   }, [lockoutUntil]);
 
-  const isLockedOut = Boolean(lockoutUntil && secondsRemaining > 0);
-
-  // Format MM:SS for countdown timer
-  const formatTimer = (totalSeconds: number): string => {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  };
-
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isLockedOut) return;
+    if (isRateLimited || isLoading) return;
 
     setErrorMsg('');
-    const rawInput = identifier.trim();
+    const rawInput = username.trim();
     const cleanPass = password.trim();
 
     if (!rawInput) {
-      setErrorMsg('Silakan masukkan Username, NIP, atau Email Dinas.');
+      setErrorMsg('Silakan masukkan Username, NIP, atau Email.');
       return;
     }
 
     if (!cleanPass) {
-      setErrorMsg('Silakan masukkan Kata Sandi atau PIN Pengamanan.');
+      setErrorMsg('Silakan masukkan Kata Sandi atau PIN.');
       return;
     }
+
+    const effectiveUsers = (userList && userList.length > 0) ? userList : DEFAULT_USERS;
 
     // Identify user by Username, NIP, or Email
     const targetClean = rawInput.toLowerCase();
     const targetDigits = rawInput.replace(/\s+/g, '');
 
-    const matchedUser = userList.find(u => {
+    const matchedUser = effectiveUsers.find(u => {
       const matchUsername = u.username.toLowerCase() === targetClean;
       const matchEmail = u.email ? u.email.toLowerCase() === targetClean : false;
       const matchNip = u.nip ? u.nip.replace(/\s+/g, '') === targetDigits : false;
@@ -141,7 +192,7 @@ export const LoginView: React.FC<Props> = ({
         // Trigger 5-Minute Lockout
         const lockTime = Date.now() + LOCKOUT_DURATION_MS;
         setLockoutUntil(lockTime);
-        setSecondsRemaining(Math.ceil(LOCKOUT_DURATION_MS / 1000));
+        setRateLimitTime(Math.ceil(LOCKOUT_DURATION_MS / 1000));
         localStorage.setItem(STORAGE_LOCKOUT_KEY, String(lockTime));
 
         logAuditEvent({
@@ -170,7 +221,7 @@ export const LoginView: React.FC<Props> = ({
           status: 'FAILED'
         });
 
-        setErrorMsg(`Kredensial tidak sesuai. Sisa kesempatan login: ${remainingChances} kali sebelum akun dikunci.`);
+        setErrorMsg(`Kredensial tidak sesuai. Sisa kesempatan: ${remainingChances} kali sebelum akun dikunci.`);
       }
       return;
     }
@@ -197,304 +248,358 @@ export const LoginView: React.FC<Props> = ({
       });
 
       setIsLoading(false);
-      onLoginSuccess(matchedUser, rememberMe);
-    }, 400);
+      if (onLogin) {
+        onLogin(matchedUser, trustDevice);
+      } else if (onLoginSuccess) {
+        onLoginSuccess(matchedUser, trustDevice);
+      }
+    }, 450);
   };
 
   const containerWrapper = isModal
-    ? 'fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto'
-    : 'min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4 sm:p-6 selection:bg-blue-600 selection:text-white';
+    ? 'fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto'
+    : 'min-h-screen bg-slate-950 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(30,58,138,0.35),rgba(255,255,255,0))] flex items-center justify-center p-3 sm:p-6 selection:bg-indigo-600 selection:text-white';
 
   const cardWrapper = isModal
-    ? 'relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto ring-1 ring-black/5'
-    : 'w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto ring-1 ring-black/5';
+    ? 'relative w-full max-w-4xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden my-auto ring-1 ring-black/5'
+    : 'w-full max-w-4xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200/80 overflow-hidden my-auto ring-1 ring-black/5';
 
   return (
     <div className={containerWrapper}>
       <div className={cardWrapper}>
-        
-        {/* Top Header Banner with Institutional Identity */}
-        <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white p-6 sm:p-7 border-b border-blue-900/40 relative">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 p-0.5 shadow-lg shadow-blue-500/20 ring-2 ring-white/20 flex items-center justify-center flex-shrink-0">
-                <Building2 className="w-6 h-6 text-white" />
+
+        {/* Modal Close Button if opened in modal mode */}
+        {isModal && onCloseModal && (
+          <button
+            type="button"
+            onClick={onCloseModal}
+            className="absolute top-4 right-4 z-20 text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 p-2 rounded-xl transition-all cursor-pointer shadow-xs"
+            title="Tutup Jendela"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        )}
+
+        <div className="flex flex-col md:flex-row min-h-[580px]">
+          
+          {/* ========================================================= */}
+          {/* SIDEBAR KIRI: BRANDING & FITUR (DESKTOP)                  */}
+          {/* ========================================================= */}
+          <div className="w-full md:w-5/12 bg-slate-900 text-white p-8 flex flex-col justify-between border-r border-slate-800 relative overflow-hidden">
+            {/* Subtle background ornamentation */}
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-indigo-600/10 blur-3xl pointer-events-none" />
+            <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-64 h-64 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
+
+            <div className="relative z-10">
+              <div className="flex items-center space-x-2 mb-6">
+                <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-xl text-white shadow-md shadow-indigo-600/30 overflow-hidden">
+                  {resolvedLogoUrl ? (
+                    <img src={resolvedLogoUrl} alt="Logo" className="w-full h-full object-contain p-1.5" />
+                  ) : (
+                    <span>S</span>
+                  )}
+                </div>
+                <span className="text-xs bg-emerald-500/20 text-emerald-400 px-2 py-1 rounded-full font-semibold border border-emerald-500/30 inline-flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  TA {activeYear} • AKTIF
+                </span>
               </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">SIMBA</h1>
-                  <span className="bg-blue-500/30 text-blue-200 border border-blue-400/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    Sistem Penatausahaan Aset
+
+              <h1 className="text-2xl font-black tracking-wider mb-1 text-white">SIMBA</h1>
+              <p className="text-xs font-bold text-indigo-400 uppercase tracking-wider mb-4">
+                Sistem Penatausahaan Aset
+              </p>
+
+              <div className="text-xs text-slate-400 space-y-1 mb-6 border-b border-slate-800 pb-4">
+                <p className="font-semibold text-slate-300">Cabang Dinas Pendidikan Wilayah XIII</p>
+                <p>Pemerintah Daerah • Pengelolaan Persediaan &amp; Aset Milik Daerah</p>
+                <p className="text-indigo-300 font-bold mt-1">
+                  Satuan Pendidikan: {effectiveSchoolName}
+                </p>
+              </div>
+
+              <div className="bg-slate-800/60 p-3 rounded-lg border border-slate-700/50 mb-6 text-xs italic text-slate-300">
+                &ldquo;Kelola aset dan persediaan secara aman, terstruktur, dan terintegrasi.&rdquo;
+              </div>
+
+              {/* Feature Highlights */}
+              <div className="space-y-4 text-xs">
+                <div className="flex items-start space-x-3">
+                  <span className="text-indigo-400 font-bold text-sm">✓</span>
+                  <div>
+                    <p className="font-semibold text-slate-200">Akses Berbasis Role</p>
+                    <p className="text-slate-400 text-[11px]">
+                      Setiap pengguna hanya dapat mengakses fitur sesuai kewenangannya.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <span className="text-indigo-400 font-bold text-sm">✓</span>
+                  <div>
+                    <p className="font-semibold text-slate-200">Audit Aktivitas</p>
+                    <p className="text-slate-400 text-[11px]">
+                      Aktivitas penting pengguna tercatat secara otomatis.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start space-x-3">
+                  <span className="text-indigo-400 font-bold text-sm">✓</span>
+                  <div>
+                    <p className="font-semibold text-slate-200">Perlindungan Akun</p>
+                    <p className="text-slate-400 text-[11px]">
+                      Sistem melindungi akun dari percobaan login yang tidak sah.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="text-[10px] text-slate-500 mt-8 pt-4 border-t border-slate-800 flex items-center gap-2 relative z-10">
+              <Shield className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+              <span>Portal Resmi Penatausahaan Persediaan &amp; Aset Daerah</span>
+            </div>
+          </div>
+
+          {/* ========================================================= */}
+          {/* AREA KANAN: FORM LOGIN RESMI (CLEAN PRODUCTION UI)         */}
+          {/* ========================================================= */}
+          <div className="w-full md:w-7/12 p-8 md:p-12 flex flex-col justify-between bg-white">
+            <div>
+              {/* Mobile Compact Branding Header */}
+              <div className="md:hidden mb-6 pb-4 border-b border-slate-200">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 bg-indigo-600 rounded-xl flex items-center justify-center font-bold text-lg text-white">
+                      S
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base font-black tracking-tight text-slate-900">SIMBA</span>
+                        <span className="text-[9px] font-bold text-indigo-700 uppercase bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                          Aset
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        {effectiveSchoolName}
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                    TA {activeYear}
                   </span>
                 </div>
-                <p className="text-xs text-blue-100 font-medium">
-                  Cabang Dinas Pendidikan Wilayah XIII
-                </p>
-                <p className="text-[11px] text-slate-300">
-                  Pemerintah Daerah • Pengelolaan Persediaan &amp; Aset Milik Daerah (BOS/APBD)
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 self-start sm:self-center">
-              <span className="bg-white/10 text-white/90 text-xs px-3 py-1 rounded-lg border border-white/15 backdrop-blur-xs font-mono">
-                T.A. 2026
-              </span>
-              {isModal && onCloseModal && (
-                <button
-                  type="button"
-                  onClick={onCloseModal}
-                  className="text-white/80 hover:text-white bg-white/10 hover:bg-white/20 p-1.5 rounded-xl transition-colors cursor-pointer"
-                  title="Tutup Jendela"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Content Body: Left Information Pillar & Right Authentication Form */}
-        <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
-          
-          {/* LEFT: Institutional & Security Assurance */}
-          <div className="md:col-span-5 bg-slate-50 border border-slate-200/90 rounded-2xl p-5 flex flex-col justify-between space-y-6">
-            <div className="space-y-4">
-              <div>
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-blue-700 bg-blue-100/70 border border-blue-200 px-2.5 py-1 rounded-full">
-                  <ShieldCheck className="w-3.5 h-3.5 text-blue-700" />
-                  Keamanan Sistem Terjamin
-                </span>
-                <h2 className="text-base font-bold text-slate-900 mt-2.5">
-                  Portal Autentikasi Pegawai &amp; Operator
-                </h2>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Aplikasi dilengkapi proteksi berlapis untuk menjaga integritas data barang milik daerah dan pembukuan dana BOS.
-                </p>
               </div>
 
-              <div className="space-y-3 pt-2">
-                <div className="flex items-start gap-2.5 text-xs text-slate-700">
-                  <div className="w-5 h-5 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Hak Akses Berbasis Peran (RBAC)</span>
-                    <p className="text-[11px] text-slate-500">Pemisahan wewenang Administrator, Operator Inventaris, dan Staf Pengguna Barang.</p>
-                  </div>
-                </div>
+              <h2 className="text-2xl font-bold text-slate-800 mb-1">Masuk ke SIMBA</h2>
+              <p className="text-xs text-slate-500 mb-6">Gunakan akun resmi Anda untuk mengakses sistem.</p>
 
-                <div className="flex items-start gap-2.5 text-xs text-slate-700">
-                  <div className="w-5 h-5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 stroke-[3]" />
+              {/* ALERT RATE LIMIT (JIKA AKTIF) */}
+              {isRateLimited && (
+                <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-6">
+                  <div className="flex items-center justify-between text-rose-700 text-xs font-semibold mb-1">
+                    <span className="flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-rose-600" />
+                      Akses Diblokir Sementara (Rate Limit)
+                    </span>
                   </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Log Audit Digital Terpusat</span>
-                    <p className="text-[11px] text-slate-500">Seluruh riwayat login, input barang, penyaluran, dan perubahan data tersimpan rapi.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-2.5 text-xs text-slate-700">
-                  <div className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 stroke-[3]" />
-                  </div>
-                  <div>
-                    <span className="font-semibold text-slate-900">Perlindungan Brute-Force</span>
-                    <p className="text-[11px] text-slate-500">Penguncian otomatis sementara setelah 5 kali kesalahan kredensial.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-200/80 text-[11px] text-slate-500 flex items-center gap-2">
-              <Shield className="w-4 h-4 text-slate-400 flex-shrink-0" />
-              <span>Sesi terenkripsi dan terlindungi otentikasi lokal browser.</span>
-            </div>
-          </div>
-
-          {/* RIGHT: Official Standard Credentials Form */}
-          <div className="md:col-span-7 flex flex-col justify-center">
-            
-            <div className="mb-5">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <KeyRound className="w-5 h-5 text-blue-600" />
-                Masuk ke Sistem SIMBA
-              </h2>
-              <p className="text-xs text-slate-600 mt-1">
-                Silakan masukkan kredensial resmi akun Anda untuk memulai sesi kerja.
-              </p>
-            </div>
-
-            {/* Lockout Notification Banner */}
-            {isLockedOut && (
-              <div className="mb-5 p-4 bg-red-50 border-2 border-red-300 rounded-2xl flex items-start gap-3 text-red-900 animate-pulse">
-                <ShieldAlert className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="text-xs space-y-1">
-                  <div className="font-bold text-red-900 flex items-center gap-1.5">
-                    <span>Akses Dikunci Sementara (Rate Limit Aktif)</span>
-                  </div>
-                  <p className="text-red-800 leading-relaxed">
-                    Sistem mendeteksi 5 kali kegagalan masuk berturut-turut. Akses login dihentikan sementara selama 5 menit demi mencegah intrusi.
+                  <p className="text-[11px] text-rose-600 mb-2 leading-relaxed">
+                    Sistem mendeteksi kesalahan beruntun. Akses login ditangguhkan sementara demi menjaga keamanan akun.
                   </p>
-                  <div className="inline-flex items-center gap-1.5 font-mono font-bold text-sm bg-red-100 text-red-900 px-2.5 py-1 rounded-lg border border-red-300 mt-1">
-                    <Clock className="w-4 h-4 text-red-700 animate-spin" />
-                    <span>Tersisa: {formatTimer(secondsRemaining)}</span>
+                  <span className="inline-block bg-rose-100 text-rose-800 font-mono text-xs px-2 py-1 rounded border border-rose-300 font-bold">
+                    Sisa Waktu: {String(Math.floor(rateLimitTime / 60)).padStart(2, '0')}:{String(rateLimitTime % 60).padStart(2, '0')}
+                  </span>
+                </div>
+              )}
+
+              {/* General Error Banner */}
+              {!isRateLimited && errorMsg && (
+                <div className="mb-5 p-3.5 bg-amber-50/90 border border-amber-300/80 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
+                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <span className="font-medium leading-relaxed">{errorMsg}</span>
+                </div>
+              )}
+
+              {/* FORM INPUT */}
+              <form onSubmit={handleFormSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Username / NIP / Email
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <input
+                      ref={usernameInputRef}
+                      type="text"
+                      disabled={isRateLimited || isLoading}
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="Masukkan Username / NIP"
+                      autoComplete="username"
+                      required
+                      className="w-full pl-9 pr-3 py-2 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-slate-100 disabled:cursor-not-allowed outline-none transition"
+                    />
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* General Error Banner */}
-            {!isLockedOut && errorMsg && (
-              <div className="mb-5 p-3.5 bg-amber-50 border border-amber-300 rounded-xl flex items-start gap-2.5 text-xs text-amber-900">
-                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <span className="font-medium leading-relaxed">{errorMsg}</span>
-              </div>
-            )}
-
-            {/* Official Standard Authentication Form */}
-            <form onSubmit={handleFormSubmit} className="space-y-4">
-              
-              {/* Field 1: Username / NIP / Email */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Username, NIP, atau Email Kedinasan:
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type="text"
-                    disabled={isLockedOut || isLoading}
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Masukkan username, NIP pegawai, atau email"
-                    autoComplete="username"
-                    required
-                    className="w-full pl-10 pr-3 py-2.5 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl text-xs text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-hidden transition-all disabled:opacity-50 disabled:bg-slate-100 cursor-text"
-                  />
-                </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  Bisa menggunakan Username akun, 18 digit NIP resmi, atau Email terdaftar.
-                </p>
-              </div>
-
-              {/* Field 2: Password / PIN with Show/Hide Toggle */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-bold text-slate-700">
-                    Kata Sandi atau PIN Pengamanan:
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Kata Sandi / PIN
                   </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      disabled={isRateLimited || isLoading}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      required
+                      className="w-full pl-9 pr-10 py-2 text-xs font-mono border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:bg-slate-100 disabled:cursor-not-allowed outline-none transition"
+                    />
+                    <button
+                      type="button"
+                      disabled={isRateLimited || isLoading}
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-700 transition-colors cursor-pointer disabled:opacity-40"
+                      title={showPassword ? 'Sembunyikan Kata Sandi' : 'Tampilkan Kata Sandi'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    disabled={isLockedOut || isLoading}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Ketik kata sandi atau 6-digit PIN"
-                    autoComplete="current-password"
-                    required
-                    className="w-full pl-10 pr-11 py-2.5 bg-slate-50 hover:bg-white focus:bg-white border border-slate-300 rounded-xl text-xs font-mono text-slate-900 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-hidden transition-all disabled:opacity-50 disabled:bg-slate-100 cursor-text"
-                  />
+
+                <div className="flex items-center justify-between text-xs pt-1">
+                  <label className="flex items-center space-x-2 text-slate-600 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      disabled={isRateLimited || isLoading}
+                      checked={trustDevice}
+                      onChange={(e) => setTrustDevice(e.target.checked)}
+                      className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50 cursor-pointer"
+                    />
+                    <span>Percayai perangkat ini</span>
+                  </label>
+
                   <button
                     type="button"
-                    disabled={isLockedOut || isLoading}
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer disabled:opacity-40"
-                    title={showPassword ? 'Sembunyikan Sandi' : 'Tampilkan Sandi'}
+                    onClick={() => setIsHelpModalOpen(true)}
+                    className="text-indigo-600 font-medium hover:underline cursor-pointer"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    Lupa Password/PIN?
                   </button>
                 </div>
-              </div>
-
-              {/* Field 3: Remember Me Checkbox */}
-              <div className="pt-1 flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    disabled={isLockedOut || isLoading}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded-md border-slate-300 focus:ring-blue-500 cursor-pointer disabled:opacity-50"
-                  />
-                  <span>Ingat Saya di Perangkat Ini</span>
-                </label>
-              </div>
-
-              {/* Field 4: Main Login Button */}
-              <button
-                type="submit"
-                disabled={isLockedOut || isLoading}
-                className="w-full mt-2 py-3 px-4 bg-gradient-to-r from-blue-700 via-indigo-600 to-blue-800 hover:from-blue-800 hover:to-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 active:scale-98 disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <>
-                    <Clock className="w-4 h-4 animate-spin" />
-                    <span>Memverifikasi Kredensial &amp; Sesi...</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn className="w-4 h-4" />
-                    <span>Masuk ke Sistem SIMBA</span>
-                  </>
-                )}
-              </button>
-
-            </form>
-
-            {/* Multi-Tenant Quick Demo Switcher */}
-            <div className="mt-4 pt-3 border-t border-slate-200">
-              <p className="text-[11px] font-bold text-slate-700 mb-2">
-                Pilih Akun Demo / Uji Coba Multi-Tenant:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIdentifier('dinas');
-                    setPassword('dinas');
-                    setErrorMsg('');
-                  }}
-                  className="p-2.5 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-xl text-left text-xs text-rose-900 transition-colors cursor-pointer"
-                  title="Super Admin / Dinas: Pengawas Cabang Dinas Wilayah XIII"
-                >
-                  <div className="font-bold flex items-center justify-between">
-                    <span>Super Admin / Dinas</span>
-                    <span className="text-[10px] bg-rose-200 text-rose-800 font-mono font-bold px-1.5 py-0.5 rounded">Dinas</span>
-                  </div>
-                  <div className="text-[11px] text-rose-700 font-mono mt-0.5">dinas / dinas</div>
-                </button>
 
                 <button
-                  type="button"
-                  onClick={() => {
-                    setIdentifier('admin.cihaurbeuti');
-                    setPassword('admin');
-                    setErrorMsg('');
-                  }}
-                  className="p-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-xl text-left text-xs text-indigo-900 transition-colors cursor-pointer"
-                  title="Admin Sekolah (SMAN 1 Cihaurbeuti)"
+                  type="submit"
+                  disabled={isRateLimited || isLoading || !username.trim() || !password.trim()}
+                  className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-bold py-2.5 rounded-lg shadow-md transition duration-200 flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <div className="font-bold flex items-center justify-between">
-                    <span>Admin Sekolah</span>
-                    <span className="text-[10px] bg-indigo-200 text-indigo-800 font-mono font-bold px-1.5 py-0.5 rounded">Sekolah</span>
-                  </div>
-                  <div className="text-[11px] text-indigo-700 font-mono mt-0.5">admin.cihaurbeuti / admin</div>
+                  {isLoading ? (
+                    <>
+                      <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Memverifikasi akun...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogIn className="w-4 h-4" />
+                      <span>Masuk ke Sistem SIMBA</span>
+                    </>
+                  )}
                 </button>
-              </div>
+              </form>
             </div>
 
-            <div className="mt-3 text-center text-[10px] text-slate-500">
-              Setiap aktivitas login dan penyaluran barang tercatat otomatis dalam <strong>Log Audit Keamanan</strong>.
+            {/* FOOTER KANAN (CLEAN PRODUCTION, NO DEMO) */}
+            <div className="text-center text-[11px] text-slate-400 mt-8 pt-4 border-t border-slate-100">
+              Sistem Penatausahaan Persediaan &amp; Aset Milik Daerah (BOS/APBD)
             </div>
-
           </div>
 
         </div>
 
       </div>
+
+      {/* ========================================================= */}
+      {/* MODAL BANTUAN LUPA PASSWORD / RESET KREDENSIAL           */}
+      {/* ========================================================= */}
+      {isHelpModalOpen && (
+        <div className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Bantuan Pemulihan Kredensial</h3>
+                  <p className="text-[11px] text-slate-500">Prosedur resmi reset Kata Sandi atau PIN</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsHelpModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-slate-600">
+              <div className="p-3 bg-indigo-50/80 border border-indigo-200/80 rounded-xl text-indigo-900 text-xs flex items-start gap-2.5">
+                <Info className="w-4 h-4 text-indigo-700 flex-shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  Demi perlindungan data inventaris daerah dan pencegahan manipulasi akun, reset kredensial wajib melalui verifikasi resmi administrator.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-slate-900 mb-1.5">Langkah Pemulihan Akun:</h4>
+                <ol className="list-decimal pl-4 space-y-1.5 text-[11px] leading-relaxed">
+                  <li>
+                    <strong>Tingkat Satuan Pendidikan:</strong> Hubungi Petugas Pengurus Barang atau Admin SIMBA di sekolah Anda ({effectiveSchoolName}) untuk mereset kata sandi melalui menu <em>Manajemen Pengguna</em>.
+                  </li>
+                  <li>
+                    <strong>Tingkat Cabang Dinas:</strong> Hubungi Tim Teknis Aset Cabang Dinas Pendidikan Wilayah XIII dengan melampirkan NIP dan Surat Tugas kedinasan resmi.
+                  </li>
+                </ol>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-[11px]">
+                <div className="font-semibold text-slate-800">Kontak Helpdesk &amp; Layanan Teknis:</div>
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <span>cadisdik.wil13@jabarprov.go.id</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-700">
+                  <Phone className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Layanan SIMBA Cabang Dinas Wilayah XIII</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsHelpModalOpen(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-medium text-xs rounded-xl transition-all cursor-pointer"
+              >
+                Saya Mengerti &amp; Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+export const LoginPage = LoginView;
+export default LoginView;

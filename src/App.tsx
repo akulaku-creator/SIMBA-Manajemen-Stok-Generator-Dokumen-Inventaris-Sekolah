@@ -109,11 +109,26 @@ export default function App() {
   const [pejabatList, setPejabatList] = useState<Pejabat[]>(() => {
     const saved = localStorage.getItem('simba_pejabat_list');
     let list: Pejabat[] = saved ? JSON.parse(saved) : DEFAULT_PEJABAT;
-    // Auto-migrate: Tag with primary school if sekolah_id is missing
-    list = list.map(p => ({
-      ...p,
-      sekolah_id: p.sekolah_id || DEFAULT_PRIMARY_SEKOLAH_ID
-    }));
+    // Auto-migrate: Tag with primary school if sekolah_id is missing and guarantee accurate roles
+    list = list.map(p => {
+      let role = p.role;
+      if (!role) {
+        if (p.id?.includes('kepsek') || p.jabatan?.toLowerCase().includes('kepala sekolah')) {
+          role = 'kepala_sekolah';
+        } else if (p.id?.includes('pengurus-barang') || p.jabatan?.toLowerCase().includes('pengurus barang') || p.jabatan?.toLowerCase().includes('pengelola persediaan')) {
+          role = 'pengurus_barang';
+        } else if (p.id?.includes('sarpras') || p.jabatan?.toLowerCase().includes('sarpras') || p.jabatan?.toLowerCase().includes('sarana') || p.jabatan?.toLowerCase().includes('wakasek')) {
+          role = 'sarpras';
+        } else if (p.id?.includes('bendahara') || p.jabatan?.toLowerCase().includes('bendahara')) {
+          role = 'bendahara_bos';
+        }
+      }
+      return {
+        ...p,
+        role,
+        sekolah_id: p.sekolah_id || DEFAULT_PRIMARY_SEKOLAH_ID
+      };
+    });
     // Seed initial officials for other schools if not present
     for (const [schId, pejabats] of Object.entries(DEFAULT_PEJABAT_BY_SEKOLAH)) {
       if (!list.some(p => p.sekolah_id === schId)) {
@@ -526,8 +541,8 @@ export default function App() {
   const activeSekolah = useMemo(() => {
     return sekolahList.find(s => s.id === currentSekolahId) || sekolahList[0] || {
       id: DEFAULT_PRIMARY_SEKOLAH_ID,
-      nama: 'SMK NEGERI 1 KOTA PENDIDIKAN',
-      npsn: '20231945'
+      nama: 'SMAN 1 CIHAURBEUTI',
+      npsn: '20211512'
     };
   }, [sekolahList, currentSekolahId]);
 
@@ -1528,6 +1543,7 @@ export default function App() {
         userList={userList}
         onLoginSuccess={handleLoginSuccess}
         schoolName={activeSekolah.nama}
+        kopConfig={activeKopConfig}
       />
     );
   }
@@ -1895,6 +1911,7 @@ export default function App() {
           userList={userList}
           onLoginSuccess={handleLoginSuccess}
           schoolName={activeSekolah.nama}
+          kopConfig={activeKopConfig}
         />
       )}
 

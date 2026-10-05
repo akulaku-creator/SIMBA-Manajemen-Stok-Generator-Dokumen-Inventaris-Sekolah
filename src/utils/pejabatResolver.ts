@@ -6,6 +6,7 @@ export interface ResolvedOfficial {
   nip: string;
   pangkatGolongan: string;
   jabatan: string;
+  jabatanKedinasan?: string;
   statusJabatan?: StatusJabatan;
   unitKerja?: string;
   isNonAsn?: boolean;
@@ -119,47 +120,42 @@ export function resolveKepalaSekolah(pejabatList: Pejabat[], specificId?: string
 export function resolvePengurusBarang(pejabatList: Pejabat[], specificId?: string): ResolvedOfficial {
   const list = pejabatList || [];
 
+  // Filter out any officials related to wakasek or sarpras
+  const safeList = list.filter(p => 
+    p.role !== 'sarpras' && 
+    p.role !== 'wakasek_sarpras' && 
+    p.id !== 'pejabat-sarpras' &&
+    !p.jabatan?.toLowerCase().includes('sarpras') && 
+    !p.jabatan?.toLowerCase().includes('sarana') && 
+    !p.jabatan?.toLowerCase().includes('wakasek')
+  );
+
   // Cari pejabat resmi Pengurus Barang Pembantu dari master pejabat
   const pengurusOfficial = 
-    list.find(p => p.role === 'pengurus_barang') ||
-    list.find(p => p.id === 'pejabat-pengurus-barang' || p.id?.includes('pengurus-barang')) ||
-    list.find(p => p.jabatan && (
+    safeList.find(p => p.role === 'pengurus_barang') ||
+    safeList.find(p => p.id === 'pejabat-pengurus-barang' || p.id?.includes('pengurus-barang')) ||
+    safeList.find(p => p.jabatan && (
       p.jabatan.toLowerCase().includes('pengurus barang') || 
       p.jabatan.toLowerCase().includes('pengelola barang') ||
       p.jabatan.toLowerCase().includes('pengelola persediaan') ||
       p.jabatan.toLowerCase().includes('penyimpan barang')
     )) ||
-    list.find(p => 
+    safeList.find(p => 
       p.id !== 'pejabat-kepsek' && 
-      p.id !== 'pejabat-sarpras' && 
       !p.jabatan?.toLowerCase().includes('kepala sekolah') && 
-      !p.jabatan?.toLowerCase().includes('sarpras') && 
-      !p.jabatan?.toLowerCase().includes('sarana') &&
       !p.jabatan?.toLowerCase().includes('bendahara')
     );
 
   // Periksa specificId jika diberikan
-  const specificOfficial = specificId ? list.find(p => p.id === specificId) : undefined;
-  const isInvalidSpecific = specificOfficial && (
-    specificOfficial.id === 'pejabat-sarpras' ||
-    specificOfficial.id === 'pejabat-kepsek' ||
-    specificOfficial.role === 'sarpras' ||
-    specificOfficial.role === 'kepala_sekolah' ||
-    (specificOfficial.jabatan && (
-      specificOfficial.jabatan.toLowerCase().includes('sarpras') ||
-      specificOfficial.jabatan.toLowerCase().includes('sarana') ||
-      specificOfficial.jabatan.toLowerCase().includes('kepala sekolah')
-    ))
-  );
-
-  const found = (!isInvalidSpecific && specificOfficial) ? specificOfficial : (pengurusOfficial || list[2] || list[0]);
+  const specificOfficial = specificId ? safeList.find(p => p.id === specificId) : undefined;
+  const found = specificOfficial || pengurusOfficial || safeList.find(p => p.id !== 'pejabat-kepsek') || safeList[0];
 
   return {
     id: found?.id || 'pejabat-pengurus-barang',
-    nama: found?.nama || 'Pengurus Barang Pembantu',
+    nama: found?.nama || 'Pengurus Barang',
     nip: formatNipDisplay(found?.nip),
     pangkatGolongan: found?.pangkatGolongan || '-',
-    jabatan: found?.jabatan || 'Pengurus Barang Pembantu',
+    jabatan: found?.jabatan || 'Pengurus Barang',
     statusJabatan: found?.statusJabatan,
     unitKerja: found?.unitKerja || 'Pengelola Persediaan Barang'
   };

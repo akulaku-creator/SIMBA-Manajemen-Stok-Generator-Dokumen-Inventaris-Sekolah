@@ -31,7 +31,7 @@ import { DocRekapKodering } from './documents/DocRekapKodering';
 import { ExcelImportBOSModal } from './ExcelImportBOSModal';
 import { downloadBOSExcelFile } from '../utils/excelBosGenerator';
 import { formatTanggalIndonesia, MONTHS_ID } from '../utils/numberGenerator';
-import { resolveKepalaSekolah, resolvePengurusBarang, resolveWakasekSarpras } from '../utils/pejabatResolver';
+import { resolveKepalaSekolah, resolvePengurusBarang } from '../utils/pejabatResolver';
 
 interface Props {
   transaksiList: TransaksiPengeluaran[];
@@ -98,12 +98,29 @@ export const DocumentViewer: React.FC<Props> = ({
   const [isImportBOSModalOpen, setIsImportBOSModalOpen] = useState<boolean>(false);
   const [isExportingBOS, setIsExportingBOS] = useState<boolean>(false);
 
-  // Signatory Selection States
-  const initialKepsek = pejabatList.find(p => p.role === 'kepala_sekolah') || pejabatList[0];
-  const initialPengurus = pejabatList.find(p => p.role === 'pengurus_barang') || pejabatList[1] || pejabatList[0];
+  // Signatory Selection States: Exclusively Kepala Sekolah and Pengurus Barang (NEVER Wakasek)
+  const initialKepsek = resolveKepalaSekolah(pejabatList);
+  const initialPengurus = resolvePengurusBarang(pejabatList);
 
   const [selectedKepalaSekolahId, setSelectedKepalaSekolahId] = useState<string>(initialKepsek?.id || '');
   const [selectedPengurusBarangId, setSelectedPengurusBarangId] = useState<string>(initialPengurus?.id || '');
+
+  // Ensure selectedPengurusBarangId is never Wakasek / Sarpras
+  const sanitizedPengurusBarangId = useMemo(() => {
+    const selected = pejabatList.find(p => p.id === selectedPengurusBarangId);
+    if (
+      !selected ||
+      selected.id === 'pejabat-sarpras' ||
+      selected.role === 'sarpras' ||
+      selected.role === 'wakasek_sarpras' ||
+      selected.jabatan?.toLowerCase().includes('sarpras') ||
+      selected.jabatan?.toLowerCase().includes('wakasek') ||
+      selected.jabatan?.toLowerCase().includes('sarana')
+    ) {
+      return resolvePengurusBarang(pejabatList)?.id || '';
+    }
+    return selected.id;
+  }, [pejabatList, selectedPengurusBarangId]);
 
   // Computed effectivePejabatList so all documents immediately reflect chosen signatories
   const effectivePejabatList = useMemo(() => {
@@ -111,19 +128,25 @@ export const DocumentViewer: React.FC<Props> = ({
       if (p.id === selectedKepalaSekolahId) {
         return { ...p, role: 'kepala_sekolah' as const };
       }
-      if (p.id === selectedPengurusBarangId) {
+      if (p.id === sanitizedPengurusBarangId) {
         return { ...p, role: 'pengurus_barang' as const };
       }
       return p;
     });
-  }, [pejabatList, selectedKepalaSekolahId, selectedPengurusBarangId]);
+  }, [pejabatList, selectedKepalaSekolahId, sanitizedPengurusBarangId]);
 
   const effectivePejabatSettings = useMemo(() => {
     const kepsek = resolveKepalaSekolah(effectivePejabatList);
     const pengurus = resolvePengurusBarang(effectivePejabatList);
     return {
-      kepalaSekolah: kepsek,
-      pengurusBarang: pengurus,
+      kepalaSekolah: {
+        ...kepsek,
+        jabatanKedinasan: kepsek.jabatan || 'KEPALA SEKOLAH'
+      },
+      pengurusBarang: {
+        ...pengurus,
+        jabatanKedinasan: pengurus.jabatan || 'PENGURUS BARANG'
+      },
       lokasi: kopConfig.kotaSurat || 'Ciamis',
       namaSekolah: kopConfig.namaSekolah
     };
@@ -539,11 +562,10 @@ export const DocumentViewer: React.FC<Props> = ({
                     pejabat: effectivePejabatList,
                     namaSekolah: kopConfig.namaSekolah
                   }}
-                  pejabatSettings={{
-                    kepalaSekolah: resolveKepalaSekolah(effectivePejabatList),
-                    wakasekSarpras: resolveWakasekSarpras(effectivePejabatList),
-                    pengurusBarang: resolvePengurusBarang(effectivePejabatList),
-                    namaSekolah: kopConfig.namaSekolah
+                  pejabatSettings={effectivePejabatSettings}
+                  dataOpname={{
+                    lokasi: kopConfig.kotaSurat || 'Ciamis',
+                    tanggalCetak: formatTanggalIndonesia(new Date().toISOString().split('T')[0])
                   }}
                   selectedMonth={selectedMonth === -1 ? 11 : selectedMonth}
                   selectedYear={selectedYear}
@@ -555,6 +577,12 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPenerimaanList={transaksiPenerimaanList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={effectivePejabatSettings}
+                  dataDokumen={sharedDataDokumen}
                   selectedMonth={selectedMonth}
                   selectedYear={selectedYear}
                   minRows={minRows}
@@ -566,7 +594,12 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
-                  settings={{ pejabat: effectivePejabatList }}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={effectivePejabatSettings}
+                  dataDokumen={sharedDataDokumen}
                   selectedMonth={selectedMonth}
                   selectedYear={selectedYear}
                   minRows={minRows}
@@ -580,6 +613,12 @@ export const DocumentViewer: React.FC<Props> = ({
                   masterBarang={masterBarang}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={effectivePejabatSettings}
+                  dataDokumen={sharedDataDokumen}
                   minRows={minRows}
                 />
               )}
@@ -591,6 +630,12 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={effectivePejabatSettings}
+                  dataDokumen={sharedDataDokumen}
                   periodFilter={effectiveKartuPeriodFilter}
                   minRows={minRows}
                   isLast={true}
@@ -604,6 +649,12 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={effectivePejabatSettings}
+                  dataDokumen={sharedDataDokumen}
                   periodFilter={effectiveKartuPeriodFilter}
                   selectedMonth={selectedMonth}
                   selectedYear={selectedYear}
@@ -643,6 +694,12 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={effectivePejabatSettings}
+                  dataDokumen={sharedDataDokumen}
                   periodFilter={effectiveKartuPeriodFilter}
                   minRows={minRows}
                   isLast={bIdx === masterBarang.length - 1}
@@ -668,6 +725,12 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksiPengeluaranList={transaksiList}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  settings={{
+                    pejabat: effectivePejabatList,
+                    namaSekolah: kopConfig.namaSekolah
+                  }}
+                  pejabatSettings={effectivePejabatSettings}
+                  dataDokumen={sharedDataDokumen}
                   periodFilter={effectiveKartuPeriodFilter}
                   selectedMonth={selectedMonth}
                   selectedYear={selectedYear}

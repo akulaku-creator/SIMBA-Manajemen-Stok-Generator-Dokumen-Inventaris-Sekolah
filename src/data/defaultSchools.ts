@@ -1,6 +1,6 @@
 import { Barang, KopSuratConfig, Pejabat, Sekolah, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
 
-export const DEFAULT_PRIMARY_SEKOLAH_ID = 'sekolah-smkn1-kota';
+export const DEFAULT_PRIMARY_SEKOLAH_ID = 'sekolah-sman1-cihaurbeuti';
 
 export const DEFAULT_SEKOLAH_LIST: Sekolah[] = [
   {
@@ -138,6 +138,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
   'sekolah-sman1-cihaurbeuti': [
     {
       id: 'pejabat-chrbt-kepsek',
+      role: 'kepala_sekolah',
       sekolah_id: 'sekolah-sman1-cihaurbeuti',
       nama: 'Dra. Hj. Imas Rohayati, M.Pd.',
       nip: '19690321 199412 2 001',
@@ -147,6 +148,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
     },
     {
       id: 'pejabat-chrbt-sarpras',
+      role: 'sarpras',
       sekolah_id: 'sekolah-sman1-cihaurbeuti',
       nama: 'H. Dadan Hamdani, M.Pd.',
       nip: '19750210 200312 1 004',
@@ -156,6 +158,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
     },
     {
       id: 'pejabat-chrbt-pengurus-barang',
+      role: 'pengurus_barang',
       sekolah_id: 'sekolah-sman1-cihaurbeuti',
       nama: 'Endang Kusnandar, S.AP.',
       nip: '19870512 201101 1 007',
@@ -166,6 +169,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
     },
     {
       id: 'pejabat-chrbt-bendahara-bos',
+      role: 'bendahara_bos',
       sekolah_id: 'sekolah-sman1-cihaurbeuti',
       nama: 'Yanti Rohmayanti, S.Pd.',
       nip: '19810815 200604 2 011',
@@ -176,6 +180,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
     },
     {
       id: 'pejabat-chrbt-tim-pemeriksa',
+      role: 'tim_pemeriksa',
       sekolah_id: 'sekolah-sman1-cihaurbeuti',
       nama: 'Dedi Kusmayadi, S.Pd.',
       nip: '19790412 200501 1 008',
@@ -188,6 +193,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
   'sekolah-smkn2-bandung': [
     {
       id: 'pejabat-bdg-kepsek',
+      role: 'kepala_sekolah',
       sekolah_id: 'sekolah-smkn2-bandung',
       nama: 'Drs. H. Asep Suryana, M.M.',
       nip: '19710815 199702 1 003',
@@ -198,6 +204,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
     },
     {
       id: 'pejabat-bdg-sarpras',
+      role: 'sarpras',
       sekolah_id: 'sekolah-smkn2-bandung',
       nama: 'Yayan Hendrayana, S.T., M.Kom.',
       nip: '19800612 200801 1 015',
@@ -208,6 +215,7 @@ export const DEFAULT_PEJABAT_BY_SEKOLAH: Record<string, Pejabat[]> = {
     },
     {
       id: 'pejabat-bdg-pengurus-barang',
+      role: 'pengurus_barang',
       sekolah_id: 'sekolah-smkn2-bandung',
       nama: 'Fitri Handayani, A.Md.',
       nip: '19910405 201503 2 004',

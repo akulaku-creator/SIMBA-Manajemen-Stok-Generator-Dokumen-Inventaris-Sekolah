@@ -44,6 +44,7 @@ export const DEFAULT_KOP_SURAT: KopSuratConfig = {
 export const DEFAULT_PEJABAT: Pejabat[] = [
   {
     id: 'pejabat-kepsek',
+    role: 'kepala_sekolah',
     nama: 'Drs. H. Bambang Suhartono, M.Pd.',
     nip: '19680512 199303 1 005',
     pangkatGolongan: 'Pembina Utama Muda / IV c',
@@ -52,6 +53,7 @@ export const DEFAULT_PEJABAT: Pejabat[] = [
   },
   {
     id: 'pejabat-sarpras',
+    role: 'sarpras',
     nama: 'Ahmad Fauzi, S.Pd., M.T.',
     nip: '19780415 200501 1 009',
     pangkatGolongan: 'Penata Tingkat I / III d',
@@ -60,6 +62,7 @@ export const DEFAULT_PEJABAT: Pejabat[] = [
   },
   {
     id: 'pejabat-pengurus-barang',
+    role: 'pengurus_barang',
     nama: 'Rina Kartikasari, S.AP.',
     nip: '19890820 201402 2 003',
     pangkatGolongan: 'Penata Muda / III a',
