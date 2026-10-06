@@ -69,7 +69,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({
 }) => {
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
-  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || currentUser?.sekolah_id === 'dinas_prov';
+  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'admin_dinas' || currentUser?.sekolah_id === 'dinas_prov' || currentUser?.username === 'dinas';
 
   const menuItems = [
     {
@@ -94,10 +94,10 @@ export const AppSidebar: React.FC<SidebarProps> = ({
       },
       isActive: activeTab === 'generator'
     },
-    /* HANYA MUNCUL JIKA USER ADALAH SUPER ADMIN DINAS */
+    /* HANYA MUNCUL JIKA USER ADALAH SUPER ADMIN / ADMIN DINAS */
     ...(isDinasUser ? [{
       id: 'dinas',
-      label: 'Modul Dinas',
+      label: 'Laporan Dinas',
       icon: Building2,
       badge: 'MUTASI',
       onClick: () => {

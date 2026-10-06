@@ -83,7 +83,7 @@ export const Navbar: React.FC<Props> = ({
   const isAdmin = currentUser.role === 'admin';
   const isOperator = currentUser.role === 'operator';
   const isPengguna = currentUser.role === 'pengguna';
-  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || currentUser?.sekolah_id === 'dinas_prov';
+  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'admin_dinas' || currentUser?.sekolah_id === 'dinas_prov' || currentUser?.username === 'dinas';
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {

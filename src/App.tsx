@@ -421,7 +421,7 @@ export default function App() {
     unitKerja: 'Subbag Tata Usaha & IT'
   };
 
-  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || currentUser?.sekolah_id === 'dinas_prov';
+  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'admin_dinas' || currentUser?.sekolah_id === 'dinas_prov' || currentUser?.username === 'dinas';
 
   // STRICT MULTI-TENANT ISOLATION GUARD:
   // If user is not super_admin / dinas, lock currentSekolahId to their assigned school!

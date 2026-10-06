@@ -98,7 +98,7 @@ export const DashboardStats: React.FC<Props> = ({
   schoolName = 'SMAN 1 CIHAURBEUTI'
 }) => {
   const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
-  const isDinasUser = currentUser?.role?.toLowerCase() === 'super_admin' || currentUser?.sekolah_id === 'dinas_prov';
+  const isDinasUser = currentUser?.role?.toLowerCase() === 'super_admin' || currentUser?.role?.toLowerCase() === 'admin_dinas' || currentUser?.sekolah_id === 'dinas_prov' || currentUser?.username === 'dinas';
 
   // 1. BANNER MINIMIZE STATE (Requirement 2 & 3)
   const [isBannerMinimized, setIsBannerMinimized] = useState<boolean>(() => {
