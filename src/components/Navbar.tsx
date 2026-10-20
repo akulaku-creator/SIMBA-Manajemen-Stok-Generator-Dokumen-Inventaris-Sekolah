@@ -27,7 +27,7 @@ import {
 import React, { useState } from 'react';
 import { AppUser, PaperSize, UserRole } from '../types';
 
-export type MainTab = 'dashboard' | 'generator' | 'barang' | 'pejabat' | 'dinas';
+export type MainTab = 'dashboard' | 'generator' | 'barang' | 'pejabat';
 
 interface Props {
   activeTab: MainTab;
@@ -83,7 +83,6 @@ export const Navbar: React.FC<Props> = ({
   const isAdmin = currentUser.role === 'admin';
   const isOperator = currentUser.role === 'operator';
   const isPengguna = currentUser.role === 'pengguna';
-  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'admin_dinas' || currentUser?.sekolah_id === 'dinas_prov' || currentUser?.username === 'dinas';
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
@@ -187,21 +186,6 @@ export const Navbar: React.FC<Props> = ({
                 >
                   <Users className="w-3.5 h-3.5" />
                   Master Pegawai
-                </button>
-              )}
-
-              {isDinasUser && (
-                <button
-                  id="nav-dinas"
-                  onClick={() => onTabChange('dinas')}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                    activeTab === 'dinas'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'text-indigo-200 hover:text-white hover:bg-indigo-900/60'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-                  <span>Laporan Dinas</span>
                 </button>
               )}
             </nav>
@@ -556,14 +540,6 @@ export const Navbar: React.FC<Props> = ({
                 className={`px-2 py-1 rounded-md transition-colors ${activeTab === 'pejabat' ? 'bg-blue-600 text-white font-bold' : 'text-slate-400'}`}
               >
                 Pegawai
-              </button>
-            )}
-            {isDinasUser && (
-              <button
-                onClick={() => onTabChange('dinas')}
-                className={`px-2 py-1 rounded-md transition-colors ${activeTab === 'dinas' ? 'bg-indigo-600 text-white font-bold' : 'text-indigo-400'}`}
-              >
-                Dinas
               </button>
             )}
           </div>

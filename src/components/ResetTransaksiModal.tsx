@@ -72,7 +72,7 @@ export const ResetTransaksiModal: React.FC<Props> = ({
 
   if (!isOpen) return null;
 
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
+  const isAdmin = currentUser.role === 'admin';
   const hasAnyScope = chkTransaksiPenyaluran || chkTransaksiPenerimaan || chkMutasiStok || chkMasterBarang || chkMasterPegawai;
   const isTransactionRelatedSelected = chkTransaksiPenyaluran || chkTransaksiPenerimaan || chkMutasiStok;
   
@@ -144,7 +144,6 @@ export const ResetTransaksiModal: React.FC<Props> = ({
         username: currentUser.username,
         userName: currentUser.nama,
         userRole: currentUser.role,
-        sekolah_id: currentUser.sekolah_id,
         nama_sekolah: schoolName,
         action: 'RESET_TRANSAKSI',
         title: `Pengosongan Data [${schoolName || 'Satuan Pendidikan'}]`,
@@ -211,14 +210,14 @@ export const ResetTransaksiModal: React.FC<Props> = ({
 
         <div className="p-6 space-y-4 text-xs text-slate-700 max-h-[78vh] overflow-y-auto">
           
-          {/* Multi-Tenant Scope Banner */}
+          {/* Single-Tenant School Scope Banner */}
           <div className="bg-blue-50 border border-blue-200/80 rounded-xl p-3 flex items-start gap-2.5 text-xs text-blue-900">
             <Building2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
             <div>
               <span className="font-bold">Konteks Satuan Pendidikan: </span>
-              <span className="font-extrabold text-blue-950">{schoolName || 'Satuan Pendidikan Terpilih'}</span>
+              <span className="font-extrabold text-blue-950">{schoolName || 'SMAN 1 CIHAURBEUTI'}</span>
               <p className="text-[11px] text-blue-700 mt-0.5">
-                Pengosongan data ini hanya berlaku secara lokal pada sekolah ini. Data sekolah lain dan 40 Rekening Belanja Resmi daerah tetap aman terlindungi.
+                Pengosongan data ini hanya berdampak pada operasional internal satuan pendidikan ini. Struktur master kode rekening belanja resmi tetap aman terlindungi.
               </p>
             </div>
           </div>

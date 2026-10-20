@@ -3,47 +3,44 @@ import { AuditLog, AuditAction, AuditSeverity, UserRole, Sekolah } from '../type
 const AUDIT_STORAGE_KEY = 'simba_audit_logs';
 
 /**
- * Realistic default seed audit logs showcasing multi-tenant isolation, 
- * security audits, and transactions across multiple schools.
+ * Realistic default seed audit logs for SMAN 1 Cihaurbeuti single-tenant system.
  */
 export const DEFAULT_AUDIT_LOGS: AuditLog[] = [
   {
     id: 'audit-sec-001',
-    sekolah_id: 'sekolah-smkn1-kota',
-    nama_sekolah: 'SMK Negeri 1 Kota Pendidikan',
+    nama_sekolah: 'SMAN 1 Cihaurbeuti',
     timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
     formattedDate: new Intl.DateTimeFormat('id-ID', {
       day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(new Date(Date.now() - 1000 * 60 * 12)),
-    userId: 'usr-admin-1',
+    userId: 'user-admin-1',
     username: 'admin',
-    userName: 'Ahmad Fauzi, S.Pd (Pengurus Barang)',
+    userName: 'Dedi Kurniawan, S.Pd. (Admin Sekolah)',
     userRole: 'admin',
     action: 'TAMBAH_TRANSAKSI',
     severity: 'INFO',
     title: 'Penerbitan Berkas Penyaluran Barang (NPB-SPB-SPPB-BAST)',
-    details: 'Berhasil menerbitkan 4 berkas dokumen resmi penyaluran barang inventaris ke Unit Pemohon: Laboratorium Komputer TKJ (No. BAST: 028/001/BAST-SMKN1/IX/2026). Stok 5 rim kertas A4 dan 2 mouse optik terpotong otomatis.',
+    details: 'Berhasil menerbitkan berkas resmi penyaluran barang inventaris ke Unit Pemohon: Laboratorium Komputer. Stok 5 rim kertas A4 dan 2 mouse optik terpotong otomatis.',
     status: 'SUCCESS',
     ipAddress: '192.168.1.45 (Local LAN)',
     deviceInfo: 'Chrome / Windows NT 10.0',
-    meta: { noBAST: '028/001/BAST-SMKN1/IX/2026', totalItems: 2, totalValue: 260000 }
+    meta: { noBAST: '028/001/BAST-SMAN1CH/2026', totalItems: 2, totalValue: 260000 }
   },
   {
     id: 'audit-sec-002',
-    sekolah_id: 'sekolah-sman1-cihaurbeuti',
     nama_sekolah: 'SMAN 1 Cihaurbeuti',
     timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
     formattedDate: new Intl.DateTimeFormat('id-ID', {
       day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(new Date(Date.now() - 1000 * 60 * 45)),
-    userId: 'usr-ch-operator',
-    username: 'operator.cihaurbeuti',
-    userName: 'Dedi Kurniawan, S.Pd',
+    userId: 'user-op-1',
+    username: 'operator',
+    userName: 'Siti Rohmah, S.Pd',
     userRole: 'operator',
     action: 'TAMBAH_PENERIMAAN',
     severity: 'INFO',
     title: 'Pencatatan Penerimaan Barang Belanja BOS Reguler',
-    details: 'Mencatat pengadaan ATK dan bahan cetak dari CV Sumber Berkah Mandiri senilai Rp 4.850.000 (No. Bukti: BUKTI-BOS-CHRBT-01). Saldo barang bertambah secara otomatis.',
+    details: 'Mencatat pengadaan ATK dan bahan cetak dari CV Sumber Berkah Mandiri senilai Rp 4.850.000 (No. Bukti: BUKTI-BOS-CHRBT-01). Saldo persediaan bertambah otomatis.',
     status: 'SUCCESS',
     ipAddress: '192.168.10.12 (Koneksi Satker)',
     deviceInfo: 'Edge / Windows 11',
@@ -51,68 +48,66 @@ export const DEFAULT_AUDIT_LOGS: AuditLog[] = [
   },
   {
     id: 'audit-sec-003',
-    sekolah_id: 'sekolah-smkn2-bandung',
-    nama_sekolah: 'SMKN 2 Bandung',
+    nama_sekolah: 'SMAN 1 Cihaurbeuti',
     timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
     formattedDate: new Intl.DateTimeFormat('id-ID', {
       day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(new Date(Date.now() - 1000 * 60 * 120)),
-    userId: 'usr-bdg-admin',
-    username: 'admin.smkn2',
-    userName: 'Rina Sugiarti, M.T',
+    userId: 'user-admin-1',
+    username: 'admin',
+    userName: 'Dedi Kurniawan, S.Pd.',
     userRole: 'admin',
     action: 'VERIFIKASI_DOKUMEN',
     severity: 'INFO',
     title: 'Pengecekan Integritas QR & Digital Hash Berkas',
-    details: 'Verifikasi hash tanda tangan elektronik dan QR Code BAST-028/014/SMKN2/2026. Status integritas: VALID & ASLI (100% matched checksum).',
+    details: 'Verifikasi hash tanda tangan elektronik dan QR Code BAST penyaluran barang. Status integritas: VALID & ASLI (100% matched checksum).',
     status: 'SUCCESS',
-    ipAddress: '10.0.12.88 (Jaringan Sekolah)',
-    deviceInfo: 'Safari / macOS',
-    meta: { docType: 'BAST', hash: 'SIMBA-BAST-202609-F9E2A1', isValid: true }
+    ipAddress: '192.168.1.45 (Local LAN)',
+    deviceInfo: 'Chrome / Windows NT 10.0',
+    meta: { docType: 'BAST', hash: 'SIMBA-BAST-2026-F9E2A1', isValid: true }
   },
   {
     id: 'audit-sec-004',
+    nama_sekolah: 'SMAN 1 Cihaurbeuti',
     timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
     formattedDate: new Intl.DateTimeFormat('id-ID', {
       day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(new Date(Date.now() - 1000 * 60 * 240)),
-    userId: 'usr-super-dinas',
-    username: 'dinas',
-    userName: 'Dr. H. Bambang Soediro, M.Pd (Pengawas Dinas)',
-    userRole: 'super_admin',
+    userId: 'user-admin-1',
+    username: 'admin',
+    userName: 'Dedi Kurniawan, S.Pd. (Admin Sekolah)',
+    userRole: 'admin',
     action: 'SECURITY_CHECK',
     severity: 'INFO',
-    title: 'Pemeriksaan Integritas Isolasi Multi-Tenant Lintas Satker',
-    details: 'Audit rutin partisi database: Seluruh transaksi dan saldo barang terisolasi 100% berdasarkan sekolah_id. Nol kebocoran data antar sekolah terdeteksi.',
+    title: 'Pemeriksaan Integritas Database Internal Sekolah',
+    details: 'Pemeriksaan integritas sistem: Seluruh transaksi dan saldo persediaan internal SMAN 1 Cihaurbeuti berjalan optimal dan valid.',
     status: 'SUCCESS',
-    ipAddress: '10.10.1.5 (Pusat Data Dinas Pendidikan)',
-    deviceInfo: 'Chrome / Linux x86_64',
-    meta: { inspectedTenants: 3, isolationScore: '100%', leaksDetected: 0 }
+    ipAddress: '127.0.0.1 (Local Workstation)',
+    deviceInfo: 'SIMBA Desktop Client',
+    meta: { tenantMode: 'SINGLE_TENANT', integrityScore: '100%' }
   },
   {
     id: 'audit-sec-005',
-    sekolah_id: 'sekolah-smkn1-kota',
-    nama_sekolah: 'SMK Negeri 1 Kota Pendidikan',
+    nama_sekolah: 'SMAN 1 Cihaurbeuti',
     timestamp: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
     formattedDate: new Intl.DateTimeFormat('id-ID', {
       day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
     }).format(new Date(Date.now() - 1000 * 60 * 360)),
-    userId: 'usr-staf-1',
-    username: 'budi_sarpras',
-    userName: 'Budi Santoso, S.Kom',
+    userId: 'user-user-1',
+    username: 'guru',
+    userName: 'Asep Saepudin, S.Pd',
     userRole: 'pengguna',
     action: 'LOGIN',
     severity: 'INFO',
     title: 'Sesi Otentikasi Pengguna Berhasil',
-    details: 'Pengguna berhasil masuk ke sistem dengan hak akses Staf Pemohon (SMK Negeri 1 Kota Pendidikan).',
+    details: 'Pengguna berhasil masuk ke sistem dengan hak akses Staf / Guru (SMAN 1 Cihaurbeuti).',
     status: 'SUCCESS',
     ipAddress: '192.168.1.80 (Mobile Client)',
     deviceInfo: 'Chrome Mobile / Android 14'
   },
   {
     id: 'audit-sec-006',
-    sekolah_id: 'sekolah-smkn1-kota',
-    nama_sekolah: 'SMK Negeri 1 Kota Pendidikan',
+    nama_sekolah: 'SMAN 1 Cihaurbeuti',
     timestamp: new Date(Date.now() - 1000 * 60 * 420).toISOString(),
     formattedDate: new Intl.DateTimeFormat('id-ID', {
       day: '2-digit', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
@@ -255,7 +250,7 @@ export const exportAuditLogsToCSV = (logsToExport?: AuditLog[]): void => {
   const rows = logs.map(l => [
     `"${l.formattedDate || l.timestamp}"`,
     `"${l.severity || 'INFO'}"`,
-    `"${l.nama_sekolah || l.sekolah_id || 'Global / Dinas'}"`,
+    `"${l.nama_sekolah || 'SMAN 1 Cihaurbeuti'}"`,
     `"${l.userName}"`,
     `"${l.username}"`,
     `"${l.userRole}"`,

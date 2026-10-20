@@ -97,8 +97,7 @@ export const DashboardStats: React.FC<Props> = ({
   kopConfig,
   schoolName = 'SMAN 1 CIHAURBEUTI'
 }) => {
-  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
-  const isDinasUser = currentUser?.role?.toLowerCase() === 'super_admin' || currentUser?.role?.toLowerCase() === 'admin_dinas' || currentUser?.sekolah_id === 'dinas_prov' || currentUser?.username === 'dinas';
+  const isAdmin = currentUser.role === 'admin';
 
   // 1. BANNER MINIMIZE STATE (Requirement 2 & 3)
   const [isBannerMinimized, setIsBannerMinimized] = useState<boolean>(() => {
@@ -610,7 +609,7 @@ export const DashboardStats: React.FC<Props> = ({
                   <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
                   <span>Standar Format Baku Instansi Pemerintah (A4/F4)</span>
                 </div>
-                <span className="text-[11px] text-slate-400 font-mono hidden sm:inline">&bull; Multi-Tenant Aktif</span>
+                <span className="text-[11px] text-slate-500 font-semibold hidden sm:inline">&bull; {schoolName}</span>
               </div>
 
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900 leading-snug">
@@ -626,17 +625,6 @@ export const DashboardStats: React.FC<Props> = ({
 
             {/* Banner Right Actions: Minimize toggle */}
             <div className="flex items-center gap-2 shrink-0 self-end lg:self-center">
-              {onOpenDinasModule && isDinasUser && (
-                <button
-                  type="button"
-                  onClick={onOpenDinasModule}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-900 text-xs font-bold shadow-2xs transition-all cursor-pointer"
-                  title="Buka Modul Pengawasan Dinas & Laporan Mutasi Gabungan"
-                >
-                  <Building2 className="w-3.5 h-3.5 text-blue-700" />
-                  <span>Modul Dinas</span>
-                </button>
-              )}
               <button
                 type="button"
                 onClick={toggleBanner}

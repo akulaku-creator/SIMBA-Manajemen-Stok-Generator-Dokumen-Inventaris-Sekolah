@@ -34,7 +34,7 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [confirmInput, setConfirmInput] = useState('');
-  const isAllowed = currentUser.role === 'admin' || currentUser.role === 'super_admin';
+  const isAllowed = currentUser.role === 'admin';
 
   if (!isOpen) return null;
 
@@ -66,7 +66,7 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
               </div>
               <div>
                 <span className="inline-block text-[10px] font-mono tracking-wider font-semibold uppercase px-2 py-0.5 rounded bg-rose-950/50 border border-white/20 text-rose-200 mb-1">
-                  Protokol Keamanan &amp; Reversi Saldo Multi-Tenant
+                  Protokol Keamanan &amp; Reversi Saldo Persediaan
                 </span>
                 <h3 className="text-base font-bold text-white">
                   {isPenyaluran 
@@ -238,7 +238,7 @@ export const SecurityDeleteConfirmModal: React.FC<Props> = ({
           <div className="text-[11px] text-slate-500 bg-slate-100/70 p-2.5 rounded-lg border border-slate-200 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              Tindakan ini akan dicatat ke dalam <strong>Security Audit Log Multi-Tenant</strong> dengan identitas <strong>{currentUser.nama}</strong> (@{currentUser.username}).
+              Tindakan ini akan dicatat ke dalam <strong>Security Audit Log Sistem</strong> dengan identitas <strong>{currentUser.nama}</strong> (@{currentUser.username}).
             </span>
           </div>
 

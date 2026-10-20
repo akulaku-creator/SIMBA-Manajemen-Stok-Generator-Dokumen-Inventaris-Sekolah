@@ -28,16 +28,16 @@ export const DEFAULT_KATEGORI_LIST: KategoriBarangItem[] = [
 export const DEFAULT_KOP_SURAT: KopSuratConfig = {
   pemerintahDaerah: 'PEMERINTAH DAERAH PROVINSI JAWA BARAT',
   dinasPendidikan: 'DINAS PENDIDIKAN',
-  cabangDinas: 'CABANG DINAS PENDIDIKAN WILAYAH III',
-  namaSekolah: 'SMK NEGERI 1 KOTA PENDIDIKAN',
-  alamatLengkap: 'Jl. Ki Hajar Dewantara No. 107, Telp. (021) 89901234, Fax. (021) 89901235',
-  emailWebsite: 'Email: info@smkn1kotapendidikan.sch.id | Website: https://smkn1kotapendidikan.sch.id',
-  npsn: '20231945',
-  kotaSurat: 'Bekasi',
+  cabangDinas: 'CABANG DINAS PENDIDIKAN WILAYAH XIII',
+  namaSekolah: 'SMAN 1 CIHAURBEUTI',
+  alamatLengkap: 'Jl. Kartawijaya No. 600, Cihaurbeuti, Kabupaten Ciamis',
+  emailWebsite: 'Email: info@sman1cihaurbeuti.sch.id | Website: https://sman1cihaurbeuti.sch.id',
+  npsn: '20211512',
+  kotaSurat: 'Ciamis',
   logoType: 'pemda',
   logoProvinsiType: 'pemda',
   tampilkanLogoProvinsi: true,
-  logoSekolahType: 'tutwuri',
+  logoSekolahType: 'sma',
   tampilkanLogoSekolah: true
 };
 
@@ -45,71 +45,47 @@ export const DEFAULT_PEJABAT: Pejabat[] = [
   {
     id: 'pejabat-kepsek',
     role: 'kepala_sekolah',
-    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
-    nip: '19680512 199303 1 005',
+    nama: 'Dra. Hj. Imas Rohayati, M.Pd.',
+    nip: '19690321 199412 2 001',
     pangkatGolongan: 'Pembina Utama Muda / IV c',
     jabatan: 'Kepala Sekolah',
-    unitKerja: 'Pimpinan Lembaga'
+    unitKerja: 'Pimpinan SMAN 1 Cihaurbeuti'
   },
   {
     id: 'pejabat-sarpras',
     role: 'sarpras',
-    nama: 'Ahmad Fauzi, S.Pd., M.T.',
-    nip: '19780415 200501 1 009',
+    nama: 'H. Dadan Hamdani, M.Pd.',
+    nip: '19750210 200312 1 004',
     pangkatGolongan: 'Penata Tingkat I / III d',
     jabatan: 'Wakasek Sarana Prasarana',
-    unitKerja: 'Wakasek Bidang Sarpras'
+    unitKerja: 'Sarpras SMAN 1 Cihaurbeuti'
   },
   {
     id: 'pejabat-pengurus-barang',
     role: 'pengurus_barang',
-    nama: 'Rina Kartikasari, S.AP.',
-    nip: '19890820 201402 2 003',
-    pangkatGolongan: 'Penata Muda / III a',
+    nama: 'Endang Kusnandar, S.AP.',
+    nip: '19870512 201101 1 007',
+    pangkatGolongan: 'Penata / III c',
     jabatan: 'Pengurus Barang Pembantu',
-    unitKerja: 'Pengelola Aset & Inventaris'
-  },
-  {
-    id: 'pejabat-tu',
-    nama: 'H. Dadang Irawan, S.Sos.',
-    nip: '19750311 200003 1 004',
-    pangkatGolongan: 'Penata / III c',
-    jabatan: 'Kepala Subbagian Tata Usaha',
-    unitKerja: 'Bagian Tata Usaha'
-  },
-  {
-    id: 'pejabat-lab-komputer',
-    nama: 'Dian Wahyuni, S.Kom.',
-    nip: '19850614 201001 2 018',
-    pangkatGolongan: 'Penata Muda Tingkat I / III b',
-    jabatan: 'Kepala Laboratorium Komputer',
-    unitKerja: 'Unit Lab Komputer'
-  },
-  {
-    id: 'pejabat-kurikulum',
-    nama: 'Sugeng Priyadi, S.Pd.',
-    nip: '19820207 200801 1 012',
-    pangkatGolongan: 'Penata / III c',
-    jabatan: 'Koordinator Kurikulum & Asesmen',
-    unitKerja: 'Bidang Kurikulum'
+    unitKerja: 'Pengelola Persediaan Barang'
   },
   {
     id: 'pejabat-bendahara-bos',
-    nama: 'Sri Wahyuni, S.E., M.Ak.',
-    nip: '19840916 200902 2 004',
+    role: 'bendahara_bos',
+    nama: 'Yanti Rohmayanti, S.Pd.',
+    nip: '19810815 200604 2 011',
     pangkatGolongan: 'Penata Tingkat I / III d',
     jabatan: 'Bendahara BOS',
-    statusJabatan: 'Definitif',
-    unitKerja: 'Pengelola Keuangan BOS / APBD'
+    unitKerja: 'Pengelola Keuangan SMAN 1 Cihaurbeuti'
   },
   {
     id: 'pejabat-tim-pemeriksa',
-    nama: 'Ir. H. Gunawan Wibisono, M.T.',
-    nip: '19760714 200212 1 003',
-    pangkatGolongan: 'Pembina / IV a',
+    role: 'tim_pemeriksa',
+    nama: 'Dedi Kusmayadi, S.Pd.',
+    nip: '19790412 200501 1 008',
+    pangkatGolongan: 'Penata / III c',
     jabatan: 'Tim Pemeriksa Fisik',
-    statusJabatan: 'Definitif',
-    unitKerja: 'Tim Pemeriksa Barang Persediaan'
+    unitKerja: 'Pemeriksa Fisik Barang Persediaan'
   }
 ];
 

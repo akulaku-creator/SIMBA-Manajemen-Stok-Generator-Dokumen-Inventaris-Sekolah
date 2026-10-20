@@ -78,10 +78,7 @@ export const AuditLogModal: React.FC<Props> = ({
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [actionCategoryFilter, setActionCategoryFilter] = useState<string>('ALL');
   const [timeRangeFilter, setTimeRangeFilter] = useState<'ALL' | 'TODAY' | 'WEEK' | 'MONTH'>('ALL');
-  const [sekolahFilter, setSekolahFilter] = useState<string>(() => {
-    if (currentUser?.role === 'super_admin') return 'ALL';
-    return currentSekolahId || 'ALL';
-  });
+  const [sekolahFilter, setSekolahFilter] = useState<string>('ALL');
   const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   // Verification tab states
@@ -97,8 +94,7 @@ export const AuditLogModal: React.FC<Props> = ({
     verificationDate?: string;
   } | null>(null);
 
-  const isSuperAdmin = currentUser?.role === 'super_admin';
-  const isAdmin = currentUser?.role === 'admin' || isSuperAdmin;
+  const isAdmin = currentUser?.role === 'admin';
 
   const handleRefresh = () => {
     setLogs(getAuditLogs());
@@ -315,19 +311,19 @@ export const AuditLogModal: React.FC<Props> = ({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base font-bold text-white tracking-tight">
-                  Pusat Keamanan &amp; Audit Log Multi-Tenant
+                  Pusat Keamanan &amp; Audit Log Sekolah
                 </h2>
                 <span className="bg-indigo-500/30 text-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-md border border-indigo-400/40 uppercase tracking-wider">
                   Langkah 5: Keamanan &amp; Integritas Data
                 </span>
-                {isSuperAdmin && (
-                  <span className="bg-rose-500/25 text-rose-200 text-[10px] font-bold px-2 py-0.5 rounded-md border border-rose-400/30 uppercase">
-                    Dinas / Super Admin
+                {isAdmin && (
+                  <span className="bg-indigo-500/25 text-indigo-200 text-[10px] font-bold px-2 py-0.5 rounded-md border border-indigo-400/30 uppercase">
+                    Admin Sekolah
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-300 mt-0.5">
-                Pengawasan komprehensif atas seluruh integritas data, isolasi partisi per sekolah, jejak audit multi-tenant, dan pencegahan manipulasi persediaan.
+                Pengawasan komprehensif atas seluruh integritas data, jejak audit operasional sekolah, dan perlindungan data persediaan lokal.
               </p>
             </div>
           </div>
@@ -465,7 +461,7 @@ export const AuditLogModal: React.FC<Props> = ({
                   </button>
                 )}
 
-                {isSuperAdmin && (
+                {isAdmin && (
                   <button
                     type="button"
                     onClick={handleClear}

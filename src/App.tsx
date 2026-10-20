@@ -20,10 +20,8 @@ import { SchemaAndScriptModal } from './components/SchemaAndScriptModal';
 import { StaffPermintaanNPBView } from './components/StaffPermintaanNPBView';
 import { TransactionForm } from './components/TransactionForm';
 import { UserManagementModal } from './components/UserManagementModal';
-import { MasterSekolahModal } from './components/MasterSekolahModal';
-import { ModulDinasView } from './components/ModulDinasView';
-import { RouteForbiddenView } from './components/RouteForbiddenView';
 import { GoogleSheetsModal } from './components/GoogleSheetsModal';
+import { APP_CONFIG } from './config/appConfig';
 import { LoginView } from './components/LoginView';
 import { AuditLogModal } from './components/AuditLogModal';
 import { SecurityDeleteConfirmModal } from './components/SecurityDeleteConfirmModal';
@@ -42,13 +40,7 @@ import {
 } from './data/defaultData';
 import { DEFAULT_USERS } from './data/defaultUsers';
 import { 
-  DEFAULT_SEKOLAH_LIST, 
-  DEFAULT_PRIMARY_SEKOLAH_ID, 
-  DEFAULT_KOP_SURAT_BY_SEKOLAH, 
-  DEFAULT_PEJABAT_BY_SEKOLAH,
-  DEFAULT_BARANG_BY_SEKOLAH,
-  DEFAULT_TRANSAKSI_BY_SEKOLAH,
-  DEFAULT_PENERIMAAN_BY_SEKOLAH
+  DEFAULT_PRIMARY_SEKOLAH_ID
 } from './data/defaultSchools';
 import { 
   AppUser, 
@@ -68,49 +60,45 @@ import { DEFAULT_NUMBERING_CONFIG } from './utils/numberGenerator';
 import { getNamaRekeningByKode } from './data/kodeRekeningData';
 
 export default function App() {
-  // Multi-Tenant School Management
-  const [sekolahList, setSekolahList] = useState<Sekolah[]>(() => {
-    const saved = localStorage.getItem('simba_sekolah_list');
-    return saved ? JSON.parse(saved) : DEFAULT_SEKOLAH_LIST;
+  // Single-Tenant School Configuration (SMAN 1 CIHAURBEUTI)
+  const defaultSchoolObj: Sekolah = useMemo(() => ({
+    id: DEFAULT_PRIMARY_SEKOLAH_ID,
+    nama: APP_CONFIG.defaultSchool.namaSekolah,
+    nama_sekolah: APP_CONFIG.defaultSchool.namaSekolah,
+    npsn: APP_CONFIG.defaultSchool.npsn,
+    instansi: APP_CONFIG.defaultSchool.instansi,
+    wilayah: APP_CONFIG.defaultSchool.wilayah,
+    alamat: 'Jl. Kartawijaya No. 600, Cihaurbeuti',
+    kabupaten_kota: 'Kabupaten Ciamis',
+    kota: 'Ciamis',
+    provinsi: 'Jawa Barat',
+    telepon: '(0265) 771234',
+    email: 'info@sman1cihaurbeuti.sch.id',
+    website: 'https://sman1cihaurbeuti.sch.id',
+    jenjang: 'SMA',
+    status: 'Negeri',
+    isActive: true
+  }), []);
+
+  const [sekolahList] = useState<Sekolah[]>([defaultSchoolObj]);
+  const currentSekolahId = DEFAULT_PRIMARY_SEKOLAH_ID;
+
+  // Single-Tenant Kop Surat Config
+  const [kopConfig, setKopConfig] = useState<KopSuratConfig>(() => {
+    const saved = localStorage.getItem('simba_kop_config');
+    return saved ? JSON.parse(saved) : DEFAULT_KOP_SURAT;
   });
 
-  const [currentSekolahId, setCurrentSekolahId] = useState<string>(() => {
-    const saved = localStorage.getItem('simba_active_sekolah_id');
-    return saved ? saved : DEFAULT_PRIMARY_SEKOLAH_ID;
-  });
-
-  // Per-School Kop Surat Config Map
-  const [kopConfigMap, setKopConfigMap] = useState<Record<string, KopSuratConfig>>(() => {
-    const saved = localStorage.getItem('simba_kop_config_map');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    const single = localStorage.getItem('simba_kop_config');
-    const baseDefault = single ? JSON.parse(single) : DEFAULT_KOP_SURAT;
-    return {
-      [DEFAULT_PRIMARY_SEKOLAH_ID]: { ...baseDefault, sekolah_id: DEFAULT_PRIMARY_SEKOLAH_ID },
-      ...DEFAULT_KOP_SURAT_BY_SEKOLAH
-    };
-  });
-
-  // Per-School Numbering Pattern Config Map
-  const [numberingConfigMap, setNumberingConfigMap] = useState<Record<string, NumberingPatternConfig>>(() => {
-    const saved = localStorage.getItem('simba_numbering_config_map');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
-    }
-    const single = localStorage.getItem('simba_numbering_config');
-    const baseDefault = single ? JSON.parse(single) : DEFAULT_NUMBERING_CONFIG;
-    return {
-      [DEFAULT_PRIMARY_SEKOLAH_ID]: { ...baseDefault, sekolah_id: DEFAULT_PRIMARY_SEKOLAH_ID }
-    };
+  // Single-Tenant Numbering Pattern Config
+  const [numberingConfig, setNumberingConfig] = useState<NumberingPatternConfig>(() => {
+    const saved = localStorage.getItem('simba_numbering_config');
+    return saved ? JSON.parse(saved) : DEFAULT_NUMBERING_CONFIG;
   });
 
   const [pejabatList, setPejabatList] = useState<Pejabat[]>(() => {
     const saved = localStorage.getItem('simba_pejabat_list');
     let list: Pejabat[] = saved ? JSON.parse(saved) : DEFAULT_PEJABAT;
-    // Auto-migrate: Tag with primary school if sekolah_id is missing and guarantee accurate roles
-    list = list.map(p => {
+    return list.map(p => {
       let role = p.role;
       if (!role) {
         if (p.id?.includes('kepsek') || p.jabatan?.toLowerCase().includes('kepala sekolah')) {
@@ -125,42 +113,24 @@ export default function App() {
       }
       return {
         ...p,
-        role,
-        sekolah_id: p.sekolah_id || DEFAULT_PRIMARY_SEKOLAH_ID
+        role
       };
     });
-    // Seed initial officials for other schools if not present
-    for (const [schId, pejabats] of Object.entries(DEFAULT_PEJABAT_BY_SEKOLAH)) {
-      if (!list.some(p => p.sekolah_id === schId)) {
-        list.push(...pejabats);
-      }
-    }
-    return list;
   });
 
   const [masterBarang, setMasterBarang] = useState<Barang[]>(() => {
     const saved = localStorage.getItem('simba_master_barang');
     let list: Barang[] = saved ? JSON.parse(saved) : DEFAULT_BARANG;
-    // Auto-migrate & synchronize official descriptions for 40 official accounts:
-    // Single Source of Truth: 1 Kategori Barang = 1 Kode Rekening Belanja + Tag sekolah_id
-    list = list.map(b => {
+    return list.map(b => {
       const kode = b.kodeRekening?.trim() || '5.1.02.01.01.0024';
       const officialName = getNamaRekeningByKode(kode);
       return {
         ...b,
-        sekolah_id: b.sekolah_id || DEFAULT_PRIMARY_SEKOLAH_ID,
         kodeRekening: kode,
         namaRekening: officialName,
         kategori: officialName
       };
     });
-    // Seed initial items for other schools if not present
-    for (const [schId, items] of Object.entries(DEFAULT_BARANG_BY_SEKOLAH)) {
-      if (!list.some(b => b.sekolah_id === schId)) {
-        list.push(...items);
-      }
-    }
-    return list;
   });
 
   const [kategoriList, setKategoriList] = useState<KategoriBarangItem[]>(() => {
@@ -185,9 +155,8 @@ export default function App() {
   const [transaksiList, setTransaksiList] = useState<TransaksiPengeluaran[]>(() => {
     const saved = localStorage.getItem('simba_transaksi_list');
     let list: TransaksiPengeluaran[] = saved ? JSON.parse(saved) : DEFAULT_TRANSAKSI_PENGELUARAN;
-    list = list.map(trx => ({
+    return list.map(trx => ({
       ...trx,
-      sekolah_id: trx.sekolah_id || DEFAULT_PRIMARY_SEKOLAH_ID,
       items: trx.items.map(it => {
         const kode = it.kodeRekening?.trim() || '5.1.02.01.01.0024';
         const officialName = getNamaRekeningByKode(kode);
@@ -198,21 +167,13 @@ export default function App() {
         };
       })
     }));
-    // Seed initial transactions for other schools if not present
-    for (const [schId, trxs] of Object.entries(DEFAULT_TRANSAKSI_BY_SEKOLAH)) {
-      if (!list.some(t => t.sekolah_id === schId)) {
-        list.push(...trxs);
-      }
-    }
-    return list;
   });
 
   const [penerimaanList, setPenerimaanList] = useState<TransaksiPenerimaan[]>(() => {
     const saved = localStorage.getItem('simba_penerimaan_list');
     let list: TransaksiPenerimaan[] = saved ? JSON.parse(saved) : DEFAULT_TRANSAKSI_PENERIMAAN;
-    list = list.map(rcv => ({
+    return list.map(rcv => ({
       ...rcv,
-      sekolah_id: rcv.sekolah_id || DEFAULT_PRIMARY_SEKOLAH_ID,
       items: rcv.items.map(it => {
         const kode = it.kodeRekening?.trim() || '5.1.02.01.01.0024';
         const officialName = getNamaRekeningByKode(kode);
@@ -223,13 +184,6 @@ export default function App() {
         };
       })
     }));
-    // Seed initial penerimaan for other schools if not present
-    for (const [schId, rcvs] of Object.entries(DEFAULT_PENERIMAAN_BY_SEKOLAH)) {
-      if (!list.some(p => p.sekolah_id === schId)) {
-        list.push(...rcvs);
-      }
-    }
-    return list;
   });
 
   // User Management & Roles
@@ -292,7 +246,6 @@ export default function App() {
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
-  const [isMasterSekolahOpen, setIsMasterSekolahOpen] = useState(false);
   const [isGoogleSheetsOpen, setIsGoogleSheetsOpen] = useState(false);
   const [googleSheetConfig, setGoogleSheetConfig] = useState<GoogleSheetSyncConfig | null>(() => {
     const saved = localStorage.getItem('simba_gsheet_config');
@@ -342,7 +295,7 @@ export default function App() {
           const matched = transaksiList.find(t => t.id === id || t.noNPB === no || t.noSPB === no || t.noSPPB === no || t.noBAST === no);
           if (matched) {
             const docNo = no || (type === 'NPB' ? matched.noNPB : type === 'SPB' ? matched.noSPB : type === 'SPPB' ? matched.noSPPB : matched.noBAST);
-            const matchedKop = kopConfigMap[matched.sekolah_id || ''] || DEFAULT_KOP_SURAT_BY_SEKOLAH[matched.sekolah_id || ''] || DEFAULT_KOP_SURAT;
+            const matchedKop = kopConfig || DEFAULT_KOP_SURAT;
             const verifData = buildVerificationData(type, matched, docNo, matchedKop);
             setVerificationModalState({
               isOpen: true,
@@ -355,7 +308,7 @@ export default function App() {
     } catch (err) {
       console.error('Failed to parse URL verification parameters:', err);
     }
-  }, [transaksiList, kopConfigMap]);
+  }, [transaksiList, kopConfig]);
 
   const handleUpdateSheetConfig = (newCfg: GoogleSheetSyncConfig | null) => {
     setGoogleSheetConfig(newCfg);
@@ -366,22 +319,14 @@ export default function App() {
     }
   };
 
-  // Sync to localStorage
+  // Sync to localStorage (Single-Tenant)
   useEffect(() => {
-    localStorage.setItem('simba_sekolah_list', JSON.stringify(sekolahList));
-  }, [sekolahList]);
+    localStorage.setItem('simba_kop_config', JSON.stringify(kopConfig));
+  }, [kopConfig]);
 
   useEffect(() => {
-    localStorage.setItem('simba_active_sekolah_id', currentSekolahId);
-  }, [currentSekolahId]);
-
-  useEffect(() => {
-    localStorage.setItem('simba_kop_config_map', JSON.stringify(kopConfigMap));
-  }, [kopConfigMap]);
-
-  useEffect(() => {
-    localStorage.setItem('simba_numbering_config_map', JSON.stringify(numberingConfigMap));
-  }, [numberingConfigMap]);
+    localStorage.setItem('simba_numbering_config', JSON.stringify(numberingConfig));
+  }, [numberingConfig]);
 
   useEffect(() => {
     localStorage.setItem('simba_pejabat_list', JSON.stringify(pejabatList));
@@ -413,67 +358,27 @@ export default function App() {
 
   const currentUser: AppUser = userList.find(u => u.id === currentUserId) || userList[0] || {
     id: 'user-admin-1',
-    sekolah_id: DEFAULT_PRIMARY_SEKOLAH_ID,
-    nama: 'Ratna Indrawati, S.Kom',
+    nama: 'Dedi Kurniawan, S.Pd.',
     username: 'admin',
     role: 'admin',
-    jabatan: 'Admin Sistem & Pengurus Barang',
+    jabatan: 'Administrator Sistem & Pengurus Barang',
     unitKerja: 'Subbag Tata Usaha & IT'
   };
 
-  const isDinasUser = (currentUser?.role as string) === 'SUPER_ADMIN' || currentUser?.role === 'super_admin' || (currentUser?.role as string) === 'admin_dinas' || currentUser?.sekolah_id === 'dinas_prov' || currentUser?.username === 'dinas';
-
-  // STRICT MULTI-TENANT ISOLATION GUARD:
-  // If user is not super_admin / dinas, lock currentSekolahId to their assigned school!
-  useEffect(() => {
-    if (!isDinasUser && currentUser.sekolah_id) {
-      if (currentSekolahId !== currentUser.sekolah_id) {
-        setCurrentSekolahId(currentUser.sekolah_id);
-        localStorage.setItem('simba_active_sekolah_id', currentUser.sekolah_id);
-      }
-    }
-  }, [currentUser, isDinasUser, currentSekolahId]);
-
-  // ROUTE CONTROLLER & RBAC URL SECURITY GUARD (Requirement 3: 403 Forbidden)
+  // ROUTE CONTROLLER (Single-Tenant Pure Navigation)
   useEffect(() => {
     const handleLocationChange = () => {
       const pathname = window.location.pathname.toLowerCase();
       const hash = window.location.hash.toLowerCase().replace('#', '');
       
-      const isDinasTarget = pathname.includes('modul-dinas') || hash.includes('modul-dinas') || hash === 'dinas';
-      const isSekolahTarget = pathname.includes('data-sekolah') || hash.includes('data-sekolah') || hash === 'sekolah';
-
-      if (isDinasTarget || isSekolahTarget) {
-        if (!isDinasUser) {
-          const targetedRoute = isDinasTarget ? '/modul-dinas' : '/data-sekolah';
-          setForbiddenRoute(targetedRoute);
-          logAuditEvent({
-            userId: currentUser.id,
-            username: currentUser.username,
-            userName: currentUser.nama,
-            userRole: currentUser.role,
-            action: 'SECURITY_ALERT',
-            title: `Percobaan Akses Ilegal ${targetedRoute} (403 Forbidden)`,
-            details: `Pengguna ${currentUser.nama} (@${currentUser.username}) dengan role ${currentUser.role} mengakses URL ${targetedRoute} secara manual. Akses diblokir oleh Route Controller.`,
-            status: 'WARNING'
-          });
-        } else {
-          setForbiddenRoute(null);
-          if (isDinasTarget) {
-            setActiveTab('dinas');
-          } else if (isSekolahTarget) {
-            setIsMasterSekolahOpen(true);
-          }
-        }
+      if (pathname.includes('generator') || hash === 'generator') {
+        setActiveTab('generator');
+      } else if (pathname.includes('master-barang') || hash === 'barang') {
+        setActiveTab('barang');
+      } else if (pathname.includes('master-pegawai') || hash === 'pejabat') {
+        setActiveTab('pejabat');
       } else {
-        setForbiddenRoute(null);
-        if (pathname.includes('generator') || hash === 'generator') {
-          setActiveTab('generator');
-        } else if (pathname.includes('master-barang') || hash === 'barang') {
-          setActiveTab('barang');
-        } else if (pathname.includes('master-pegawai') || hash === 'pejabat') {
-          setActiveTab('pejabat');
-        }
+        setActiveTab('dashboard');
       }
     };
 
@@ -484,30 +389,14 @@ export default function App() {
       window.removeEventListener('popstate', handleLocationChange);
       window.removeEventListener('hashchange', handleLocationChange);
     };
-  }, [currentUser, isDinasUser]);
+  }, []);
 
   const handleTabChange = (tab: MainTab) => {
-    if (tab === 'dinas' && !isDinasUser) {
-      setForbiddenRoute('/modul-dinas');
-      logAuditEvent({
-        userId: currentUser.id,
-        username: currentUser.username,
-        userName: currentUser.nama,
-        userRole: currentUser.role,
-        action: 'SECURITY_ALERT',
-        title: 'Akses Ditolak: Rute Modul Dinas (403 Forbidden)',
-        details: `Pengguna ${currentUser.nama} (@${currentUser.username}) dengan role ${currentUser.role} dilarang mengakses Modul Dinas.`,
-        status: 'WARNING'
-      });
-      return;
-    }
-    setForbiddenRoute(null);
     setActiveTab(tab);
     if (window.history.pushState) {
       const pathMap: Record<MainTab, string> = {
         dashboard: '/',
         generator: '/generator',
-        dinas: '/modul-dinas',
         barang: '/master-barang',
         pejabat: '/master-pegawai'
       };
@@ -515,85 +404,32 @@ export default function App() {
     }
   };
 
-  const handleOpenMasterSekolah = () => {
-    if (!isDinasUser) {
-      setForbiddenRoute('/data-sekolah');
-      logAuditEvent({
-        userId: currentUser.id,
-        username: currentUser.username,
-        userName: currentUser.nama,
-        userRole: currentUser.role,
-        action: 'SECURITY_ALERT',
-        title: 'Akses Ditolak: Rute Master Sekolah (403 Forbidden)',
-        details: `Pengguna ${currentUser.nama} (@${currentUser.username}) dilarang membuka Master Data Sekolah.`,
-        status: 'WARNING'
-      });
-      return;
-    }
-    setForbiddenRoute(null);
-    setIsMasterSekolahOpen(true);
-    if (window.history.pushState) {
-      window.history.pushState(null, '', '/data-sekolah');
-    }
-  };
-
-  // Active School Tenant Object
-  const activeSekolah = useMemo(() => {
-    return sekolahList.find(s => s.id === currentSekolahId) || sekolahList[0] || {
+  // Active School Entity (Single-Tenant)
+  const activeSekolah: Sekolah = useMemo(() => {
+    return {
       id: DEFAULT_PRIMARY_SEKOLAH_ID,
-      nama: 'SMAN 1 CIHAURBEUTI',
-      npsn: '20211512'
+      nama: kopConfig.namaSekolah || APP_CONFIG.defaultSchool.namaSekolah,
+      nama_sekolah: kopConfig.namaSekolah || APP_CONFIG.defaultSchool.namaSekolah,
+      npsn: kopConfig.npsn || APP_CONFIG.defaultSchool.npsn,
+      alamat: kopConfig.alamatLengkap,
+      kota: kopConfig.kotaSurat,
+      provinsi: 'Jawa Barat',
+      status: 'Negeri',
+      jenjang: 'SMA',
+      isActive: true
     };
-  }, [sekolahList, currentSekolahId]);
+  }, [kopConfig]);
 
-  // Active School Kop Surat
-  const activeKopConfig: KopSuratConfig = useMemo(() => {
-    if (kopConfigMap[currentSekolahId]) {
-      return kopConfigMap[currentSekolahId];
-    }
-    const preset = DEFAULT_KOP_SURAT_BY_SEKOLAH[currentSekolahId];
-    if (preset) return preset;
-    return {
-      ...DEFAULT_KOP_SURAT,
-      sekolah_id: currentSekolahId,
-      namaSekolah: activeSekolah.nama,
-      npsn: activeSekolah.npsn,
-      alamatLengkap: activeSekolah.alamat ? `${activeSekolah.alamat}, Kota ${activeSekolah.kota || ''}` : DEFAULT_KOP_SURAT.alamatLengkap,
-      kotaSurat: activeSekolah.kota || DEFAULT_KOP_SURAT.kotaSurat
-    };
-  }, [kopConfigMap, currentSekolahId, activeSekolah]);
+  const activeKopConfig: KopSuratConfig = kopConfig;
+  const activeNumberingConfig: NumberingPatternConfig = numberingConfig;
 
-  // Active School Numbering Pattern
-  const activeNumberingConfig: NumberingPatternConfig = useMemo(() => {
-    if (numberingConfigMap[currentSekolahId]) {
-      return numberingConfigMap[currentSekolahId];
-    }
-    const code = activeSekolah.nama.replace(/[^A-Za-z0-9]/g, '').slice(0, 10).toUpperCase();
-    return {
-      ...DEFAULT_NUMBERING_CONFIG,
-      sekolah_id: currentSekolahId,
-      schoolCode: code || DEFAULT_NUMBERING_CONFIG.schoolCode
-    };
-  }, [numberingConfigMap, currentSekolahId, activeSekolah]);
+  // Single-Tenant Datasets: Direct access without relational filtering overhead
+  const scopedBarang = masterBarang;
+  const scopedTransaksi = transaksiList;
+  const scopedPenerimaan = penerimaanList;
+  const scopedPejabat = pejabatList;
 
-  // STRICT DATA ISOLATION: Scoped Datasets for Active School
-  const scopedBarang = useMemo(() => {
-    return masterBarang.filter(b => b.sekolah_id === currentSekolahId || (!b.sekolah_id && currentSekolahId === DEFAULT_PRIMARY_SEKOLAH_ID));
-  }, [masterBarang, currentSekolahId]);
-
-  const scopedTransaksi = useMemo(() => {
-    return transaksiList.filter(t => t.sekolah_id === currentSekolahId || (!t.sekolah_id && currentSekolahId === DEFAULT_PRIMARY_SEKOLAH_ID));
-  }, [transaksiList, currentSekolahId]);
-
-  const scopedPenerimaan = useMemo(() => {
-    return penerimaanList.filter(p => p.sekolah_id === currentSekolahId || (!p.sekolah_id && currentSekolahId === DEFAULT_PRIMARY_SEKOLAH_ID));
-  }, [penerimaanList, currentSekolahId]);
-
-  const scopedPejabat = useMemo(() => {
-    return pejabatList.filter(p => p.sekolah_id === currentSekolahId || (!p.sekolah_id && currentSekolahId === DEFAULT_PRIMARY_SEKOLAH_ID));
-  }, [pejabatList, currentSekolahId]);
-
-  // Synchronize selected transaction when active school changes
+  // Synchronize selected transaction
   useEffect(() => {
     if (scopedTransaksi.length > 0) {
       if (!scopedTransaksi.some(t => t.id === selectedTransaksiId)) {
@@ -602,183 +438,37 @@ export default function App() {
     } else {
       setSelectedTransaksiId('');
     }
-  }, [currentSekolahId, scopedTransaksi]);
-
-  const handleSelectSekolah = (newSekolahId: string) => {
-    if (currentUser.role !== 'super_admin') {
-      showToast('Akses Dibatasi: Hanya pengguna Super Admin / Dinas yang dapat berpindah sekolah.');
-      return;
-    }
-    setCurrentSekolahId(newSekolahId);
-    localStorage.setItem('simba_active_sekolah_id', newSekolahId);
-    const target = sekolahList.find(s => s.id === newSekolahId);
-    logAuditEvent({
-      userId: currentUser.id,
-      username: currentUser.username,
-      userName: currentUser.nama,
-      userRole: currentUser.role,
-      action: 'SWITCH_SEKOLAH',
-      title: 'Supervisi Beralih Sekolah',
-      details: `Beralih ke supervisi sekolah: ${target?.nama || newSekolahId} (NPSN: ${target?.npsn || '-'}).`,
-      status: 'SUCCESS'
-    });
-    showToast(`Beralih ke: ${target?.nama || newSekolahId}`);
-  };
-
-  const handleAddSekolah = (newSekolah: Sekolah) => {
-    // 1. Add to master sekolah list
-    setSekolahList(prev => [...prev, newSekolah]);
-
-    // 2. Automatically provision per-school Kop Surat
-    const newKop: KopSuratConfig = {
-      sekolah_id: newSekolah.id,
-      pemerintahDaerah: `PEMERINTAH DAERAH PROVINSI ${(newSekolah.provinsi || 'JAWA BARAT').toUpperCase()}`,
-      dinasPendidikan: 'DINAS PENDIDIKAN',
-      cabangDinas: `CABANG DINAS PENDIDIKAN ${newSekolah.kabupaten_kota || newSekolah.kota ? `WILAYAH (${newSekolah.kabupaten_kota || newSekolah.kota})` : 'WILAYAH SETEMPAT'}`,
-      namaSekolah: newSekolah.nama,
-      alamatLengkap: `${newSekolah.alamat || ''}${newSekolah.kabupaten_kota || newSekolah.kota ? `, ${newSekolah.kabupaten_kota || newSekolah.kota}` : ''}${newSekolah.telepon ? `, Telp. ${newSekolah.telepon}` : ''}`,
-      emailWebsite: `Email: ${newSekolah.email || '-'} | Website: ${newSekolah.website || '-'}`,
-      npsn: newSekolah.npsn,
-      kotaSurat: newSekolah.kabupaten_kota || newSekolah.kota || 'Kota',
-      logoType: 'pemda',
-      logoProvinsiType: 'pemda',
-      tampilkanLogoProvinsi: true,
-      logoSekolahType: (newSekolah.logo as any) || (newSekolah.jenjang === 'SMA' ? 'sma' : 'tutwuri'),
-      tampilkanLogoSekolah: true
-    };
-    setKopConfigMap(prev => ({
-      ...prev,
-      [newSekolah.id]: newKop
-    }));
-
-    // 3. Automatically provision standard officials for this school
-    const initialOfficials: Pejabat[] = [
-      {
-        id: `pejabat-ks-${newSekolah.id}`,
-        sekolah_id: newSekolah.id,
-        nama: newSekolah.kepalaSekolahNama || 'Kepala Satuan Pendidikan',
-        nip: newSekolah.kepalaSekolahNip || '19720101 199802 1 001',
-        jabatan: 'Kepala Sekolah',
-        role: 'kepala_sekolah',
-        peran: 'kepala_sekolah',
-        pangkatGolongan: 'Pembina / IV/a'
-      },
-      {
-        id: `pejabat-pb-${newSekolah.id}`,
-        sekolah_id: newSekolah.id,
-        nama: 'Pengurus Barang Sekolah',
-        nip: '19860205 201101 2 003',
-        jabatan: 'Pengurus Barang Pembantu',
-        role: 'pengurus_barang',
-        peran: 'pengurus_barang',
-        pangkatGolongan: 'Penata / III/c'
-      },
-      {
-        id: `pejabat-pp-${newSekolah.id}`,
-        sekolah_id: newSekolah.id,
-        nama: 'Petugas Pengeluaran Barang',
-        nip: '19910510 201602 1 004',
-        jabatan: 'Petugas Gudang & Pengeluaran',
-        role: 'pengurus_barang',
-        peran: 'pengurus_barang',
-        pangkatGolongan: 'Pengatur / II/c'
-      }
-    ];
-    setPejabatList(prev => [...prev, ...initialOfficials]);
-
-    // 4. Log audit event
-    logAuditEvent({
-      userId: currentUser.id,
-      username: currentUser.username,
-      userName: currentUser.nama,
-      userRole: currentUser.role,
-      action: 'TAMBAH_BARANG',
-      title: 'Pendaftaran Satuan Pendidikan Baru (Multi-Tenant)',
-      details: `Sekolah baru didaftarkan: ${newSekolah.nama} (NPSN: ${newSekolah.npsn}, Jenjang: ${newSekolah.jenjang}).`,
-      status: 'SUCCESS'
-    });
-
-    showToast(`Satuan pendidikan "${newSekolah.nama}" berhasil didaftarkan ke SIMBA!`);
-  };
-
-  const handleUpdateSekolah = (updated: Sekolah) => {
-    setSekolahList(prev => prev.map(s => s.id === updated.id ? updated : s));
-
-    // Update Kop Surat if present
-    setKopConfigMap(prev => {
-      const existing = prev[updated.id];
-      if (!existing) return prev;
-      return {
-        ...prev,
-        [updated.id]: {
-          ...existing,
-          namaSekolah: updated.nama,
-          npsn: updated.npsn,
-          kotaSurat: updated.kabupaten_kota || updated.kota || existing.kotaSurat,
-          alamatLengkap: updated.alamat ? `${updated.alamat}, ${updated.kabupaten_kota || updated.kota || ''}` : existing.alamatLengkap
-        }
-      };
-    });
-
-    logAuditEvent({
-      userId: currentUser.id,
-      username: currentUser.username,
-      userName: currentUser.nama,
-      userRole: currentUser.role,
-      action: 'UPDATE_KOP',
-      title: 'Pembaruan Profil Satuan Pendidikan',
-      details: `Data sekolah diperbarui: ${updated.nama} (NPSN: ${updated.npsn}).`,
-      status: 'SUCCESS'
-    });
-
-    showToast(`Data sekolah "${updated.nama}" berhasil diperbarui.`);
-  };
-
-  const handleDeleteSekolah = (sekolahId: string) => {
-    const target = sekolahList.find(s => s.id === sekolahId);
-    setSekolahList(prev => prev.filter(s => s.id !== sekolahId));
-
-    logAuditEvent({
-      userId: currentUser.id,
-      username: currentUser.username,
-      userName: currentUser.nama,
-      userRole: currentUser.role,
-      action: 'RESTORE_DATABASE',
-      title: 'Penghapusan Satuan Pendidikan',
-      details: `Data sekolah dihapus: ${target?.nama || sekolahId} (NPSN: ${target?.npsn || '-'}).`,
-      status: 'SUCCESS'
-    });
-
-    showToast(`Data sekolah "${target?.nama || sekolahId}" berhasil dihapus.`);
-  };
+  }, [scopedTransaksi, selectedTransaksiId]);
 
   const handleUpdateKopConfig = (newKop: KopSuratConfig) => {
-    const updated = { ...newKop, sekolah_id: currentSekolahId };
-    setKopConfigMap(prev => ({
-      ...prev,
-      [currentSekolahId]: updated
-    }));
-    localStorage.setItem('simba_kop_config', JSON.stringify(updated));
+    setKopConfig(newKop);
+    localStorage.setItem('simba_kop_config', JSON.stringify(newKop));
     logAuditEvent({
       userId: currentUser.id,
       username: currentUser.username,
       userName: currentUser.nama,
       userRole: currentUser.role,
       action: 'UPDATE_KOP',
-      title: `Pembaruan Kop Surat ${updated.namaSekolah}`,
-      details: `Kop dinas dan identitas lembaga telah diperbarui untuk ${updated.namaSekolah} (NPSN: ${updated.npsn}).`,
+      title: `Pembaruan Kop Surat ${newKop.namaSekolah}`,
+      details: `Kop surat dan identitas lembaga telah diperbarui untuk ${newKop.namaSekolah} (NPSN: ${newKop.npsn}).`,
       status: 'SUCCESS'
     });
-    showToast(`Pengaturan Kop Surat untuk ${updated.namaSekolah} berhasil diperbarui.`);
+    showToast('Identitas dan Kop Surat sekolah berhasil diperbarui.');
   };
 
   const handleUpdateNumberingConfig = (newCfg: NumberingPatternConfig) => {
-    const updated = { ...newCfg, sekolah_id: currentSekolahId };
-    setNumberingConfigMap(prev => ({
-      ...prev,
-      [currentSekolahId]: updated
-    }));
-    localStorage.setItem('simba_numbering_config', JSON.stringify(updated));
+    setNumberingConfig(newCfg);
+    localStorage.setItem('simba_numbering_config', JSON.stringify(newCfg));
+    logAuditEvent({
+      userId: currentUser.id,
+      username: currentUser.username,
+      userName: currentUser.nama,
+      userRole: currentUser.role,
+      action: 'UPDATE_NOMOR',
+      title: 'Pembaruan Format Nomor Surat',
+      details: 'Pola format nomor NPB, SPB, SPPB, BAST berhasil diperbarui.',
+      status: 'SUCCESS'
+    });
     showToast('Pengaturan pola penomoran dokumen berhasil diperbarui.');
   };
 
@@ -854,11 +544,7 @@ export default function App() {
       showToast(`Transaksi #${trxData.nomorUrut} berhasil diperbarui! Selisih stok telah dikalkulasi ulang.`);
     } else {
       // CREATE MODE: Add new transaction and deduct stock
-      const trxWithTenant: TransaksiPengeluaran = {
-        ...trxData,
-        sekolah_id: trxData.sekolah_id || currentSekolahId
-      };
-      setTransaksiList([trxWithTenant, ...transaksiList]);
+      setTransaksiList([trxData, ...transaksiList]);
 
       setMasterBarang(prev => 
         prev.map(b => {
@@ -873,7 +559,7 @@ export default function App() {
         })
       );
 
-      setSelectedTransaksiId(trxWithTenant.id);
+      setSelectedTransaksiId(trxData.id);
       setIsNewTransaksiModalOpen(false);
       
       if (currentUser.role !== 'pengguna') {
@@ -903,8 +589,8 @@ export default function App() {
 
   // Handler: Prompt Delete Transaction (RBAC Check)
   const handlePromptDeleteTransaksi = (trx: TransaksiPengeluaran) => {
-    if (currentUser.role !== 'admin' && currentUser.role !== 'super_admin') {
-      showToast('Akses Ditolak: Fitur hapus transaksi hanya aktif untuk pengguna ber-role Admin / Dinas.');
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Fitur hapus transaksi hanya aktif untuk pengguna ber-role Admin.');
       return;
     }
     setDeleteModalState({
@@ -996,11 +682,7 @@ export default function App() {
       showToast(`Faktur ${rcvData.noBukti} berhasil diperbarui! Selisih stok telah disinkronkan.`);
     } else {
       // CREATE MODE: Add receipt, increase stock, and update price
-      const rcvWithTenant: TransaksiPenerimaan = {
-        ...rcvData,
-        sekolah_id: rcvData.sekolah_id || currentSekolahId
-      };
-      setPenerimaanList([rcvWithTenant, ...penerimaanList]);
+      setPenerimaanList([rcvData, ...penerimaanList]);
 
       setMasterBarang(prev =>
         prev.map(b => {
@@ -1041,8 +723,8 @@ export default function App() {
 
   // Handler: Prompt Delete Receipt (RBAC Check)
   const handlePromptDeletePenerimaan = (rcv: TransaksiPenerimaan) => {
-    if (currentUser.role !== 'admin' && currentUser.role !== 'super_admin') {
-      showToast('Akses Ditolak: Fitur hapus penerimaan hanya aktif untuk pengguna ber-role Admin / Dinas.');
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Fitur hapus penerimaan hanya aktif untuk pengguna ber-role Admin.');
       return;
     }
     setDeleteModalState({
@@ -1088,18 +770,14 @@ export default function App() {
     showToast(`Faktur ${rcv.noBukti} berhasil dihapus. Saldo stok gudang telah dikurangi secara otomatis.`);
   };
 
-  // Master Barang Handlers - Isolated to Current School
+  // Master Barang Handlers (Single-Tenant)
   const handleAddBarang = (b: Barang) => {
-    const bWithTenant: Barang = {
-      ...b,
-      sekolah_id: b.sekolah_id || currentSekolahId
-    };
-    setMasterBarang(prev => [...prev, bWithTenant]);
+    setMasterBarang(prev => [...prev, b]);
     showToast(`Barang ${b.namaBarang} berhasil ditambahkan ke Master Barang [${activeSekolah.nama}].`);
   };
 
   const handleUpdateBarang = (b: Barang) => {
-    setMasterBarang(masterBarang.map(item => item.id === b.id ? { ...b, sekolah_id: b.sekolah_id || item.sekolah_id || currentSekolahId } : item));
+    setMasterBarang(masterBarang.map(item => item.id === b.id ? b : item));
     showToast(`Data barang ${b.namaBarang} diperbarui.`);
   };
 
@@ -1112,31 +790,23 @@ export default function App() {
   };
 
   const handleImportBarang = (importedList: Barang[], mode: 'append' | 'replace') => {
-    const taggedList = importedList.map(item => ({
-      ...item,
-      sekolah_id: item.sekolah_id || currentSekolahId
-    }));
     if (mode === 'replace') {
-      setMasterBarang(prev => [...prev.filter(b => b.sekolah_id !== currentSekolahId), ...taggedList]);
+      setMasterBarang(importedList);
       showToast(`Berhasil mengganti seluruh Master Barang [${activeSekolah.nama}] dengan ${importedList.length} inventaris dari Excel.`);
     } else {
-      setMasterBarang(prev => [...prev, ...taggedList]);
+      setMasterBarang(prev => [...prev, ...importedList]);
       showToast(`Berhasil mengimpor ${importedList.length} inventaris barang ke [${activeSekolah.nama}].`);
     }
   };
 
-  // Master Pejabat Handlers - Isolated to Current School
+  // Master Pejabat Handlers (Single-Tenant)
   const handleAddPejabat = (p: Pejabat) => {
-    const pWithTenant: Pejabat = {
-      ...p,
-      sekolah_id: p.sekolah_id || currentSekolahId
-    };
-    setPejabatList(prev => [...prev, pWithTenant]);
+    setPejabatList(prev => [...prev, p]);
     showToast(`Pejabat ${p.nama} berhasil ditambahkan untuk [${activeSekolah.nama}].`);
   };
 
   const handleUpdatePejabat = (p: Pejabat) => {
-    setPejabatList(pejabatList.map(item => item.id === p.id ? { ...p, sekolah_id: p.sekolah_id || item.sekolah_id || currentSekolahId } : item));
+    setPejabatList(pejabatList.map(item => item.id === p.id ? p : item));
     showToast(`Data pejabat ${p.nama} diperbarui.`);
   };
 
@@ -1149,15 +819,11 @@ export default function App() {
   };
 
   const handleImportPejabat = (importedList: Pejabat[], mode: 'append' | 'replace') => {
-    const taggedList = importedList.map(item => ({
-      ...item,
-      sekolah_id: item.sekolah_id || currentSekolahId
-    }));
     if (mode === 'replace') {
-      setPejabatList(prev => [...prev.filter(p => p.sekolah_id !== currentSekolahId), ...taggedList]);
+      setPejabatList(importedList);
       showToast(`Berhasil mengganti data Pegawai [${activeSekolah.nama}] dengan ${importedList.length} data baru.`);
     } else {
-      setPejabatList(prev => [...prev, ...taggedList]);
+      setPejabatList(prev => [...prev, ...importedList]);
       showToast(`Berhasil mengimpor ${importedList.length} pegawai baru ke [${activeSekolah.nama}].`);
     }
   };
@@ -1167,36 +833,36 @@ export default function App() {
     setActiveTab('generator');
   };
 
-  // Fitur Keamanan & Pembersihan Data (Reset Transaksi / Reset Scope Data) - Khusus Admin / Super Admin (Isolated per School)
+  // Fitur Keamanan & Pembersihan Data (Reset Transaksi / Reset Scope Data) - Khusus Admin
   const handleResetTransaksi = (options: ResetScopeOptions) => {
-    if (currentUser.role !== 'admin' && currentUser.role !== 'super_admin') {
+    if (currentUser.role !== 'admin') {
       alert('Akses Ditolak: Fitur kosongkan data hanya dapat dijalankan oleh Admin sistem.');
       return;
     }
 
     const clearedItems: string[] = [];
 
-    // 1. Penyaluran (NPB, SPB, SPPB, BAST) - Hanya untuk sekolah aktif
+    // 1. Penyaluran (NPB, SPB, SPPB, BAST)
     if (options.deletePenyaluran) {
-      setTransaksiList(prev => prev.filter(t => t.sekolah_id !== currentSekolahId));
+      setTransaksiList([]);
       setSelectedTransaksiId('');
       clearedItems.push('Riwayat Penyaluran');
     }
 
-    // 2. Penerimaan / Barang Masuk BOS - Hanya untuk sekolah aktif
+    // 2. Penerimaan / Barang Masuk BOS
     if (options.deletePenerimaan) {
-      setPenerimaanList(prev => prev.filter(p => p.sekolah_id !== currentSekolahId));
+      setPenerimaanList([]);
       clearedItems.push('Faktur Penerimaan BOS');
     }
 
-    // 3. Mutasi Stok & Master Data Barang - Hanya untuk sekolah aktif
+    // 3. Mutasi Stok & Master Data Barang
     if (options.deleteMasterBarang) {
-      setMasterBarang(prev => prev.filter(b => b.sekolah_id !== currentSekolahId));
+      setMasterBarang([]);
       clearedItems.push('Master Data Barang & NUSP');
     } else if (options.deleteMutasiStok || options.deletePenyaluran || options.deletePenerimaan) {
       if (options.restoreStockToInitial) {
         setMasterBarang(prev =>
-          prev.map(b => (b.sekolah_id === currentSekolahId ? { ...b, stokSekarang: b.stokAwal } : b))
+          prev.map(b => ({ ...b, stokSekarang: b.stokAwal }))
         );
         clearedItems.push('Stok Fisik Dikembalikan ke Stok Awal');
       } else {
@@ -1204,15 +870,15 @@ export default function App() {
       }
     }
 
-    // 4. Master Data Pegawai - Hanya untuk sekolah aktif
+    // 4. Master Data Pegawai
     if (options.deleteMasterPegawai) {
-      setPejabatList(prev => prev.filter(p => p.sekolah_id !== currentSekolahId));
+      setPejabatList([]);
       clearedItems.push('Master Data Pegawai');
     }
 
     // Master Kode Rekening Belanja (40 item resmi) TETAP AMAN / Permanen (Read-only)
     const summaryMsg = clearedItems.length > 0 
-      ? `Pengosongan data [${activeSekolah.nama}] berhasil: ${clearedItems.join(', ')}. Master Kode Rekening Belanja dan data sekolah lain tetap aman terlindungi.`
+      ? `Pengosongan data [${activeSekolah.nama}] berhasil: ${clearedItems.join(', ')}. Master Kode Rekening Belanja tetap aman.`
       : 'Tidak ada modul data yang dipilih untuk dikosongkan.';
 
     showToast(summaryMsg);
@@ -1336,14 +1002,7 @@ export default function App() {
   }) => {
     handleUpdateKopConfig(updated.kopConfig);
     handleUpdateNumberingConfig(updated.numberingConfig);
-    const taggedPejabats = updated.pejabatList.map(p => ({
-      ...p,
-      sekolah_id: p.sekolah_id || currentSekolahId
-    }));
-    setPejabatList(prev => [
-      ...prev.filter(p => p.sekolah_id !== currentSekolahId),
-      ...taggedPejabats
-    ]);
+    setPejabatList(updated.pejabatList);
     if (updated.kategoriList && updated.kategoriList.length > 0) {
       handleUpdateKategoriList(updated.kategoriList);
     }
@@ -1586,7 +1245,6 @@ export default function App() {
           onOpenLoginModal={() => setIsLoginModalOpen(true)}
           onLogout={handleLogout}
           onOpenResetTransaksi={() => setIsResetTransaksiOpen(true)}
-          onOpenMasterSekolah={isDinasUser ? handleOpenMasterSekolah : undefined}
         />
       </div>
 
@@ -1609,32 +1267,13 @@ export default function App() {
             paperSize={paperSize}
             onSelectPaperSize={setPaperSize}
             lastBackupTime={lastBackupTime}
-            sekolahList={sekolahList}
-            currentSekolahId={currentSekolahId}
-            onSelectSekolah={handleSelectSekolah}
-            onOpenMasterSekolah={isDinasUser ? handleOpenMasterSekolah : undefined}
             onOpenAuditLog={() => setIsAuditLogOpen(true)}
           />
         </div>
 
         {/* Main Container */}
         <main className="flex-1 w-full">
-        {/* PROTEKSI KEAMANAN ROUTE: 403 Forbidden Screen jika rute dinas diakses oleh akun sekolah */}
-        {forbiddenRoute ? (
-          <RouteForbiddenView
-            targetRoute={forbiddenRoute}
-            currentUser={currentUser}
-            schoolName={activeSekolah.nama}
-            onBackToDashboard={() => {
-              setForbiddenRoute(null);
-              setActiveTab('dashboard');
-              setIsMasterSekolahOpen(false);
-              if (window.history.pushState) {
-                window.history.pushState(null, '', '/');
-              }
-            }}
-          />
-        ) : currentUser.role === 'pengguna' ? (
+        {currentUser.role === 'pengguna' ? (
           <StaffPermintaanNPBView
             currentUser={currentUser}
             masterBarang={scopedBarang}
@@ -1673,7 +1312,6 @@ export default function App() {
                     setGeneratorInitialDocType('buku_penerimaan');
                     setActiveTab('generator');
                   }}
-                  onOpenDinasModule={() => handleTabChange('dinas')}
                   kopConfig={activeKopConfig}
                   schoolName={activeSekolah.nama}
                 />
@@ -1700,36 +1338,6 @@ export default function App() {
                 paperSize={paperSize}
                 onSelectPaperSize={setPaperSize}
               />
-            )}
-
-            {/* TAB DINAS: Modul Pengawasan & Laporan Mutasi Gabungan Seluruh Satuan Pendidikan (Langkah 4) */}
-            {activeTab === 'dinas' && (
-              isDinasUser ? (
-                <ModulDinasView
-                  sekolahList={sekolahList}
-                  allMasterBarang={masterBarang}
-                  allTransaksi={transaksiList}
-                  allPenerimaan={penerimaanList}
-                  allPejabat={pejabatList}
-                  currentUser={currentUser}
-                  onSelectSekolah={handleSelectSekolah}
-                  paperSize={paperSize}
-                  showToast={showToast}
-                />
-              ) : (
-                <RouteForbiddenView
-                  targetRoute="/modul-dinas"
-                  currentUser={currentUser}
-                  schoolName={activeSekolah.nama}
-                  onBackToDashboard={() => {
-                    setForbiddenRoute(null);
-                    setActiveTab('dashboard');
-                    if (window.history.pushState) {
-                      window.history.pushState(null, '', '/');
-                    }
-                  }}
-                />
-              )
             )}
 
             {/* TAB 3: Master Barang & NUSP (Admin & Operator) */}
@@ -1759,10 +1367,9 @@ export default function App() {
               </div>
             )}
 
-            {/* TAB 4: Master Pejabat (Hanya Admin / Super Admin) */}
             {activeTab === 'pejabat' && (
               <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-                {(currentUser.role === 'admin' || currentUser.role === 'super_admin') ? (
+                {currentUser.role === 'admin' ? (
                   <MasterPejabatTable
                     pejabatList={scopedPejabat}
                     onAddPejabat={handleAddPejabat}
@@ -1892,7 +1499,7 @@ export default function App() {
         onOpenAuditLog={() => setIsAuditLogOpen(true)}
       />
 
-      {/* MODAL KEAMANAN: Log Audit Sistem & Jejak Keamanan Multi-Tenant (Langkah 5) */}
+      {/* MODAL KEAMANAN: Log Audit Sistem & Integritas Data (Langkah 5) */}
       <AuditLogModal
         isOpen={isAuditLogOpen}
         onClose={() => setIsAuditLogOpen(false)}
@@ -1925,30 +1532,8 @@ export default function App() {
         onUpdateUser={handleUpdateUser}
         onDeleteUser={handleDeleteUser}
         onSwitchUser={handleSwitchUser}
-        sekolahList={sekolahList}
-        currentSekolahId={currentSekolahId}
-        onSelectSekolah={handleSelectSekolah}
+        schoolName={activeSekolah.nama}
         currentUser={currentUser}
-      />
-
-      {/* MODAL: Master Data Satuan Pendidikan / Sekolah (Multi-Tenant Langkah 3) */}
-      <MasterSekolahModal
-        isOpen={isMasterSekolahOpen && isDinasUser}
-        onClose={() => {
-          setIsMasterSekolahOpen(false);
-          if (window.location.pathname.includes('data-sekolah') && window.history.pushState) {
-            window.history.pushState(null, '', '/');
-          }
-        }}
-        sekolahList={sekolahList}
-        currentSekolahId={currentSekolahId}
-        onAddSekolah={handleAddSekolah}
-        onUpdateSekolah={handleUpdateSekolah}
-        onDeleteSekolah={handleDeleteSekolah}
-        onSelectSekolah={handleSelectSekolah}
-        transaksiList={transaksiList}
-        masterBarang={masterBarang}
-        userList={userList}
       />
 
       {/* MODAL: Integrasi & Sinkronisasi Google Sheets */}

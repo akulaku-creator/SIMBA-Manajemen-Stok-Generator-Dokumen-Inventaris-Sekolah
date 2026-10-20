@@ -247,11 +247,11 @@ export interface StockOpnameCategorySummary {
   sisaFisikNilai: number;
 }
 
-export type UserRole = 'super_admin' | 'admin' | 'operator' | 'pengguna';
+export type UserRole = 'admin' | 'operator' | 'pengguna';
 
 export interface AppUser {
   id: string;
-  sekolah_id?: string; // undefined or 'all' for super_admin (Dinas)
+  sekolah_id?: string;
   nama: string;
   username: string;
   role: UserRole;
