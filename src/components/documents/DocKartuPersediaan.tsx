@@ -533,122 +533,76 @@ export const DocKartuPersediaan: React.FC<DocKartuPersediaanProps> = ({
     saldoAkhirRp
   } = data;
 
-  const paddingRowsCount = Math.max(0, minRows - (rows.length + 1)); // +1 for saldo awal row
+  const isCompact = rows.length <= 5; // Deteksi jika data sedikit/kosong
+  const paddingRowsCount = isCompact ? 0 : Math.max(0, minRows - (rows.length + 1)); // +1 for saldo awal row
+
   const currentDateString = formatTanggalIndonesia(new Date().toISOString().split('T')[0]);
+  const schoolName = pejabatSettings?.namaSekolah || kopConfig?.namaSekolah || 'SMAN 1 CIHAURBEUTI';
+  const kotaDisplay = pejabatSettings?.lokasi || dataDokumen?.lokasi || kopConfig?.kotaSurat || 'Ciamis';
+  const tanggalDisplay = dataDokumen?.tanggalCetak || currentDateString;
 
   return (
     <div 
-      className="doc-content kartu-persediaan-page w-full bg-white text-black p-0 select-text flex flex-col justify-between"
+      className={`print-container doc-content kartu-persediaan-page w-full bg-white text-black p-2 font-sans select-text flex flex-col justify-between ${isCompact ? 'compact-mode' : ''}`}
       style={{
         pageBreakAfter: isLast ? 'auto' : 'always',
         breakAfter: isLast ? 'auto' : 'page',
-        minHeight: '100%'
+        minHeight: isCompact ? 'auto' : '100%'
       }}
     >
       <div>
-        {/* Header KOP Resmi */}
-        <div className="doc-header-kop avoid-break">
-          <KopSuratView config={kopConfig} />
+        {/* HEADER KARTU */}
+        <div className="text-center font-bold text-xs uppercase mb-1.5 border-b pb-1 avoid-break">
+          <p className="tracking-wider text-slate-700 text-[11px] font-bold">
+            LAMPIRAN 13: KARTU PERSEDIAAN BARANG
+          </p>
+          <h2 className="text-sm font-black text-slate-900 tracking-wide mt-0.5">
+            KARTU PERSEDIAAN BARANG
+          </h2>
+          <p className="text-xs font-bold text-blue-900 mt-0.5">
+            {schoolName} • Periode: {labelPeriode}
+          </p>
         </div>
 
-        {/* Lampiran 13 Label & Title */}
-        <div className="relative mt-2 mb-3 avoid-break">
-          <div className="text-right text-[10px] font-mono text-slate-600 uppercase tracking-wider mb-1">
-            LAMPIRAN 13 (STANDAR BMD PEMDA)
+        {/* ATRIBUT BARANG (SKPD, Nama Barang, Kode, dll) */}
+        <div className="grid grid-cols-2 text-[10px] mb-2 gap-x-4 border border-black p-1.5 bg-slate-50/50 rounded-xs avoid-break">
+          <div className="space-y-0.5">
+            <p><span className="font-semibold text-slate-700">Nama Barang:</span> <span className="font-bold text-slate-900">{barang?.namaBarang || '-'}</span></p>
+            <p><span className="font-semibold text-slate-700">Kode Barang:</span> <span className="font-mono font-bold text-slate-900">{barang?.kodeBarang || '-'}</span></p>
+            <p><span className="font-semibold text-slate-700">NUSP:</span> <span className="font-mono font-bold text-blue-900">{barang?.nusp || '-'}</span></p>
+            <p><span className="font-semibold text-slate-700">Spesifikasi:</span> <span className="text-slate-800">{barang?.spesifikasi || '-'}</span></p>
           </div>
-          <div className="text-center">
-            <h2 className="text-base font-bold uppercase tracking-wider underline">
-              KARTU PERSEDIAAN BARANG
-            </h2>
-            <div className="text-xs font-semibold text-slate-800 mt-1">
-              Periode: <span className="font-bold text-black">{labelPeriode}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Identitas Barang - 3 Kolom Sesuai Standar Administrasi BMD */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mb-3 border border-slate-700 p-2.5 bg-slate-50/50 rounded-sm avoid-break">
-          {/* Kolom 1: SKPD & Lokasi */}
-          <div className="space-y-1">
-            <div className="flex">
-              <span className="w-24 text-slate-600 font-medium">SKPD/Unit</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-bold flex-1 text-slate-900">{kopConfig.instansiNama || 'Dinas Pendidikan'}</span>
-            </div>
-            <div className="flex">
-              <span className="w-24 text-slate-600 font-medium">Unit Kerja</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-semibold flex-1 text-slate-800">{kopConfig.namaSekolah || 'SMA Negeri 1 Cihaurbeuti'}</span>
-            </div>
-            <div className="flex">
-              <span className="w-24 text-slate-600 font-medium">Gudang</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-semibold flex-1 text-slate-800">{barang.lokasiGudang || 'Gudang Utama'}</span>
-            </div>
-          </div>
-
-          {/* Kolom 2: Fisik Barang */}
-          <div className="space-y-1">
-            <div className="flex">
-              <span className="w-28 text-slate-600 font-medium">Nama Barang</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-bold flex-1 text-slate-900">{barang.namaBarang}</span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-slate-600 font-medium">Satuan</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-semibold flex-1 text-slate-800">{barang.satuan}</span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-slate-600 font-medium">Spesifikasi</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-medium flex-1 text-slate-700">{barang.spesifikasi || '-'}</span>
-            </div>
-          </div>
-
-          {/* Kolom 3: Kode Barang, NUSP Terpisah, Kode Rekening */}
-          <div className="space-y-1">
-            <div className="flex">
-              <span className="w-28 text-slate-600 font-medium">Kode Barang</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-mono font-bold flex-1 text-slate-900">{barang.kodeBarang}</span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-slate-600 font-medium">NUSP</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-mono font-bold flex-1 text-blue-900">{barang.nusp || '-'}</span>
-            </div>
-            <div className="flex">
-              <span className="w-28 text-slate-600 font-medium">Kode Rekening</span>
-              <span className="w-3 text-center">:</span>
-              <span className="font-mono font-semibold text-slate-800 flex-1">{barang.kodeRekening}</span>
-            </div>
+          <div className="space-y-0.5 text-right sm:text-left sm:pl-4">
+            <p><span className="font-semibold text-slate-700">Satuan:</span> <span className="font-bold text-slate-900">{barang?.satuan || '-'}</span></p>
+            <p><span className="font-semibold text-slate-700">Lokasi Gudang:</span> <span className="text-slate-800">{barang?.lokasiGudang || 'Gudang Utama'}</span></p>
+            <p><span className="font-semibold text-slate-700">Kode Rekening:</span> <span className="font-mono text-slate-800">{barang?.kodeRekening || '-'}</span></p>
+            <p className="truncate"><span className="font-semibold text-slate-700">Rekening:</span> <span className="text-slate-800 text-[9.5px]">{barang?.namaRekening || '-'}</span></p>
           </div>
         </div>
 
         {/* Tabel Komprehensif Lampiran 13 */}
         <div className="overflow-x-auto w-full">
-          <table className="doc-table w-full text-[10px] leading-tight border-collapse border border-black text-black" style={{ tableLayout: 'fixed', width: '100%' }}>
+          <table className="doc-table w-full text-[9.5px] leading-tight border-collapse border border-black text-black mb-2" style={{ tableLayout: 'fixed', width: '100%' }}>
             <thead>
               <tr className="bg-slate-100 text-center font-bold">
                 <th rowSpan={2} style={{ width: '3%' }} className="border border-black p-1">No</th>
                 <th rowSpan={2} style={{ width: '8%' }} className="border border-black p-1">Tanggal</th>
-                <th rowSpan={2} style={{ width: '15%' }} className="border border-black p-1">No. &amp; Tgl Surat Dasar Penerimaan / Pengeluaran</th>
-                <th rowSpan={2} style={{ width: '15%' }} className="border border-black p-1">Uraian</th>
-                <th colSpan={3} style={{ width: '12%' }} className="border border-black p-1">Barang-Barang (Qty)</th>
-                <th rowSpan={2} style={{ width: '8%' }} className="border border-black p-1">Harga Satuan (Rp)</th>
-                <th colSpan={3} style={{ width: '26%' }} className="border border-black p-1">Jumlah Harga Barang</th>
-                <th rowSpan={2} style={{ width: '13%' }} className="border border-black p-1">Keterangan</th>
+                <th rowSpan={2} style={{ width: '16%' }} className="border border-black p-1">No. Dasar Bukti</th>
+                <th rowSpan={2} style={{ width: '15%' }} className="border border-black p-1">Uraian Transaksi</th>
+                <th colSpan={3} style={{ width: '13%' }} className="border border-black p-1">Barang (Qty)</th>
+                <th rowSpan={2} style={{ width: '8%' }} className="border border-black p-1">Harga Satuan</th>
+                <th colSpan={3} style={{ width: '25%' }} className="border border-black p-1">Jumlah Harga (Rp)</th>
+                <th rowSpan={2} style={{ width: '12%' }} className="border border-black p-1">Keterangan</th>
               </tr>
-              <tr className="bg-slate-100 text-center font-bold">
-                <th style={{ width: '4%' }} className="border border-black p-1">Masuk</th>
-                <th style={{ width: '4%' }} className="border border-black p-1">Keluar</th>
-                <th style={{ width: '4%' }} className="border border-black p-1">Sisa</th>
-                <th style={{ width: '8.6%' }} className="border border-black p-1">Diterima (Rp)</th>
-                <th style={{ width: '8.6%' }} className="border border-black p-1">Dikeluarkan (Rp)</th>
-                <th style={{ width: '8.8%' }} className="border border-black p-1">Sisa (Rp)</th>
+              <tr className="bg-slate-100 text-center font-bold text-[9px]">
+                <th style={{ width: '4.3%' }} className="border border-black p-0.5">Masuk</th>
+                <th style={{ width: '4.3%' }} className="border border-black p-0.5">Keluar</th>
+                <th style={{ width: '4.4%' }} className="border border-black p-0.5">Sisa</th>
+                <th style={{ width: '8.3%' }} className="border border-black p-0.5">Diterima</th>
+                <th style={{ width: '8.3%' }} className="border border-black p-0.5">Dikeluarkan</th>
+                <th style={{ width: '8.4%' }} className="border border-black p-0.5">Sisa (Rp)</th>
               </tr>
-              <tr className="bg-slate-50 text-[9px] text-center font-medium italic text-slate-600">
+              <tr className="bg-slate-50 text-[8.5px] text-center font-medium italic text-slate-600">
                 <td className="border border-black py-0.5">1</td>
                 <td className="border border-black py-0.5">2</td>
                 <td className="border border-black py-0.5">3</td>
@@ -665,92 +619,94 @@ export const DocKartuPersediaan: React.FC<DocKartuPersediaanProps> = ({
             </thead>
             <tbody>
               {/* Baris Saldo Awal Bawaan Periode */}
-              <tr className="bg-amber-50/50 font-semibold">
-                <td className="border border-black p-1 text-center">-</td>
+              <tr className="bg-amber-50/50 font-semibold text-[9.5px]">
+                <td className="border border-black p-1 text-center font-mono">1</td>
                 <td className="border border-black p-1 text-center font-mono whitespace-nowrap">
-                  {saldoAwalDateString}
+                  {saldoAwalDateString || '-'}
                 </td>
-                <td className="border border-black p-1 text-center text-slate-500 font-mono">-</td>
+                <td className="border border-black p-1 text-center text-slate-500 font-mono">SALDO-AWAL</td>
                 <td className="border border-black p-1 font-bold text-slate-900">
-                  SALDO AWAL PER {saldoAwalDateString.toUpperCase()}
+                  Saldo Awal Periode
                 </td>
-                <td className="border border-black p-1 text-center text-slate-400">-</td>
-                <td className="border border-black p-1 text-center text-slate-400">-</td>
-                <td className="border border-black p-1 text-center font-bold text-blue-900">{sisaQtyAwal}</td>
+                <td className="border border-black p-1 text-center text-slate-400 font-mono">-</td>
+                <td className="border border-black p-1 text-center text-slate-400 font-mono">-</td>
+                <td className="border border-black p-1 text-center font-bold text-blue-900 font-mono">{sisaQtyAwal}</td>
                 <td className="border border-black p-1 text-right font-mono">{formatRupiah(hargaSatuan)}</td>
-                <td className="border border-black p-1 text-center text-slate-400">-</td>
-                <td className="border border-black p-1 text-center text-slate-400">-</td>
+                <td className="border border-black p-1 text-center text-slate-400 font-mono">-</td>
+                <td className="border border-black p-1 text-center text-slate-400 font-mono">-</td>
                 <td className="border border-black p-1 text-right font-bold font-mono text-emerald-800">
                   {formatRupiah(sisaRpAwal)}
                 </td>
-                <td className="border border-black p-1 text-slate-600 text-[9px]">Saldo Akhir Periode Lalu</td>
+                <td className="border border-black p-1 text-slate-600 text-[8.5px]">Saldo Awal Bawaan</td>
               </tr>
 
               {/* Baris Transaksi Mutasi Periode Berjalan */}
-              {rows.map((r, idx) => (
-                <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                  <td className="border border-black p-1 text-center">{idx + 1}</td>
-                  <td className="border border-black p-1 text-center font-mono whitespace-nowrap">
-                    {formatTanggalIndonesia(r.tanggal)}
-                  </td>
-                  <td className="border border-black p-1 font-mono text-[9px] break-words">
-                    {r.noBukti}
-                  </td>
-                  <td className="border border-black p-1 font-medium text-slate-900">
-                    {generateUraianKartuPersediaan(r)}
-                  </td>
-                  {/* Qty Masuk */}
-                  <td className="border border-black p-1 text-center font-medium">
-                    {r.masuk > 0 ? (
-                      <span className="font-bold text-emerald-700">+{r.masuk}</span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                  {/* Qty Keluar */}
-                  <td className="border border-black p-1 text-center font-medium">
-                    {r.keluar > 0 ? (
-                      <span className="font-bold text-rose-700">-{r.keluar}</span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                  {/* Qty Sisa */}
-                  <td className="border border-black p-1 text-center font-bold">
-                    {r.sisaQty}
-                  </td>
-                  {/* Harga Satuan */}
-                  <td className="border border-black p-1 text-right font-mono">
-                    {formatRupiah(r.hargaSatuan)}
-                  </td>
-                  {/* Bertambah Rp (Diterima) */}
-                  <td className="border border-black p-1 text-right font-mono">
-                    {r.bertambahRp > 0 ? (
-                      <span className="font-semibold text-emerald-700">{formatRupiah(r.bertambahRp)}</span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                  {/* Berkurang Rp (Dikeluarkan) */}
-                  <td className="border border-black p-1 text-right font-mono">
-                    {r.berkurangRp > 0 ? (
-                      <span className="font-semibold text-rose-700">{formatRupiah(r.berkurangRp)}</span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                  {/* Sisa Rp */}
-                  <td className="border border-black p-1 text-right font-mono font-bold text-slate-900">
-                    {formatRupiah(r.sisaRp)}
-                  </td>
-                  <td className="border border-black p-1 text-[9px] text-slate-600 break-words">
-                    {r.keterangan}
-                  </td>
-                </tr>
-              ))}
+              {rows.length > 0 ? (
+                rows.map((r, idx) => (
+                  <tr key={idx} className="hover:bg-slate-50 transition-colors text-[9.5px]">
+                    <td className="border border-black p-1 text-center font-mono">{idx + 2}</td>
+                    <td className="border border-black p-1 text-center font-mono whitespace-nowrap">
+                      {formatTanggalIndonesia(r.tanggal)}
+                    </td>
+                    <td className="border border-black p-1 font-mono text-[9px] truncate">
+                      {r.noBukti}
+                    </td>
+                    <td className="border border-black p-1 font-medium text-slate-900 truncate">
+                      {generateUraianKartuPersediaan(r)}
+                    </td>
+                    {/* Qty Masuk */}
+                    <td className="border border-black p-1 text-center font-mono font-medium">
+                      {r.masuk > 0 ? (
+                        <span className="font-bold text-emerald-700">+{r.masuk}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    {/* Qty Keluar */}
+                    <td className="border border-black p-1 text-center font-mono font-medium">
+                      {r.keluar > 0 ? (
+                        <span className="font-bold text-rose-700">-{r.keluar}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    {/* Qty Sisa */}
+                    <td className="border border-black p-1 text-center font-mono font-bold">
+                      {r.sisaQty}
+                    </td>
+                    {/* Harga Satuan */}
+                    <td className="border border-black p-1 text-right font-mono">
+                      {formatRupiah(r.hargaSatuan)}
+                    </td>
+                    {/* Bertambah Rp (Diterima) */}
+                    <td className="border border-black p-1 text-right font-mono">
+                      {r.bertambahRp > 0 ? (
+                        <span className="font-semibold text-emerald-700">{formatRupiah(r.bertambahRp)}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    {/* Berkurang Rp (Dikeluarkan) */}
+                    <td className="border border-black p-1 text-right font-mono">
+                      {r.berkurangRp > 0 ? (
+                        <span className="font-semibold text-rose-700">{formatRupiah(r.berkurangRp)}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    {/* Sisa Rp */}
+                    <td className="border border-black p-1 text-right font-mono font-bold text-slate-900">
+                      {formatRupiah(r.sisaRp)}
+                    </td>
+                    <td className="border border-black p-1 text-[8.5px] text-slate-600 truncate">
+                      {r.keterangan || '-'}
+                    </td>
+                  </tr>
+                ))
+              ) : null}
 
-              {/* Padding empty rows for standard paper layout */}
-              {Array.from({ length: paddingRowsCount }).map((_, pIdx) => (
+              {/* Padding empty rows only when NOT compact */}
+              {!isCompact && Array.from({ length: paddingRowsCount }).map((_, pIdx) => (
                 <tr key={`pad-${pIdx}`} className="h-6">
                   <td className="border border-black p-1">&nbsp;</td>
                   <td className="border border-black p-1">&nbsp;</td>
@@ -768,56 +724,56 @@ export const DocKartuPersediaan: React.FC<DocKartuPersediaanProps> = ({
               ))}
 
               {/* Baris Total / Rekapitulasi Periode */}
-              <tr className="bg-slate-200 font-bold text-black border-t-2 border-black">
-                <td colSpan={4} className="border border-black p-1.5 text-center uppercase tracking-wider font-bold">
+              <tr className="bg-slate-200 font-bold text-black border-t-2 border-black font-mono text-[9.5px]">
+                <td colSpan={4} className="border border-black p-1 text-center uppercase tracking-wider font-bold font-sans">
                   TOTAL MUTASI PERIODE INI
                 </td>
-                <td className="border border-black p-1.5 text-center font-bold text-emerald-800">
+                <td className="border border-black p-1 text-center font-bold text-emerald-800">
                   {totalMasuk}
                 </td>
-                <td className="border border-black p-1.5 text-center font-bold text-rose-800">
+                <td className="border border-black p-1 text-center font-bold text-rose-800">
                   {totalKeluar}
                 </td>
-                <td className="border border-black p-1.5 text-center font-black bg-slate-300 text-blue-950">
+                <td className="border border-black p-1 text-center font-black bg-slate-300 text-blue-950">
                   {saldoAkhirQty}
                 </td>
-                <td className="border border-black p-1.5 text-center text-slate-500 font-mono">-</td>
-                <td className="border border-black p-1.5 text-right font-mono font-bold text-emerald-800">
+                <td className="border border-black p-1 text-center text-slate-500">-</td>
+                <td className="border border-black p-1 text-right font-bold text-emerald-800">
                   {formatRupiah(totalBertambahRp)}
                 </td>
-                <td className="border border-black p-1.5 text-right font-mono font-bold text-rose-800">
+                <td className="border border-black p-1 text-right font-bold text-rose-800">
                   {formatRupiah(totalBerkurangRp)}
                 </td>
-                <td className="border border-black p-1.5 text-right font-mono font-black text-slate-900 bg-slate-300">
+                <td className="border border-black p-1 text-right font-black text-slate-900 bg-slate-300">
                   {formatRupiah(saldoAkhirRp)}
                 </td>
-                <td className="border border-black p-1.5 text-center text-[9px] text-slate-600">-</td>
+                <td className="border border-black p-1 text-center text-[8.5px] text-slate-600 font-sans">-</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         {/* Ringkasan Akumulasi Total Mutasi Sesuai Format Administrasi BMD */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mt-3 text-xs border border-slate-700 p-2.5 bg-slate-50/70 rounded-sm avoid-break">
+        <div className="grid grid-cols-4 gap-2 my-1.5 text-[9.5px] border border-black p-1.5 bg-slate-50/70 rounded-xs avoid-break">
           <div>
-            <div className="text-[10px] text-slate-600 font-semibold uppercase">Total Barang Masuk</div>
-            <div className="font-bold text-emerald-800 text-sm">{totalMasuk} {barang.satuan}</div>
-            <div className="text-[11px] font-mono font-semibold text-emerald-700">{formatRupiah(totalBertambahRp)}</div>
+            <div className="text-[8.5px] text-slate-600 font-semibold uppercase">Total Masuk</div>
+            <div className="font-bold text-emerald-800">{totalMasuk} {barang.satuan}</div>
+            <div className="text-[9px] font-mono font-semibold text-emerald-700">{formatRupiah(totalBertambahRp)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-600 font-semibold uppercase">Total Barang Keluar</div>
-            <div className="font-bold text-rose-800 text-sm">{totalKeluar} {barang.satuan}</div>
-            <div className="text-[11px] font-mono font-semibold text-rose-700">{formatRupiah(totalBerkurangRp)}</div>
+            <div className="text-[8.5px] text-slate-600 font-semibold uppercase">Total Keluar</div>
+            <div className="font-bold text-rose-800">{totalKeluar} {barang.satuan}</div>
+            <div className="text-[9px] font-mono font-semibold text-rose-700">{formatRupiah(totalBerkurangRp)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-slate-600 font-semibold uppercase">Saldo Awal Periode</div>
-            <div className="font-bold text-slate-800 text-sm">{sisaQtyAwal} {barang.satuan}</div>
-            <div className="text-[11px] font-mono text-slate-700">{formatRupiah(sisaRpAwal)}</div>
+            <div className="text-[8.5px] text-slate-600 font-semibold uppercase">Saldo Awal</div>
+            <div className="font-bold text-slate-800">{sisaQtyAwal} {barang.satuan}</div>
+            <div className="text-[9px] font-mono text-slate-700">{formatRupiah(sisaRpAwal)}</div>
           </div>
-          <div className="bg-blue-50/70 p-1.5 rounded border border-blue-200">
-            <div className="text-[10px] text-blue-900 font-bold uppercase">Saldo Akhir</div>
-            <div className="font-black text-blue-950 text-sm">{saldoAkhirQty} {barang.satuan}</div>
-            <div className="text-[11px] font-mono font-bold text-blue-900">{formatRupiah(saldoAkhirRp)}</div>
+          <div className="bg-blue-50/70 p-1 rounded border border-blue-200">
+            <div className="text-[8.5px] text-blue-900 font-bold uppercase">Saldo Akhir</div>
+            <div className="font-black text-blue-950">{saldoAkhirQty} {barang.satuan}</div>
+            <div className="text-[9px] font-mono font-bold text-blue-900">{formatRupiah(saldoAkhirRp)}</div>
           </div>
         </div>
       </div>
@@ -829,7 +785,10 @@ export const DocKartuPersediaan: React.FC<DocKartuPersediaanProps> = ({
         settings={settings}
         pejabatSettings={pejabatSettings}
         dataDokumen={dataDokumen}
-        className="mt-6 pt-3"
+        lokasi={kotaDisplay}
+        tanggalCetak={tanggalDisplay}
+        isCompact={isCompact}
+        className={isCompact ? 'mt-2 pt-1' : 'mt-4 pt-2'}
       />
     </div>
   );

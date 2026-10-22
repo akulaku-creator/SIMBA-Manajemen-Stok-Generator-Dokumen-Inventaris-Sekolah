@@ -509,7 +509,7 @@ table {
   /* Pengaturan Ukuran Halaman & Margin Cetak Baku */
   .page-landscape {
     size: A4 landscape;
-    margin: 10mm 12mm 10mm 12mm;
+    margin: 8mm 10mm 8mm 10mm;
   }
   .page-portrait {
     size: A4 portrait;
@@ -519,11 +519,32 @@ table {
     width: 100%;
     font-family: "Times New Roman", Times, serif;
   }
+  
+  /* Optimalisasi Cetak LAMPIRAN-12 & LAMPIRAN-13 (Kartu Barang & Kartu Persediaan) */
+  .print-container {
+    width: 100% !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 10px !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Mencegah tabel dan blok tanda tangan terputus secara terpisah */
   .signature-section,
   .signature-area,
-  .signature-block, tr {
+  .signature-block,
+  .doc-signature-block,
+  tr {
     page-break-inside: avoid !important; /* Cegah tanda tangan terpotong antar halaman */
     break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
+  }
+
+  /* Jika data sedikit, paksa tidak ada perpindahan halaman */
+  .compact-mode {
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-after: avoid !important;
+    break-before: avoid !important;
   }
 
   /* Prevent awkward page break splits */
@@ -532,9 +553,7 @@ table {
   .break-inside-avoid,
   .doc-header-kop,
   .doc-title-block,
-  .doc-meta-block,
-  .doc-signature-block,
-  .signature-block {
+  .doc-meta-block {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

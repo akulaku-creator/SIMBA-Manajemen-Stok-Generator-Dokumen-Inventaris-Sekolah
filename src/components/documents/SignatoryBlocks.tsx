@@ -375,6 +375,7 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
   dataDokumen?: any;
   lokasi?: string;
   tanggalCetak?: string;
+  isCompact?: boolean;
 }> = ({
   pejabatList = [],
   kopConfig,
@@ -386,7 +387,8 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
   dataDokumen,
   customPengurusBarang,
   lokasi,
-  tanggalCetak
+  tanggalCetak,
+  isCompact = false
 }) => {
   const effectiveList: Pejabat[] = Array.isArray(pejabatSettings?.pengurusBarang)
     ? (pejabatSettings?.pengurusBarang as any)
@@ -419,22 +421,22 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
   const tanggalDisplay = tanggalCetak || dataDokumen?.tanggalCetak || formatTanggalIndonesia(tanggalSurat);
 
   return (
-    <div className={`doc-signature-block signature-block avoid-break ${className}`}>
-      <div className="flex justify-end text-xs">
-        <div className="w-80 text-center">
-          <p className="text-slate-700">
+    <div className={`signature-block doc-signature-block avoid-break break-inside-avoid ${isCompact ? 'compact-mode mt-2 pt-1' : 'mt-4 pt-2'} ${className}`}>
+      <div className="flex justify-end text-center text-[10px]">
+        <div className="w-64 sm:w-72">
+          <p className="text-slate-800">
             {kotaDisplay}, {tanggalDisplay}
           </p>
-          <p className="font-bold text-slate-900 uppercase mt-0.5">
+          <p className="font-bold text-slate-900 uppercase mt-0.5 text-[10px]">
             {pengurusBarang?.statusJabatan && pengurusBarang.statusJabatan !== 'Definitif' ? `${pengurusBarang.statusJabatan}. ` : ''}
             {pengurusBarang?.jabatanKedinasan || pengurusBarang?.jabatan || 'PENGURUS BARANG'}
           </p>
-          <p className="text-[8pt] text-slate-600 italic">(Penyalur / Pengelola Persediaan)</p>
-          <div className="doc-signature-space h-16 min-h-[64px]" />
-          <p className="font-bold underline uppercase text-slate-900 tracking-wide">
+          <p className="text-[9px] text-slate-600 italic">(Penyalur / Pengelola Persediaan)</p>
+          <div className={`${isCompact ? 'h-10 min-h-[36px]' : 'h-14 min-h-[50px]'}`} />
+          <p className="font-bold underline uppercase text-slate-900 tracking-wide text-[10px]">
             {pengurusBarang?.nama || '(Nama Pengurus Barang)'}
           </p>
-          <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang?.nip || '-'}</p>
+          <p className="font-mono text-[9px] text-slate-700">NIP. {pengurusBarang?.nip || '-'}</p>
         </div>
       </div>
     </div>

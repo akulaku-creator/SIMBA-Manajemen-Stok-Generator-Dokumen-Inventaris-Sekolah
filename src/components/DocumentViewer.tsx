@@ -315,32 +315,51 @@ export const DocumentViewer: React.FC<Props> = ({
         @media print {
           @page {
             size: ${
-              isLandscape
+              (docType === 'kartu_barang' || docType === 'kartu_persediaan')
+                ? 'A4 landscape'
+                : isLandscape
                 ? paperSize === 'A4' ? 'A4 landscape' : '330mm 215mm landscape'
                 : paperSize === 'A4' ? 'A4 portrait' : '215mm 330mm portrait'
             };
             margin: ${
-              isLandscape
+              (docType === 'kartu_barang' || docType === 'kartu_persediaan')
+                ? '8mm 10mm 8mm 10mm'
+                : isLandscape
                 ? '10mm 12mm 10mm 12mm'
                 : '12mm 15mm 12mm 15mm'
             } !important;
           }
           .page-landscape {
             size: A4 landscape;
-            margin: 10mm 12mm 10mm 12mm;
+            margin: ${(docType === 'kartu_barang' || docType === 'kartu_persediaan') ? '8mm 10mm 8mm 10mm' : '10mm 12mm 10mm 12mm'};
           }
           .page-portrait {
             size: A4 portrait;
             margin: 12mm 15mm 12mm 15mm;
           }
+          .print-container {
+            width: 100% !important;
+            font-family: Arial, sans-serif !important;
+            font-size: 10px !important;
+          }
+          .signature-section,
+          .signature-area,
+          .signature-block,
+          .doc-signature-block,
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            -webkit-column-break-inside: avoid !important;
+          }
+          .compact-mode {
+            page-break-after: avoid !important;
+            page-break-before: avoid !important;
+            break-after: avoid !important;
+            break-before: avoid !important;
+          }
           .bast-opname-container {
             width: 100%;
             font-family: "Times New Roman", Times, serif;
-          }
-          .signature-section,
-          .signature-block, tr {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
           }
           html, body {
             margin: 0 !important;

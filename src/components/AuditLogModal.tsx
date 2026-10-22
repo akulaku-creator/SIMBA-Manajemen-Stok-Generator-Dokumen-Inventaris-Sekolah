@@ -108,7 +108,7 @@ export const AuditLogModal: React.FC<Props> = ({
   };
 
   const handleResetDefault = () => {
-    if (window.confirm('Muat ulang data simulasi log audit multi-tenant standar untuk pengujian?')) {
+    if (window.confirm('Muat ulang data simulasi log audit standar sekolah untuk pengujian?')) {
       const restored = resetAuditLogsToDefault();
       setLogs(restored);
     }
@@ -490,20 +490,10 @@ export const AuditLogModal: React.FC<Props> = ({
                 />
               </div>
 
-              {/* Multi-Tenant School Selector */}
-              <div>
-                <select
-                  value={sekolahFilter}
-                  onChange={(e) => setSekolahFilter(e.target.value)}
-                  className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                >
-                  <option value="ALL">Seluruh Satuan Pendidikan (Konsolidasi)</option>
-                  {sekolahList.map(sch => (
-                    <option key={sch.id} value={sch.id}>
-                      {sch.nama}
-                    </option>
-                  ))}
-                </select>
+              {/* Satuan Pendidikan Scope Indicator */}
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700">
+                <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span className="truncate">SMAN 1 CIHAURBEUTI</span>
               </div>
 
               {/* Action Category */}
@@ -688,13 +678,13 @@ export const AuditLogModal: React.FC<Props> = ({
                     <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-400/40 uppercase">
                       Sistem Dilindungi
                     </span>
-                    <span className="text-slate-400 text-xs">Arsitektur Multi-Tenant Terisolasi</span>
+                    <span className="text-slate-400 text-xs">Arsitektur Tunggal Terverifikasi</span>
                   </div>
                   <h3 className="text-lg font-bold text-white mt-1">
-                    Status Kesehatan Keamanan &amp; Integritas Data Multi-Tenant
+                    Status Kesehatan Keamanan &amp; Integritas Data Persediaan
                   </h3>
                   <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                    Sistem SIMBA menerapkan isolasi data multi-tenant berbasis <code className="text-indigo-300 font-mono font-bold">sekolah_id</code>. Seluruh transaksi penyaluran (NPB-BAST), penerimaan BOS, dan saldo gudang terlindungi dari kontaminasi antar satuan pendidikan.
+                    Sistem SIMBA berjalan mandiri untuk operasional internal satuan pendidikan SMAN 1 CIHAURBEUTI. Seluruh transaksi penyaluran (NPB-BAST), penerimaan BOS, dan saldo gudang terlindungi dari manipulasi data.
                   </p>
                 </div>
               </div>
@@ -712,7 +702,7 @@ export const AuditLogModal: React.FC<Props> = ({
                 <div className="h-10 w-px bg-white/20" />
                 <div className="text-xs space-y-0.5 text-slate-300">
                   <div>Insiden Kritis: <strong className="text-white">{securityMetrics.criticalCount}</strong></div>
-                  <div>Tenant Aktif: <strong className="text-emerald-300">{securityMetrics.tenantCount || 3} Satker</strong></div>
+                  <div>Sistem: <strong className="text-emerald-300">Single-Tenant Aktif</strong></div>
                 </div>
               </div>
             </div>
@@ -797,9 +787,9 @@ export const AuditLogModal: React.FC<Props> = ({
                 <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-xl flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                   <div className="text-xs">
-                    <p className="font-bold text-emerald-950">Validasi Kunci Asing &amp; Isolasi Multi-Tenant: Lolos (PASS)</p>
+                    <p className="font-bold text-emerald-950">Validasi Kunci Asing &amp; Integritas Data Persediaan: Lolos (PASS)</p>
                     <p className="text-emerald-800 mt-0.5">
-                      Seluruh entitas Master Barang ({logs.length} log kejadian diperiksa) memiliki keterikatan sekolah_id yang sah. Tidak ditemukan catatan anonim atau data tak bertuan.
+                      Seluruh entitas Master Barang ({logs.length} log kejadian diperiksa) memiliki integritas struktur yang sah. Tidak ditemukan catatan anonim atau data rusak.
                     </p>
                   </div>
                 </div>
@@ -1011,17 +1001,17 @@ export const AuditLogModal: React.FC<Props> = ({
               {/* Document Title */}
               <div className="text-center space-y-1">
                 <h3 className="text-sm sm:text-base font-black underline uppercase tracking-wide">
-                  BERITA ACARA AUDIT KEAMANAN SISTEM &amp; MUTASI INVENTARIS MULTI-TENANT
+                  BERITA ACARA AUDIT KEAMANAN SISTEM &amp; MUTASI INVENTARIS PERSEDIAAN
                 </h3>
                 <p className="text-xs font-mono text-slate-600 font-bold">
-                  Nomor: 005/BA-AUDIT/DISDIK/IX/2026
+                  Nomor: 005/BA-AUDIT/SMAN1-CHB/IX/2026
                 </p>
               </div>
 
               {/* Statement */}
               <div className="text-xs leading-relaxed space-y-3 text-slate-800">
                 <p>
-                  Pada hari ini, <strong>{formatTanggalIndonesia(new Date().toISOString().slice(0, 10))}</strong>, bertempat di Ruang Pengendalian Data SIMBA, telah dilakukan pemeriksaan audit forensik menyeluruh atas integritas data inventaris, log aktivitas mutasi barang persediaan, dan kepatuhan arsitektur multi-tenant dengan hasil sebagai berikut:
+                  Pada hari ini, <strong>{formatTanggalIndonesia(new Date().toISOString().slice(0, 10))}</strong>, bertempat di Ruang Pengendalian Data SIMBA SMAN 1 CIHAURBEUTI, telah dilakukan pemeriksaan audit forensik menyeluruh atas integritas data inventaris, log aktivitas mutasi barang persediaan, dan kepatuhan standar pembukuan sekolah dengan hasil sebagai berikut:
                 </p>
 
                 {/* Audit Summary Box */}
@@ -1032,8 +1022,8 @@ export const AuditLogModal: React.FC<Props> = ({
                   </div>
                   <div className="divide-y divide-slate-200">
                     <div className="px-4 py-2 flex items-center justify-between">
-                      <span>1. Arsitektur Isolasi Data Multi-Tenant</span>
-                      <strong className="text-emerald-700">TERISOLASI 100% (LOLOS)</strong>
+                      <span>1. Integritas Struktur Basis Data Persediaan</span>
+                      <strong className="text-emerald-700">KONSISTEN &amp; VALID (LOLOS)</strong>
                     </div>
                     <div className="px-4 py-2 flex items-center justify-between">
                       <span>2. Total Kejadian / Aktivitas Audit Tercatat</span>
@@ -1044,8 +1034,8 @@ export const AuditLogModal: React.FC<Props> = ({
                       <strong className="text-emerald-700 font-mono">{securityMetrics.healthScore}% (SANGAT BAIK)</strong>
                     </div>
                     <div className="px-4 py-2 flex items-center justify-between">
-                      <span>4. Jumlah Satuan Pendidikan Terdaftar</span>
-                      <strong className="font-mono">{sekolahList.length || 3} Satuan Pendidikan</strong>
+                      <span>4. Lingkup Operasional Satuan Pendidikan</span>
+                      <strong className="font-mono">SMAN 1 CIHAURBEUTI (Tunggal)</strong>
                     </div>
                     <div className="px-4 py-2 flex items-center justify-between">
                       <span>5. Integritas Nomor Dokumen Rantai 4 (NPB-BAST)</span>
