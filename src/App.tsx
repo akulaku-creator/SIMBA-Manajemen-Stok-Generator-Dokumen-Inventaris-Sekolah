@@ -559,10 +559,7 @@ export default function App() {
 
       setSelectedTransaksiId(trxData.id);
       setIsNewTransaksiModalOpen(false);
-      
-      if (currentUser.role !== 'pengguna') {
-        setActiveTab('generator');
-      }
+      // Pengguna tetap berada di Dashboard / Daftar Transaksi (tidak otomatis dialihkan ke cetak)
 
       logAuditEvent({
         userId: currentUser.id,

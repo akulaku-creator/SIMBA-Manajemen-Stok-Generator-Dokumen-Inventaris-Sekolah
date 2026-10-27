@@ -44,6 +44,7 @@ import { exportTransaksiToExcel } from '../utils/excelHelper';
 import { formatRupiah, formatTanggalIndonesia } from '../utils/numberGenerator';
 import { triggerPrint } from '../utils/printHelper';
 import { ExportPdfLaporanPenyaluran } from './documents/ExportPdfLaporanPenyaluran';
+import { ExportPdfPenerimaan } from './documents/ExportPdfPenerimaan';
 
 interface Props {
   transaksiList: TransaksiPengeluaran[];
@@ -327,6 +328,7 @@ export const DashboardStats: React.FC<Props> = ({
 
   // Modal PDF Preview State (Requirement 15)
   const [isPdfExportModalOpen, setIsPdfExportModalOpen] = useState(false);
+  const [isPdfExportPenerimaanModalOpen, setIsPdfExportPenerimaanModalOpen] = useState(false);
 
   // Combined Filtering Penyaluran (Requirement 11: Bekerja secara kombinasi)
   const filteredTransaksi = useMemo(() => {
@@ -581,6 +583,23 @@ export const DashboardStats: React.FC<Props> = ({
     setYearRcv('all');
     setPageRcv(1);
   };
+
+  const currentPeriodeTextRcv = useMemo(() => {
+    const parts: string[] = [];
+    if (sumberDanaRcv !== 'all') {
+      parts.push(`Sumber: ${sumberDanaRcv}`);
+    }
+    if (monthRcv !== 'all') {
+      const mObj = MONTH_NAMES_ALL.find(m => m.val === monthRcv);
+      if (mObj) parts.push(`Bulan ${mObj.label}`);
+    }
+    if (yearRcv !== 'all') {
+      parts.push(`Tahun ${yearRcv}`);
+    } else {
+      parts.push('Tahun Anggaran 2026');
+    }
+    return parts.length > 0 ? parts.join(' • ') : 'Tahun Anggaran 2026';
+  }, [sumberDanaRcv, monthRcv, yearRcv]);
 
   const hasActiveFiltersTrx = searchTrx || triwulanTrx !== 'all' || monthTrx !== 'all' || (yearTrx !== 'all' && yearTrx !== '2026') || statusTrx !== 'all' || unitPemohonTrx !== 'all';
 
@@ -877,6 +896,18 @@ export const DashboardStats: React.FC<Props> = ({
                     <span>Export PDF</span>
                   </button>
                 </>
+              )}
+
+              {activeTrxTab === 'penerimaan' && (
+                <button
+                  type="button"
+                  onClick={() => setIsPdfExportPenerimaanModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                  title="Export / Cetak Format Laporan Resmi Rekapitulasi Penerimaan Barang Persediaan (Dana BOS)"
+                >
+                  <Printer className="w-3.5 h-3.5 text-rose-700" />
+                  <span>Export PDF</span>
+                </button>
               )}
 
               <button
