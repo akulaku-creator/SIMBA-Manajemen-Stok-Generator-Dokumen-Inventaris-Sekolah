@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Search, Check, ChevronDown, ShieldCheck, Tag, X } from 'lucide-react';
+import { Search, Check, ChevronDown, ShieldCheck, Tag, X, PlusCircle } from 'lucide-react';
 import { MASTER_40_REKENING_OPTIONS, ALL_REKENING_MASTER_OPTIONS } from '../data/kodeRekeningData';
-import { JenisBarang } from '../types';
+import { JenisBarang, KategoriBarangItem } from '../types';
 
 export interface SelectedRekening {
   kode: string;
@@ -15,6 +15,8 @@ interface Props {
   valueKode?: string;
   valueKategori?: string;
   jenisBarang?: JenisBarang;
+  kategoriList?: KategoriBarangItem[];
+  onOpenManager?: () => void;
   onSelect: (selected: SelectedRekening) => void;
   className?: string;
   required?: boolean;
@@ -24,6 +26,8 @@ export const KategoriRekeningSelect: React.FC<Props> = ({
   valueKode,
   valueKategori,
   jenisBarang = 'BHP',
+  kategoriList,
+  onOpenManager,
   onSelect,
   className = '',
   required = true,
@@ -59,39 +63,69 @@ export const KategoriRekeningSelect: React.FC<Props> = ({
     }
   }, [isOpen]);
 
+  // Dynamically resolve options list from custom kategoriList or default master
+  const allAvailableOptions = useMemo<SelectedRekening[]>(() => {
+    if (kategoriList && kategoriList.length > 0) {
+      return kategoriList.map(item => {
+        const kode = item.kodeRekening || '';
+        const nama = item.namaRekening || item.nama;
+        const jenisAset: JenisBarang = item.jenisDefault || (kode.startsWith('5.2') ? 'Belanja Modal' : 'BHP');
+        return {
+          kode,
+          nama,
+          kategori: item.nama,
+          jenisAset,
+          label: `${kode} - ${nama}`
+        };
+      });
+    }
+    return ALL_REKENING_MASTER_OPTIONS;
+  }, [kategoriList]);
+
   // Find currently selected item
   const selectedItem = useMemo(() => {
     if (valueKode) {
-      const match = ALL_REKENING_MASTER_OPTIONS.find(item => item.kode === valueKode);
+      const match = allAvailableOptions.find(item => item.kode === valueKode);
       if (match) return match;
     }
     if (valueKategori) {
       const cleanKat = valueKategori.toLowerCase().trim();
-      const match = ALL_REKENING_MASTER_OPTIONS.find(
-        item => item.nama.toLowerCase().trim() === cleanKat || item.label.toLowerCase().trim() === cleanKat
+      const match = allAvailableOptions.find(
+        item => item.nama.toLowerCase().trim() === cleanKat || 
+                item.kategori.toLowerCase().trim() === cleanKat || 
+                item.label.toLowerCase().trim() === cleanKat
       );
       if (match) return match;
     }
-    // Default fallback to 5.1.02.01.01.0024 ATK
-    return ALL_REKENING_MASTER_OPTIONS.find(i => i.kode === '5.1.02.01.01.0024') || MASTER_40_REKENING_OPTIONS[0];
-  }, [valueKode, valueKategori]);
+    // Default fallback to first matching option or 5.1.02.01.01.0024
+    return (
+      allAvailableOptions.find(i => i.kode === '5.1.02.01.01.0024') ||
+      allAvailableOptions[0] ||
+      MASTER_40_REKENING_OPTIONS[0]
+    );
+  }, [valueKode, valueKategori, allAvailableOptions]);
 
-  // Filter options based on user search query
+  // Filter options based on user search query and jenisBarang
   const filteredOptions = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    const sourceList = jenisBarang === 'Belanja Modal' ? ALL_REKENING_MASTER_OPTIONS : MASTER_40_REKENING_OPTIONS;
+    const sourceList = jenisBarang === 'Belanja Modal' 
+      ? allAvailableOptions.filter(i => i.jenisAset === 'Belanja Modal' || i.kode.startsWith('5.2'))
+      : allAvailableOptions;
+
+    const listToFilter = sourceList.length > 0 ? sourceList : allAvailableOptions;
 
     if (!query) {
-      return sourceList;
+      return listToFilter;
     }
 
-    return sourceList.filter(
+    return listToFilter.filter(
       item =>
         item.kode.toLowerCase().includes(query) ||
         item.nama.toLowerCase().includes(query) ||
+        item.kategori.toLowerCase().includes(query) ||
         item.label.toLowerCase().includes(query)
     );
-  }, [searchQuery, jenisBarang]);
+  }, [searchQuery, jenisBarang, allAvailableOptions]);
 
   const handleSelect = (item: SelectedRekening) => {
     onSelect(item);
@@ -166,7 +200,7 @@ export const KategoriRekeningSelect: React.FC<Props> = ({
             <div className="flex items-center justify-between mt-1.5 px-0.5 text-[10px] text-slate-500">
               <span className="flex items-center gap-1 font-medium">
                 <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                40 Daftar Master Rekening Resmi
+                {allAvailableOptions.length} Master Kategori &amp; Rekening Aktif
               </span>
               <span>{filteredOptions.length} kategori ditemukan</span>
             </div>
@@ -183,7 +217,7 @@ export const KategoriRekeningSelect: React.FC<Props> = ({
                 const isSelected = selectedItem?.kode === item.kode;
                 return (
                   <button
-                    key={item.kode}
+                    key={`${item.kode}-${item.nama}`}
                     type="button"
                     onClick={() => handleSelect(item)}
                     className={`w-full text-left px-2.5 py-2 rounded-lg flex items-start gap-2.5 transition-colors cursor-pointer ${
@@ -222,8 +256,21 @@ export const KategoriRekeningSelect: React.FC<Props> = ({
           </div>
 
           {/* Footer Information */}
-          <div className="p-2 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-500 text-center font-medium">
-            Single Source of Truth: 1 Kategori Barang = 1 Kode Rekening Belanja
+          <div className="p-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+            <span>Single Source: 1 Kategori = 1 Rekening</span>
+            {onOpenManager && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsOpen(false);
+                  onOpenManager();
+                }}
+                className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+              >
+                <PlusCircle className="w-3 h-3" />
+                <span>+ Kelola Kategori</span>
+              </button>
+            )}
           </div>
         </div>
       )}

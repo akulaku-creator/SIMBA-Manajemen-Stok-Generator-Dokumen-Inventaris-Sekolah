@@ -46,6 +46,7 @@ import {
   AppUser, 
   Barang, 
   GoogleSheetSyncConfig,
+  JenisBarang,
   KategoriBarangItem,
   KopSuratConfig, 
   NumberingPatternConfig, 
@@ -56,6 +57,7 @@ import {
   TransaksiPengeluaran, 
   UserRole 
 } from './types';
+import { CategoryFormData } from './components/MasterKategoriManager';
 import { DEFAULT_NUMBERING_CONFIG } from './utils/numberGenerator';
 import { getNamaRekeningByKode } from './data/kodeRekeningData';
 
@@ -135,21 +137,17 @@ export default function App() {
 
   const [kategoriList, setKategoriList] = useState<KategoriBarangItem[]>(() => {
     const saved = localStorage.getItem('simba_kategori_list');
-    const list: KategoriBarangItem[] = saved ? JSON.parse(saved) : DEFAULT_KATEGORI_LIST;
-    if (!saved || list.length < 40) {
-      return DEFAULT_KATEGORI_LIST;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Failed to parse simba_kategori_list from localStorage:', e);
+      }
     }
-    return list.map(kat => {
-      const matchedDefault = DEFAULT_KATEGORI_LIST.find(d => d.nama.toLowerCase() === kat.nama.toLowerCase() || d.kodeRekening === kat.kodeRekening);
-      const kode = kat.kodeRekening || matchedDefault?.kodeRekening || '5.1.02.01.01.0024';
-      const officialName = getNamaRekeningByKode(kode);
-      return {
-        ...kat,
-        nama: officialName,
-        kodeRekening: kode,
-        namaRekening: officialName
-      };
-    });
+    return DEFAULT_KATEGORI_LIST;
   });
 
   const [transaksiList, setTransaksiList] = useState<TransaksiPengeluaran[]>(() => {
@@ -828,8 +826,13 @@ export default function App() {
     }
   };
 
-  const handleSelectForPrint = (trxId: string) => {
+  const handleSelectForPrint = (trxId: string, docType?: DocumentType) => {
     setSelectedTransaksiId(trxId);
+    if (docType) {
+      setGeneratorInitialDocType(docType);
+    } else {
+      setGeneratorInitialDocType('bundle');
+    }
     setActiveTab('generator');
   };
 
@@ -1054,6 +1057,96 @@ export default function App() {
     setKategoriList(newList);
     localStorage.setItem('simba_kategori_list', JSON.stringify(newList));
     showToast('Daftar Kategori Barang berhasil diperbarui dan disinkronkan ke seluruh sistem.');
+  };
+
+  // Handler CRUD Kategori Dinamis: Simpan atau Edit Kategori & Rekening
+  const handleSaveCategory = (
+    formData: CategoryFormData,
+    editingId?: string | null
+  ) => {
+    const trimmedKode = formData.kodeRekening.trim();
+    const trimmedNama = formData.namaKategori.trim();
+    const jenisAset: JenisBarang = formData.jenis === 'Belanja Modal' || formData.jenis === 'Modal' ? 'Belanja Modal' : 'BHP';
+
+    setKategoriList(prev => {
+      let updated: KategoriBarangItem[];
+      if (editingId) {
+        const oldCat = prev.find(c => c.id === editingId);
+        updated = prev.map(c => {
+          if (c.id === editingId) {
+            return {
+              ...c,
+              kodeRekening: trimmedKode,
+              namaRekening: trimmedNama,
+              nama: trimmedNama,
+              jenisDefault: jenisAset,
+              deskripsi: `Akun Belanja: ${trimmedKode} - ${trimmedNama}`
+            };
+          }
+          return c;
+        });
+
+        // Sinkronisasi otomatis ke masterBarang jika nama atau kode rekening berubah
+        if (oldCat && (oldCat.nama !== trimmedNama || oldCat.kodeRekening !== trimmedKode)) {
+          setMasterBarang(prevBarang => {
+            const updatedBarang = prevBarang.map(b => {
+              if (b.kategori === oldCat.nama || b.kodeRekening === oldCat.kodeRekening || b.namaRekening === oldCat.nama) {
+                return {
+                  ...b,
+                  kategori: trimmedNama,
+                  kodeRekening: trimmedKode,
+                  namaRekening: trimmedNama,
+                  jenisBarang: jenisAset
+                };
+              }
+              return b;
+            });
+            localStorage.setItem('simba_master_barang', JSON.stringify(updatedBarang));
+            return updatedBarang;
+          });
+        }
+      } else {
+        const newCat: KategoriBarangItem = {
+          id: `kat-custom-${Date.now()}`,
+          nama: trimmedNama,
+          kodeRekening: trimmedKode,
+          namaRekening: trimmedNama,
+          jenisDefault: jenisAset,
+          prefixKode: jenisAset === 'Belanja Modal' ? '1.03.02.99.' : '1.01.03.99.',
+          deskripsi: `Akun Belanja: ${trimmedKode} - ${trimmedNama}`
+        };
+        updated = [...prev, newCat];
+      }
+      localStorage.setItem('simba_kategori_list', JSON.stringify(updated));
+      return updated;
+    });
+
+    showToast(editingId ? `Kategori "${trimmedNama}" berhasil diperbarui.` : `Kategori baru "${trimmedNama}" berhasil ditambahkan.`);
+  };
+
+  // Handler CRUD Kategori Dinamis: Hapus Kategori dengan Proteksi Integritas Data
+  const handleDeleteCategory = (categoryId: string) => {
+    const target = kategoriList.find(c => c.id === categoryId);
+    if (!target) return;
+
+    // Validasi: tidak dapat dihapus jika sedang digunakan oleh barang di inventaris
+    const usedBy = masterBarang.filter(
+      b => b.kategori === target.nama || b.kodeRekening === target.kodeRekening || b.namaRekening === target.nama
+    );
+
+    if (usedBy.length > 0) {
+      alert(
+        `Kategori "${target.nama}" (${target.kodeRekening || '-'}) tidak dapat dihapus karena sedang digunakan oleh ${usedBy.length} barang inventaris:\n• ${usedBy.slice(0, 3).map(b => b.namaBarang).join('\n• ')}${usedBy.length > 3 ? `\n...dan ${usedBy.length - 3} barang lainnya` : ''}\n\nSilakan ubah kategori barang terkait terlebih dahulu.`
+      );
+      return;
+    }
+
+    setKategoriList(prev => {
+      const updated = prev.filter(c => c.id !== categoryId);
+      localStorage.setItem('simba_kategori_list', JSON.stringify(updated));
+      return updated;
+    });
+    showToast(`Kategori "${target.nama}" berhasil dihapus.`);
   };
 
   // Mass migration for legacy/unmapped barang categories
@@ -1352,6 +1445,8 @@ export default function App() {
                   showToast={showToast}
                   kategoriList={kategoriList}
                   onUpdateKategoriList={handleUpdateKategoriList}
+                  onSaveCategory={handleSaveCategory}
+                  onDeleteCategory={handleDeleteCategory}
                   onMigrateUnmappedCategories={handleMigrateUnmappedCategories}
                   onViewKartuBarang={(barangId) => {
                     setGeneratorInitialDocType('kartu_barang');

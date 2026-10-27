@@ -39,10 +39,11 @@ import {
   X
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
-import { AppUser, Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
+import { AppUser, Barang, DocumentType, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
 import { exportTransaksiToExcel } from '../utils/excelHelper';
 import { formatRupiah, formatTanggalIndonesia } from '../utils/numberGenerator';
 import { triggerPrint } from '../utils/printHelper';
+import { ExportPdfLaporanPenyaluran } from './documents/ExportPdfLaporanPenyaluran';
 
 interface Props {
   transaksiList: TransaksiPengeluaran[];
@@ -50,7 +51,7 @@ interface Props {
   barangList: Barang[];
   pejabatList?: Pejabat[];
   currentUser: AppUser;
-  onSelectTransaksiForPrint: (id: string) => void;
+  onSelectTransaksiForPrint: (id: string, docType?: DocumentType) => void;
   onOpenNewTransaksi: () => void;
   onOpenNewPenerimaan: () => void;
   onEditTransaksi: (transaksi: TransaksiPengeluaran) => void;
@@ -218,7 +219,7 @@ export const DashboardStats: React.FC<Props> = ({
   const [searchTrx, setSearchTrx] = useState('');
   const [triwulanTrx, setTriwulanTrx] = useState<'all' | 'TW1' | 'TW2' | 'TW3' | 'TW4'>('all');
   const [monthTrx, setMonthTrx] = useState('all');
-  const [yearTrx, setYearTrx] = useState('all');
+  const [yearTrx, setYearTrx] = useState('2026');
   const [statusTrx, setStatusTrx] = useState<string>('all');
   const [unitPemohonTrx, setUnitPemohonTrx] = useState<string>('all');
   const [pageTrx, setPageTrx] = useState(1);
@@ -226,10 +227,23 @@ export const DashboardStats: React.FC<Props> = ({
   const [sortFieldTrx, setSortFieldTrx] = useState<'nomor' | 'tanggal' | 'nilai' | 'pemohon' | 'status'>('nomor');
   const [sortOrderTrx, setSortOrderTrx] = useState<'asc' | 'desc'>('desc');
   const [isMobileFilterOpenTrx, setIsMobileFilterOpenTrx] = useState(false);
+  const [activePrintDropdownId, setActivePrintDropdownId] = useState<string | null>(null);
 
-  // Available Years
+  // Close print dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.print-dropdown-menu') && !target.closest('.print-dropdown-trigger')) {
+        setActivePrintDropdownId(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
+  // Available Years (Default aktif: 2026)
   const availableYearsTrx = useMemo(() => {
-    const years = new Set<string>();
+    const years = new Set<string>(['2026', '2025', '2024']);
     transaksiList.forEach(t => {
       if (t.tanggal) {
         const y = new Date(t.tanggal).getFullYear();
@@ -424,7 +438,7 @@ export const DashboardStats: React.FC<Props> = ({
     setSearchTrx('');
     setTriwulanTrx('all');
     setMonthTrx('all');
-    setYearTrx('all');
+    setYearTrx('2026');
     setStatusTrx('all');
     setUnitPemohonTrx('all');
     setPageTrx(1);
@@ -568,7 +582,7 @@ export const DashboardStats: React.FC<Props> = ({
     setPageRcv(1);
   };
 
-  const hasActiveFiltersTrx = searchTrx || triwulanTrx !== 'all' || monthTrx !== 'all' || yearTrx !== 'all' || statusTrx !== 'all' || unitPemohonTrx !== 'all';
+  const hasActiveFiltersTrx = searchTrx || triwulanTrx !== 'all' || monthTrx !== 'all' || (yearTrx !== 'all' && yearTrx !== '2026') || statusTrx !== 'all' || unitPemohonTrx !== 'all';
 
   return (
     <div className="space-y-5 text-slate-800 animate-in fade-in duration-150">
@@ -968,8 +982,9 @@ export const DashboardStats: React.FC<Props> = ({
                       setPageTrx(1);
                     }}
                     className="w-full py-2 px-2 text-xs bg-white rounded-xl border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 text-slate-800 font-semibold cursor-pointer"
+                    title="Filter Tahun Aktif Transaksi (Default: 2026)"
                   >
-                    <option value="all">Thn</option>
+                    <option value="all">Semua Tahun</option>
                     {availableYearsTrx.map(y => (
                       <option key={y} value={y}>{y}</option>
                     ))}
@@ -1373,16 +1388,93 @@ export const DashboardStats: React.FC<Props> = ({
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
 
-                              {/* Cetak */}
-                              <button
-                                type="button"
-                                onClick={() => onSelectTransaksiForPrint(t.id)}
-                                className="w-8 h-8 flex items-center justify-center text-blue-700 hover:text-white hover:bg-blue-600 bg-blue-50 border border-blue-200 rounded-lg shadow-2xs transition-all cursor-pointer"
-                                title="Cetak Berkas Bundel Dokumen Resmi (NPB, SPB, SPPB, BAST)"
-                                aria-label="Cetak Dokumen Transaksi"
-                              >
-                                <Printer className="w-3.5 h-3.5" />
-                              </button>
+                              {/* Cetak Dropdown Menu */}
+                              <div className="relative inline-block text-left">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActivePrintDropdownId(activePrintDropdownId === t.id ? null : t.id);
+                                  }}
+                                  className="print-dropdown-trigger h-8 px-2 flex items-center justify-center gap-1 text-blue-700 hover:text-white hover:bg-blue-600 bg-blue-50 border border-blue-200 rounded-lg shadow-2xs transition-all cursor-pointer text-xs font-semibold"
+                                  title="Pilih Jenis Dokumen Cetak (NPB, SPB, SPPB, BAST)"
+                                  aria-label="Pilih Jenis Dokumen Cetak"
+                                >
+                                  <Printer className="w-3.5 h-3.5" />
+                                  <ChevronDown className={`w-3 h-3 transition-transform ${activePrintDropdownId === t.id ? 'rotate-180' : ''}`} />
+                                </button>
+
+                                {activePrintDropdownId === t.id && (
+                                  <div 
+                                    className="print-dropdown-menu absolute right-0 mt-1 w-64 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-left animate-in fade-in zoom-in-95 duration-100"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <div className="px-3 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 flex items-center justify-between">
+                                      <span>Pilihan Dokumen Cetak</span>
+                                      <span className="font-mono text-slate-500 font-normal">Reg #{t.nomorUrut}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivePrintDropdownId(null);
+                                        onSelectTransaksiForPrint(t.id, 'bundle');
+                                      }}
+                                      className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <FileStack className="w-4 h-4 text-blue-600 shrink-0" />
+                                      <div>
+                                        <div className="font-bold text-slate-900">Cetak Bundel (4-in-1)</div>
+                                        <div className="text-[10px] text-slate-400 font-normal">NPB, SPB, SPPB, BAST Lengkap</div>
+                                      </div>
+                                    </button>
+                                    <div className="border-t border-slate-100 my-1"></div>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivePrintDropdownId(null);
+                                        onSelectTransaksiForPrint(t.id, 'npb');
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-blue-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                      <span>Cetak NPB (Nota Permintaan)</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivePrintDropdownId(null);
+                                        onSelectTransaksiForPrint(t.id, 'spb');
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-blue-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                      <span>Cetak SPB (Surat Permintaan)</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivePrintDropdownId(null);
+                                        onSelectTransaksiForPrint(t.id, 'sppb');
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-blue-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                      <span>Cetak SPPB (Surat Penyaluran)</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setActivePrintDropdownId(null);
+                                        onSelectTransaksiForPrint(t.id, 'bast');
+                                      }}
+                                      className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 hover:text-blue-700 flex items-center gap-2 transition-colors cursor-pointer"
+                                    >
+                                      <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                      <span>Cetak BAST (Berita Acara)</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
 
                               {/* Hapus dengan konfirmasi modal */}
                               <button
@@ -1508,14 +1600,86 @@ export const DashboardStats: React.FC<Props> = ({
                           <span>Edit</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => onSelectTransaksiForPrint(t.id)}
-                          className="h-10 flex items-center justify-center gap-1.5 px-3 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer"
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                          <span>Cetak</span>
-                        </button>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActivePrintDropdownId(activePrintDropdownId === `m-${t.id}` ? null : `m-${t.id}`);
+                            }}
+                            className="print-dropdown-trigger w-full h-10 flex items-center justify-center gap-1.5 px-3 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Cetak</span>
+                            <ChevronDown className="w-3 h-3 ml-0.5" />
+                          </button>
+
+                          {activePrintDropdownId === `m-${t.id}` && (
+                            <div 
+                              className="print-dropdown-menu absolute left-0 right-0 mt-1 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-40 text-left"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                                Pilih Dokumen Cetak
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivePrintDropdownId(null);
+                                  onSelectTransaksiForPrint(t.id, 'bundle');
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700 font-semibold flex items-center gap-2"
+                              >
+                                <FileStack className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span>Cetak Bundel (4-in-1)</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivePrintDropdownId(null);
+                                  onSelectTransaksiForPrint(t.id, 'npb');
+                                }}
+                                className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>Cetak NPB</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivePrintDropdownId(null);
+                                  onSelectTransaksiForPrint(t.id, 'spb');
+                                }}
+                                className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                <span>Cetak SPB</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivePrintDropdownId(null);
+                                  onSelectTransaksiForPrint(t.id, 'sppb');
+                                }}
+                                className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                                <span>Cetak SPPB</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActivePrintDropdownId(null);
+                                  onSelectTransaksiForPrint(t.id, 'bast');
+                                }}
+                                className="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Cetak BAST</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
 
                         <button
                           type="button"
@@ -2127,11 +2291,11 @@ export const DashboardStats: React.FC<Props> = ({
           MODAL 3: EXPORT PDF LAPORAN RESMI (Requirement 15)
           ========================================================================= */}
       {isPdfExportModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 print:p-0 print:bg-white print:static print:block">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 print:max-w-full print:max-h-none print:border-none print:shadow-none print:rounded-none">
             
             {/* Header Dialog */}
-            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-rose-100 text-rose-700 rounded-xl border border-rose-200">
                   <Printer className="w-5 h-5" />
@@ -2156,106 +2320,33 @@ export const DashboardStats: React.FC<Props> = ({
             </div>
 
             {/* Printable Document Preview Area */}
-            <div className="p-6 overflow-y-auto flex-1 bg-slate-100/70 font-serif">
-              <div className="bg-white p-8 rounded-xl shadow-xs border border-slate-200 text-slate-900 text-xs space-y-4 max-w-3xl mx-auto">
-                
-                {/* Kop Surat Sekolah Resmi */}
-                <div className="border-b-2 border-slate-900 pb-3 text-center space-y-0.5">
-                  <h4 className="font-bold text-xs uppercase tracking-wider text-slate-700">
-                    {kopConfig?.pemerintahDaerah || 'PEMERINTAH DAERAH PROVINSI JAWA BARAT'}
-                  </h4>
-                  <h3 className="font-extrabold text-sm uppercase tracking-wide text-slate-900">
-                    {kopConfig?.dinasPendidikan || 'DINAS PENDIDIKAN'}
-                  </h3>
-                  <h2 className="font-extrabold text-base uppercase text-slate-950">
-                    {schoolName || kopConfig?.namaSekolah || 'SMAN 1 CIHAURBEUTI'}
-                  </h2>
-                  <p className="text-[10px] text-slate-600 font-sans">
-                    {kopConfig?.alamatLengkap || 'Jl. Kartawijaya No. 600, Cihaurbeuti'} • NPSN: {kopConfig?.npsn || '20211512'}
-                  </p>
-                </div>
-
-                {/* Judul Laporan & Periode */}
-                <div className="text-center pt-2 pb-1 space-y-1">
-                  <h3 className="font-bold text-sm uppercase tracking-wide underline underline-offset-4">
-                    REKAPITULASI PENYALURAN BARANG PERSEDIAAN
-                  </h3>
-                  <p className="text-xs font-sans text-slate-600">
-                    Periode: <strong className="text-slate-900">{currentPeriodeText}</strong>
-                  </p>
-                </div>
-
-                {/* Tabel Hasil Filter */}
-                <div className="border border-slate-900 overflow-hidden">
-                  <table className="w-full text-[11px] text-left border-collapse font-sans">
-                    <thead className="bg-slate-100 font-bold border-b border-slate-900 text-slate-900 uppercase text-[10px]">
-                      <tr>
-                        <th className="p-2 w-8 text-center border-r border-slate-900">No</th>
-                        <th className="p-2 w-24 border-r border-slate-900">Tanggal</th>
-                        <th className="p-2 w-32 border-r border-slate-900">No. Dokumen</th>
-                        <th className="p-2 border-r border-slate-900">Unit &amp; Pemohon</th>
-                        <th className="p-2 border-r border-slate-900">Rincian Barang</th>
-                        <th className="p-2 w-28 text-right">Nilai (Rp)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-300">
-                      {filteredTransaksi.map((t, idx) => {
-                        const totalNilai = t.items.reduce((s, it) => s + ((Number(it.usulanJumlah) || 0) * (Number(it.hargaSatuan) || 0)), 0);
-                        const pemohon = pemohonMap[t.pemohonId];
-                        const namaP = pemohon?.nama || (t.pemohonId && !t.pemohonId.startsWith('p-') ? t.pemohonId : '-') || '-';
-                        return (
-                          <tr key={t.id}>
-                            <td className="p-2 text-center border-r border-slate-900">{idx + 1}</td>
-                            <td className="p-2 border-r border-slate-900">{formatTanggalIndonesia(t.tanggal)}</td>
-                            <td className="p-2 font-mono border-r border-slate-900 text-[10px]">
-                              {t.noSPB || t.noBAST || `Reg #${t.nomorUrut}`}
-                            </td>
-                            <td className="p-2 border-r border-slate-900">
-                              <div className="font-bold">{t.unitPemohon}</div>
-                              <div className="text-[10px] text-slate-500">{namaP}</div>
-                            </td>
-                            <td className="p-2 border-r border-slate-900 text-[10px]">
-                              {t.items.map(it => `${it.namaBarang} (${it.usulanJumlah} ${it.satuan})`).join(', ')}
-                            </td>
-                            <td className="p-2 text-right font-mono font-bold">
-                              {formatRupiah(totalNilai)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      <tr className="bg-slate-50 font-bold border-t-2 border-slate-900">
-                        <td colSpan={5} className="p-2 text-right uppercase border-r border-slate-900">
-                          Total Nilai Penyaluran ({filteredTransaksi.length} berkas):
-                        </td>
-                        <td className="p-2 text-right font-mono text-xs">
-                          {formatRupiah(filteredTransaksi.reduce((acc, t) => acc + t.items.reduce((s, it) => s + ((Number(it.usulanJumlah) || 0) * (Number(it.hargaSatuan) || 0)), 0), 0))}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Tanda Tangan Pejabat Pengesah */}
-                <div className="pt-8 flex justify-between font-sans text-xs">
-                  <div className="text-center space-y-12">
-                    <p>Mengetahui,<br />Kepala Sekolah</p>
-                    <p className="font-bold underline uppercase">
-                      {kopConfig?.namaSekolah ? 'Kepala Satuan Pendidikan' : 'Dra. Hj. Imas Rohayati, M.Pd.'}
-                    </p>
-                  </div>
-                  <div className="text-center space-y-12">
-                    <p>{kopConfig?.kotaSurat || 'Ciamis'}, {new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}<br />Pengurus Barang Pengguna</p>
-                    <p className="font-bold underline uppercase">
-                      {currentUser?.nama || 'Dedi Kurniawan, S.Pd.'}
-                    </p>
-                  </div>
-                </div>
-
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-100/70 print:p-0 print:bg-white print:overflow-visible">
+              <div className="bg-white rounded-xl shadow-xs border border-slate-200 max-w-4xl mx-auto overflow-hidden print:border-none print:shadow-none print:max-w-full print:rounded-none">
+                <ExportPdfLaporanPenyaluran
+                  dataBerks={{
+                    periode: currentPeriodeText,
+                    items: filteredTransaksi,
+                    tanggalCetak: new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                  }}
+                  pejabatSettings={{
+                    namaSekolah: schoolName || kopConfig?.namaSekolah || "SMAN 1 CIHAURBEUTI",
+                    alamat: kopConfig?.alamatLengkap || "Jl. Kartawijaya No. 600 Cihaurbeuti, Kab. Ciamis",
+                    npsn: kopConfig?.npsn || "20211512",
+                    kotaSurat: kopConfig?.kotaSurat || "Ciamis",
+                    telepon: (kopConfig as any)?.telepon,
+                    fax: (kopConfig as any)?.fax
+                  }}
+                  transaksiList={filteredTransaksi}
+                  pejabatList={pejabatList}
+                  kopConfig={kopConfig}
+                  periode={currentPeriodeText}
+                  pemohonMap={pemohonMap}
+                />
               </div>
             </div>
 
             {/* Footer Dialog Action */}
-            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between no-print">
               <span className="text-xs text-slate-500 font-sans">
                 Dokumen siap dicetak ke format printer ISO A4 atau disimpan ke PDF.
               </span>
@@ -2272,7 +2363,7 @@ export const DashboardStats: React.FC<Props> = ({
                   onClick={() => {
                     triggerPrint({
                       documentType: 'REKAP_PENYALURAN',
-                      namaSekolah: schoolName
+                      namaSekolah: schoolName || kopConfig?.namaSekolah || 'SMAN 1 CIHAURBEUTI'
                     });
                   }}
                   className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"

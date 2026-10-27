@@ -26,11 +26,13 @@ import {
   getNamaRekeningByKode, 
   getNamaRekeningDefault 
 } from '../data/kodeRekeningData';
+import { DEFAULT_KATEGORI_LIST } from '../data/defaultData';
 import { Barang, JenisBarang, KategoriBarangItem } from '../types';
 import { exportMasterBarangToExcel } from '../utils/excelHelper';
 import { formatRupiah } from '../utils/numberGenerator';
 import { ImportBarangModal } from './ImportBarangModal';
 import { KategoriRekeningSelect, SelectedRekening } from './KategoriRekeningSelect';
+import { MasterKategoriManager, CategoryFormData } from './MasterKategoriManager';
 
 interface Props {
   barangList: Barang[];
@@ -42,6 +44,8 @@ interface Props {
   onViewKartuPersediaan?: (barangId: string) => void;
   kategoriList?: KategoriBarangItem[];
   onUpdateKategoriList?: (list: KategoriBarangItem[]) => void;
+  onSaveCategory?: (formData: CategoryFormData, editingId?: string | null) => void;
+  onDeleteCategory?: (id: string) => void;
   onMigrateUnmappedCategories?: (targetCategoryName?: string) => void;
   showToast?: (message: string) => void;
 }
@@ -54,12 +58,17 @@ export const MasterBarangTable: React.FC<Props> = ({
   onImportBarang,
   onViewKartuBarang,
   onViewKartuPersediaan,
+  kategoriList,
+  onUpdateKategoriList,
+  onSaveCategory,
+  onDeleteCategory,
   onMigrateUnmappedCategories,
   showToast
 }) => {
   const [search, setSearch] = useState('');
   const [filterJenis, setFilterJenis] = useState<'Semua' | 'BHP' | 'Belanja Modal'>('Semua');
   const [filterKategori, setFilterKategori] = useState<string>('Semua');
+  const [isKategoriModalOpen, setIsKategoriModalOpen] = useState<boolean>(false);
   
   // Fitur Pencarian Cepat Kolom Kategori & Kode Rekening
   const [categorySearch, setCategorySearch] = useState<string>('');
@@ -83,18 +92,114 @@ export const MasterBarangTable: React.FC<Props> = ({
     };
   }, []);
 
-  // Saran Kategori berdasarkan teks yang diketik pada kolom kategori
+  // Source of Truth Master Kategori List (dari prop atau default)
+  const allCategoryItems = useMemo<KategoriBarangItem[]>(() => {
+    if (kategoriList && kategoriList.length > 0) {
+      return kategoriList;
+    }
+    return DEFAULT_KATEGORI_LIST;
+  }, [kategoriList]);
+
+  const bhpCategories = useMemo(() => {
+    return allCategoryItems.filter(
+      c => (c.jenisDefault || (c.kodeRekening?.startsWith('5.2') ? 'Belanja Modal' : 'BHP')) === 'BHP'
+    );
+  }, [allCategoryItems]);
+
+  const modalCategories = useMemo(() => {
+    return allCategoryItems.filter(
+      c => (c.jenisDefault || (c.kodeRekening?.startsWith('5.2') ? 'Belanja Modal' : 'BHP')) === 'Belanja Modal'
+    );
+  }, [allCategoryItems]);
+
+  // Handler Simpan / Edit Kategori
+  const handleCategorySave = (catFormData: CategoryFormData, editingId?: string | null) => {
+    if (onSaveCategory) {
+      onSaveCategory(catFormData, editingId);
+    } else if (onUpdateKategoriList) {
+      const cleanKode = catFormData.kodeRekening.trim();
+      const cleanNama = catFormData.namaKategori.trim();
+      const jenisAset: JenisBarang = catFormData.jenis === 'Belanja Modal' || catFormData.jenis === 'Modal' ? 'Belanja Modal' : 'BHP';
+
+      let updated: KategoriBarangItem[];
+      if (editingId) {
+        updated = allCategoryItems.map(c => {
+          if (c.id === editingId) {
+            return {
+              ...c,
+              kodeRekening: cleanKode,
+              namaRekening: cleanNama,
+              nama: cleanNama,
+              jenisDefault: jenisAset,
+              deskripsi: `Akun Belanja: ${cleanKode} - ${cleanNama}`
+            };
+          }
+          return c;
+        });
+      } else {
+        const newCat: KategoriBarangItem = {
+          id: `kat-custom-${Date.now()}`,
+          nama: cleanNama,
+          kodeRekening: cleanKode,
+          namaRekening: cleanNama,
+          jenisDefault: jenisAset,
+          prefixKode: jenisAset === 'Belanja Modal' ? '1.03.02.99.' : '1.01.03.99.',
+          deskripsi: `Akun Belanja: ${cleanKode} - ${cleanNama}`
+        };
+        updated = [...allCategoryItems, newCat];
+      }
+      onUpdateKategoriList(updated);
+      if (showToast) {
+        showToast(editingId ? `Kategori "${cleanNama}" berhasil diperbarui.` : `Kategori baru "${cleanNama}" berhasil ditambahkan.`);
+      }
+    }
+  };
+
+  // Handler Hapus Kategori dengan Validasi Penggunaan
+  const handleCategoryDelete = (catId: string) => {
+    if (onDeleteCategory) {
+      onDeleteCategory(catId);
+    } else if (onUpdateKategoriList) {
+      const target = allCategoryItems.find(c => c.id === catId);
+      if (!target) return;
+
+      const usedBy = barangList.filter(
+        b => b.kategori === target.nama || b.kodeRekening === target.kodeRekening || b.namaRekening === target.nama
+      );
+
+      if (usedBy.length > 0) {
+        alert(
+          `Kategori "${target.nama}" tidak dapat dihapus karena sedang digunakan oleh ${usedBy.length} barang inventaris.`
+        );
+        return;
+      }
+
+      const updated = allCategoryItems.filter(c => c.id !== catId);
+      onUpdateKategoriList(updated);
+      if (showToast) {
+        showToast(`Kategori "${target.nama}" berhasil dihapus.`);
+      }
+    }
+  };
+
+  // Saran Kategori berdasarkan teks yang diketik pada kolom kategori (Dinamis dari master aktif)
   const categorySuggestions = useMemo(() => {
     const q = categorySearch.trim().toLowerCase();
+    const source = allCategoryItems.map(item => ({
+      kode: item.kodeRekening || '',
+      nama: item.namaRekening || item.nama,
+      jenisAset: item.jenisDefault || (item.kodeRekening?.startsWith('5.2') ? 'Belanja Modal' : 'BHP')
+    }));
+
     if (!q) {
-      return MASTER_KODE_REKENING.slice(0, 10);
+      return source.slice(0, 10);
     }
-    return MASTER_KODE_REKENING.filter(
+    return source.filter(
       item =>
         item.kode.toLowerCase().includes(q) ||
         item.nama.toLowerCase().includes(q)
     ).slice(0, 15);
-  }, [categorySearch]);
+  }, [categorySearch, allCategoryItems]);
 
   // Helper untuk menyorot kata kunci pencarian kategori
   const highlightMatch = (text: string, query: string) => {
@@ -147,18 +252,21 @@ export const MasterBarangTable: React.FC<Props> = ({
   // Display Harga dengan pemisah ribuan
   const [displayHarga, setDisplayHarga] = useState<string>('25.000');
 
-  // Calculate Auto Kode Barang based on Kategori & Rekening
+  // Calculate Auto Kode Barang based on Kategori & Rekening (Dinamis dari allCategoryItems)
   const generateAutoKode = (
     kategoriName: string,
     jenis: JenisBarang = 'BHP',
     excludeBarangId?: string | null
   ): string => {
-    const matched = MASTER_KODE_REKENING.find(r => r.nama === kategoriName);
+    const matched = allCategoryItems.find(r => r.nama === kategoriName || r.namaRekening === kategoriName) ||
+                    MASTER_KODE_REKENING.find(r => r.nama === kategoriName);
     let prefix = '1.01.03.01.';
-    if (jenis === 'Belanja Modal' || matched?.jenisAset === 'Belanja Modal') {
+    if (jenis === 'Belanja Modal' || matched?.jenisDefault === 'Belanja Modal' || (matched as any)?.jenisAset === 'Belanja Modal') {
       prefix = '1.03.02.01.';
-    } else if (matched?.kode) {
-      prefix = `1.01.03.${matched.kode.slice(-2)}.`;
+    } else if (matched?.kodeRekening) {
+      prefix = `1.01.03.${matched.kodeRekening.slice(-2)}.`;
+    } else if ((matched as any)?.kode) {
+      prefix = `1.01.03.${(matched as any).kode.slice(-2)}.`;
     }
 
     // Filter items with same prefix
@@ -179,16 +287,23 @@ export const MasterBarangTable: React.FC<Props> = ({
     return `${prefix}${nextSeq}`;
   };
 
-  // Detect unmapped / legacy categories in barangList
+  // Detect unmapped / legacy categories in barangList against active categories list
   const unmappedBarangCount = useMemo(() => {
-    const validCodes = new Set(MASTER_KODE_REKENING.map(r => r.kode));
-    const validNames = new Set(MASTER_KODE_REKENING.map(r => r.nama.toLowerCase().trim()));
+    const validCodes = new Set([
+      ...allCategoryItems.map(r => r.kodeRekening?.trim()).filter(Boolean),
+      ...MASTER_KODE_REKENING.map(r => r.kode)
+    ]);
+    const validNames = new Set([
+      ...allCategoryItems.map(r => r.nama.toLowerCase().trim()),
+      ...allCategoryItems.map(r => (r.namaRekening || '').toLowerCase().trim()).filter(Boolean),
+      ...MASTER_KODE_REKENING.map(r => r.nama.toLowerCase().trim())
+    ]);
     return barangList.filter(b => {
       const hasValidCode = b.kodeRekening && validCodes.has(b.kodeRekening.trim());
       const hasValidName = b.kategori && validNames.has(b.kategori.toLowerCase().trim());
       return !hasValidCode && !hasValidName;
     }).length;
-  }, [barangList]);
+  }, [barangList, allCategoryItems]);
 
   // Counts for tabs
   const bhpCount = barangList.filter(b => b.jenisBarang !== 'Belanja Modal').length;
@@ -455,6 +570,17 @@ export const MasterBarangTable: React.FC<Props> = ({
             Import dari Excel
           </button>
 
+          {/* Kelola Kategori & Kode Rekening Belanja Button */}
+          <button
+            type="button"
+            onClick={() => setIsKategoriModalOpen(true)}
+            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
+            title="Kelola Master Kategori & Kode Rekening Belanja secara dinamis"
+          >
+            <Tag className="w-4 h-4" />
+            <span>Kelola Kategori &amp; Rekening</span>
+          </button>
+
           {/* Tambah Barang Baru Button (Biru Utama) */}
           <button
             type="button"
@@ -560,24 +686,37 @@ export const MasterBarangTable: React.FC<Props> = ({
               id="filter_kategori"
               value={filterKategori}
               onChange={(e) => setFilterKategori(e.target.value)}
-              className="text-xs border border-slate-300 rounded-lg py-2 px-3 bg-white font-medium text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden w-full md:w-80 cursor-pointer truncate"
+              className="text-xs border border-slate-300 rounded-lg py-2 px-3 bg-white font-medium text-slate-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden w-full md:w-72 cursor-pointer truncate"
             >
-              <option value="Semua">Semua Kategori (40 Master Resmi)</option>
-              <optgroup label="40 Daftar Master Rekening Resmi">
-                {MASTER_40_REKENING_OPTIONS.map((item) => (
-                  <option key={item.kode} value={item.nama}>
-                    {item.kode} - {item.nama}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="Rekening Belanja Modal (Aset Tetap)">
-                {DAFTAR_REKENING_BELANJA_MODAL.map((item) => (
-                  <option key={item.kode} value={item.nama}>
-                    {item.kode} - {item.nama}
-                  </option>
-                ))}
-              </optgroup>
+              <option value="Semua">Semua Kategori ({allCategoryItems.length} Master)</option>
+              {bhpCategories.length > 0 && (
+                <optgroup label="Barang Habis Pakai (BHP)">
+                  {bhpCategories.map((item) => (
+                    <option key={item.id} value={item.nama}>
+                      {item.kodeRekening} - {item.nama}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {modalCategories.length > 0 && (
+                <optgroup label="Belanja Modal (Aset Tetap)">
+                  {modalCategories.map((item) => (
+                    <option key={item.id} value={item.nama}>
+                      {item.kodeRekening} - {item.nama}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+            <button
+              type="button"
+              onClick={() => setIsKategoriModalOpen(true)}
+              className="inline-flex items-center gap-1 text-xs text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-2 rounded-lg font-semibold transition-colors cursor-pointer shrink-0"
+              title="Buka Manajemen Master Kategori & Kode Rekening"
+            >
+              <Tag className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">Kelola</span>
+            </button>
           </div>
         </div>
 
@@ -968,16 +1107,21 @@ export const MasterBarangTable: React.FC<Props> = ({
                 </div>
               </div>
 
-              {/* 2. KATEGORI & KODE REKENING (SINGLE SOURCE OF TRUTH: SEARCHABLE SELECT DARI 40 MASTER) */}
+              {/* 2. KATEGORI & KODE REKENING (SINGLE SOURCE OF TRUTH: SEARCHABLE SELECT DARI MASTER AKTIF) */}
               <div className="space-y-2 p-3.5 bg-slate-50/80 border border-slate-200/90 rounded-xl">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-blue-600" />
-                    Kategori &amp; Kode Rekening Belanja (40 Master Rekening Resmi) <span className="text-rose-500">*</span>
+                    Kategori &amp; Kode Rekening Belanja <span className="text-rose-500">*</span>
                   </label>
-                  <span className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-semibold border border-blue-200/80">
-                    1 Kategori = 1 Rekening
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsKategoriModalOpen(true)}
+                    className="inline-flex items-center gap-1 text-[11px] text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>+ Kelola / Tambah Kategori</span>
+                  </button>
                 </div>
 
                 {/* Searchable Select Component */}
@@ -985,6 +1129,8 @@ export const MasterBarangTable: React.FC<Props> = ({
                   valueKode={formData.kodeRekening}
                   valueKategori={formData.kategori}
                   jenisBarang={formData.jenisBarang}
+                  kategoriList={allCategoryItems}
+                  onOpenManager={() => setIsKategoriModalOpen(true)}
                   onSelect={handleRekeningKategoriSelect}
                 />
 
@@ -1232,6 +1378,17 @@ export const MasterBarangTable: React.FC<Props> = ({
           }
         }}
       />
+
+      {/* Modal Manajemen Master Kategori & Kode Rekening Belanja */}
+      {isKategoriModalOpen && (
+        <MasterKategoriManager
+          categories={allCategoryItems}
+          barangList={barangList}
+          onSaveCategory={handleCategorySave}
+          onDeleteCategory={handleCategoryDelete}
+          onClose={() => setIsKategoriModalOpen(false)}
+        />
+      )}
     </div>
   );
 };
