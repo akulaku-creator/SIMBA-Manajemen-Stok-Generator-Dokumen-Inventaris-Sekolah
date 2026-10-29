@@ -149,21 +149,21 @@ export const DeduplicateBarangModal: React.FC<Props> = ({
             </div>
 
             <div className="bg-amber-50/70 p-3 rounded-xl border border-amber-200 shadow-2xs">
-              <div className="text-[10px] font-bold uppercase text-amber-800 tracking-wider">Barang Ganda Ditemukan</div>
+              <div className="text-[10px] font-bold uppercase text-amber-800 tracking-wider">Barang Kembar/Duplikat</div>
               <div className="text-lg font-black text-amber-900 mt-0.5">{auditReport.totalBarangGanda}</div>
               <div className="text-[11px] text-amber-700 mt-0.5">{auditReport.totalGrupDuplikat} grup kesamaan</div>
             </div>
 
-            <div className="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200 shadow-2xs">
-              <div className="text-[10px] font-bold uppercase text-emerald-800 tracking-wider">Aman Dihapus (Tanpa Trx)</div>
-              <div className="text-lg font-black text-emerald-900 mt-0.5">{auditReport.totalBisaDihapusLangsung}</div>
-              <div className="text-[11px] text-emerald-700 mt-0.5">Hapus tanpa resiko</div>
+            <div className="bg-indigo-50/70 p-3 rounded-xl border border-indigo-200 shadow-2xs">
+              <div className="text-[10px] font-bold uppercase text-indigo-800 tracking-wider">Stok Akan Diakumulasi</div>
+              <div className="text-lg font-black text-indigo-900 mt-0.5">+{auditReport.totalStokTerakumulasi}</div>
+              <div className="text-[11px] text-indigo-700 mt-0.5">Akumulasi ke master tunggal</div>
             </div>
 
             <div className="bg-blue-50/70 p-3 rounded-xl border border-blue-200 shadow-2xs">
-              <div className="text-[10px] font-bold uppercase text-blue-800 tracking-wider">Perlu Dimerge (Ada Trx)</div>
+              <div className="text-[10px] font-bold uppercase text-blue-800 tracking-wider">Relasi Trx Dialihkan</div>
               <div className="text-lg font-black text-blue-900 mt-0.5">{auditReport.totalPerluDimerge}</div>
-              <div className="text-[11px] text-blue-700 mt-0.5">Relasi riwayat dipindahkan</div>
+              <div className="text-[11px] text-blue-700 mt-0.5">Re-mapping ID transaksi</div>
             </div>
 
           </div>
@@ -172,7 +172,7 @@ export const DeduplicateBarangModal: React.FC<Props> = ({
           <div className="mt-3.5 flex items-start gap-2 bg-indigo-50/80 border border-indigo-200 rounded-lg p-2.5 text-xs text-indigo-900">
             <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
             <div className="leading-relaxed">
-              <strong>Aturan Pembersihan SIMBA:</strong> Barang ganda tanpa transaksi akan dihapus dari sistem. Barang ganda yang memiliki riwayat penerimaan atau pengeluaran akan dimerge ke data master utama yang paling aktif, sehingga nomor bukti dan laporan mutasi tetap utuh 100%.
+              <strong>Kriteria Penggabungan Data (Merging Rule):</strong> Data barang dianggap kembar dan wajib digabung <em>jika dan hanya jika</em> <strong>Nama Barang/Spesifikasi</strong>, <strong>Kode Rekening Belanja</strong>, dan <strong>Harga Satuan</strong> bernilai sama persis. Entri digabung menjadi 1 data master tunggal, stok/sisa fisik diakumulasikan, dan riwayat transaksi penerimaan maupun pengeluaran dialihkan (*re-mapped*) ke ID master hasil penggabungan.
             </div>
           </div>
         </div>
@@ -251,12 +251,18 @@ export const DeduplicateBarangModal: React.FC<Props> = ({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span className="font-mono bg-slate-200 text-slate-800 px-2 py-0.5 rounded font-semibold">
+                  <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+                    <span className="font-mono bg-slate-200 text-slate-800 px-2 py-0.5 rounded font-semibold" title="Kode Rekening Belanja">
                       {group.kodeRekening}
                     </span>
+                    <span className="bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded border border-slate-200" title="Harga Satuan Sama">
+                      {formatRupiah(group.hargaSatuan)}
+                    </span>
+                    <span className="bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded border border-indigo-200" title="Stok Akumulatif">
+                      Stok Gabungan: {group.accumulatedStokSekarang}
+                    </span>
                     <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded">
-                      {group.totalDuplicates} data ganda
+                      {group.totalDuplicates} kembar
                     </span>
                   </div>
                 </div>

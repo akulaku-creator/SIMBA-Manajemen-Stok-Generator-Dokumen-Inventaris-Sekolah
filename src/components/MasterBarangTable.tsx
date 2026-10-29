@@ -611,10 +611,10 @@ export const MasterBarangTable: React.FC<Props> = ({
                 ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-300'
                 : 'bg-slate-700 hover:bg-slate-800 text-white'
             }`}
-            title={`Audit & Bersihkan Data Barang Duplikat (${duplicateStats.totalBarangGanda} duplikat terdeteksi)`}
+            title={`Audit & Gabungkan Data Barang Kembar (${duplicateStats.totalBarangGanda} terdeteksi berdasarkan kesamaan Nama, Rekening, dan Harga)`}
           >
             <GitMerge className="w-4 h-4" />
-            <span>Bersihkan Data Ganda</span>
+            <span>Gabung Data Kembar</span>
             {duplicateStats.totalBarangGanda > 0 && (
               <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-white text-amber-700 leading-none">
                 {duplicateStats.totalBarangGanda}

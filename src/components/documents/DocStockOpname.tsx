@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../../types';
 import { formatRupiah, formatTanggalIndonesia, MONTHS_ID, terbilang } from '../../utils/numberGenerator';
 import { ResolvedOfficial, resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { buildMergeKey } from '../../utils/barangDeduplicationHelper';
 import { KopSuratView } from '../KopSuratView';
 import { SignatorySection, SignatoryStockOpname } from './SignatoryBlocks';
 
@@ -85,7 +86,7 @@ export const DocStockOpname: React.FC<Props> = ({
     const aliasToPrimaryId = new Map<string, string>();
 
     bhpItems.forEach(b => {
-      const key = `${(b.kodeBarang || '').trim().toLowerCase()}|${(b.namaBarang || '').trim().toLowerCase()}`;
+      const key = buildMergeKey(b);
       if (!uniqueMap.has(key)) {
         uniqueMap.set(key, b);
         aliasToPrimaryId.set(b.id, b.id);

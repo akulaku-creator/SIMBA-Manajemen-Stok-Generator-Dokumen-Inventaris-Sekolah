@@ -1,4 +1,5 @@
 import { Barang, KopSuratConfig, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
+import { buildMergeKey } from './barangDeduplicationHelper';
 
 export const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -123,14 +124,12 @@ export function calculateMutasiBOSData(
   const idAliasMap = new Map<string, string>(); // duplicate ID -> primary unique ID
 
   masterBarangBHP.forEach(b => {
-    const normKode = (b.kodeBarang || '').trim().toLowerCase();
-    const normNama = (b.namaBarang || '').trim().toLowerCase();
-    const uniqueKey = normKode && normNama ? `${normKode}|${normNama}` : normNama;
+    const uniqueKey = buildMergeKey(b);
 
     if (!uniqueBhpMap.has(uniqueKey)) {
       uniqueBhpMap.set(uniqueKey, { ...b });
     } else {
-      // Gabungkan relasi barang ganda ke entri master unik pertama
+      // Gabungkan relasi barang kembar ke entri master unik pertama & akumulasikan stok
       const primary = uniqueBhpMap.get(uniqueKey)!;
       idAliasMap.set(b.id, primary.id);
       primary.stokAwal = (primary.stokAwal || 0) + (b.stokAwal || 0);
