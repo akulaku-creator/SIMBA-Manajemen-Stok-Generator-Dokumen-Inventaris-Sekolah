@@ -2409,6 +2409,90 @@ export const DashboardStats: React.FC<Props> = ({
         </div>
       )}
 
+      {/* =========================================================================
+          MODAL 4: EXPORT PDF REKAPITULASI PENERIMAAN BARANG BOS
+          ========================================================================= */}
+      {isPdfExportPenerimaanModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150 print:p-0 print:bg-white print:static print:block">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150 print:max-w-full print:max-h-none print:border-none print:shadow-none print:rounded-none">
+            {/* Header Dialog */}
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50 no-print">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-rose-100 text-rose-700 rounded-xl border border-rose-200">
+                  <Printer className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Cetak / Simpan PDF Rekapitulasi Penerimaan Barang (BOS)
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Laporan resmi hasil filter aktif ({filteredPenerimaan.length} berkas faktur belanja) sesuai format dinas
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPdfExportPenerimaanModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 rounded-lg transition-colors cursor-pointer"
+                title="Tutup"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Printable Document Preview Area */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-slate-100/70 print:p-0 print:bg-white print:overflow-visible">
+              <div className="bg-white rounded-xl shadow-xs border border-slate-200 max-w-4xl mx-auto overflow-hidden print:border-none print:shadow-none print:max-w-full print:rounded-none">
+                <ExportPdfPenerimaan
+                  dataPenerimaan={filteredPenerimaan}
+                  filterInfo={currentPeriodeTextRcv}
+                  pejabatSettings={{
+                    namaSekolah: schoolName || kopConfig?.namaSekolah || "SMAN 1 CIHAURBEUTI",
+                    alamat: kopConfig?.alamatLengkap || "Jl. Kartawijaya No. 600 Cihaurbeuti, Kab. Ciamis",
+                    npsn: kopConfig?.npsn || "20211512",
+                    lokasi: kopConfig?.kotaSurat || "Ciamis",
+                    telepon: (kopConfig as any)?.telepon,
+                    fax: (kopConfig as any)?.fax
+                  }}
+                  pejabatList={pejabatList}
+                  kopConfig={kopConfig}
+                />
+              </div>
+            </div>
+
+            {/* Footer Dialog Action */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between no-print">
+              <span className="text-xs text-slate-500 font-sans">
+                Dokumen siap dicetak ke format printer ISO A4 atau disimpan ke PDF.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPdfExportPenerimaanModalOpen(false)}
+                  className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs font-semibold hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    triggerPrint({
+                      documentType: 'REKAP_PENERIMAAN_BOS',
+                      namaSekolah: schoolName || kopConfig?.namaSekolah || 'SMAN 1 CIHAURBEUTI'
+                    });
+                  }}
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Cetak / Simpan PDF</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

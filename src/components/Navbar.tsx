@@ -36,7 +36,7 @@ interface Props {
   onOpenNewPenerimaan: () => void;
   onOpenKopSettings: () => void;
   onOpenNumberingSettings: () => void;
-  onOpenUnifiedSettings?: (tab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger') => void;
+  onOpenUnifiedSettings?: (tab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme') => void;
   onExecuteBackup?: () => void;
   lastBackupTime?: string | null;
   onOpenSchemaModal: () => void;

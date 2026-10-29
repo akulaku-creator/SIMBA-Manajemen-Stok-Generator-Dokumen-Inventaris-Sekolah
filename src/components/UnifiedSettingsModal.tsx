@@ -35,7 +35,8 @@ import {
   GitBranch,
   Code2,
   ExternalLink,
-  Send
+  Send,
+  Palette
 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { 
@@ -73,11 +74,12 @@ import {
   parseDynamicNumber 
 } from '../utils/numberGenerator';
 import { KopSuratView } from './KopSuratView';
+import { ThemeSettingsComponent } from './ThemeSettingsComponent';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger';
+  initialTab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme';
   kopConfig: KopSuratConfig;
   numberingConfig: NumberingPatternConfig;
   pejabatList: Pejabat[];
@@ -109,7 +111,7 @@ interface Props {
   onOpenResetTransaksi?: () => void;
 }
 
-const VALID_SETTING_SECTIONS = ['all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger'] as const;
+const VALID_SETTING_SECTIONS = ['all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger', 'theme'] as const;
 type SettingSection = typeof VALID_SETTING_SECTIONS[number];
 
 function resolveSettingTab(tab: unknown): SettingSection {
@@ -772,6 +774,18 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           >
             <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
             6. Danger Zone (Area Bahaya)
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('theme')}
+            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeSection === 'theme'
+                ? 'bg-indigo-600 text-white shadow-2xs'
+                : 'text-indigo-700 hover:bg-indigo-100/70 bg-indigo-50/60'
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5 text-indigo-600" />
+            7. Tema &amp; Tampilan
           </button>
         </div>
 
@@ -2508,6 +2522,15 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                   </button>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SECTION 7: TEMA & GAYA TAMPILAN (COLOR ACCENT, DARK/LIGHT, TYPOGRAPHY)    */}
+          {/* ========================================================================= */}
+          {(activeSection === 'all' || activeSection === 'theme') && (
+            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden p-6">
+              <ThemeSettingsComponent onShowToast={onShowToast} />
             </div>
           )}
 

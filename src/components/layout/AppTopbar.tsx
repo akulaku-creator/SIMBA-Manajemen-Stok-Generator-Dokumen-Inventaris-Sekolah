@@ -1,6 +1,7 @@
 import {
   Building2,
   Menu,
+  Palette,
   Receipt,
   Sparkles
 } from 'lucide-react';
@@ -20,6 +21,7 @@ interface TopbarProps {
   onSelectPaperSize?: (size: PaperSize) => void;
   lastBackupTime?: string | null;
   onOpenAuditLog?: () => void;
+  onOpenThemeSettings?: () => void;
 }
 
 export const AppTopbar: React.FC<TopbarProps> = ({
@@ -29,7 +31,8 @@ export const AppTopbar: React.FC<TopbarProps> = ({
   onOpenMobileMenu,
   onOpenNewPenerimaan,
   paperSize = 'A4',
-  onSelectPaperSize
+  onSelectPaperSize,
+  onOpenThemeSettings
 }) => {
   const getTabTitle = (tab: MainTab) => {
     switch (tab) {
@@ -134,6 +137,19 @@ export const AppTopbar: React.FC<TopbarProps> = ({
             <Receipt className="w-3.5 h-3.5 text-emerald-600" />
             <span>Penerimaan (BOS)</span>
           </button>
+
+          {/* Quick Theme & Appearance Settings Button */}
+          {onOpenThemeSettings && (
+            <button
+              type="button"
+              onClick={onOpenThemeSettings}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border border-slate-200 hover:border-indigo-300 bg-slate-50 hover:bg-indigo-50/70 text-slate-700 hover:text-indigo-700 text-xs font-semibold shadow-2xs transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              title="Kustomisasi Tema, Warna Aksen & Gaya Huruf (Live Preview)"
+            >
+              <Palette className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden md:inline">Tema</span>
+            </button>
+          )}
 
           {/* User Avatar badge */}
           <div className="flex items-center gap-2 pl-1 sm:pl-2 sm:border-l sm:border-slate-200">

@@ -60,6 +60,7 @@ import {
 import { CategoryFormData } from './components/MasterKategoriManager';
 import { DEFAULT_NUMBERING_CONFIG } from './utils/numberGenerator';
 import { getNamaRekeningByKode } from './data/kodeRekeningData';
+import { applyThemeConfig, getStoredThemeConfig } from './utils/themeHelper';
 
 export default function App() {
   // Single-Tenant School Configuration (SMAN 1 CIHAURBEUTI)
@@ -237,8 +238,13 @@ export default function App() {
   const [isKopSettingsOpen, setIsKopSettingsOpen] = useState(false);
   const [isNumberingSettingsOpen, setIsNumberingSettingsOpen] = useState(false);
   const [isUnifiedSettingsOpen, setIsUnifiedSettingsOpen] = useState(false);
-  const [unifiedSettingsTab, setUnifiedSettingsTab] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger'>('all');
+  const [unifiedSettingsTab, setUnifiedSettingsTab] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme'>('all');
   const [lastBackupTime, setLastBackupTime] = useState<string | null>(getLastBackupTime());
+
+  // Inisialisasi Tema & Gaya Tampilan tersimpan secara instan pada saat aplikasi dimuat
+  useEffect(() => {
+    applyThemeConfig(getStoredThemeConfig());
+  }, []);
   const [isSchemaModalOpen, setIsSchemaModalOpen] = useState(false);
   const [isResetTransaksiOpen, setIsResetTransaksiOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
@@ -1358,6 +1364,10 @@ export default function App() {
             onSelectPaperSize={setPaperSize}
             lastBackupTime={lastBackupTime}
             onOpenAuditLog={() => setIsAuditLogOpen(true)}
+            onOpenThemeSettings={() => {
+              setUnifiedSettingsTab('theme');
+              setIsUnifiedSettingsOpen(true);
+            }}
           />
         </div>
 

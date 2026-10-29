@@ -339,3 +339,16 @@ export interface GitHubSyncConfig {
   lastCommitSha?: string;
   lastCommitUrl?: string;
 }
+
+export type ThemePrimaryColor = 'indigo' | 'emerald' | 'blue' | 'purple' | 'amber' | 'rose' | 'slate';
+export type ThemeMode = 'light' | 'dark' | 'system';
+export type ThemeFontFamily = 'font-sans' | 'font-serif' | 'font-mono';
+export type ThemeFontSize = 'text-[11px]' | 'text-xs' | 'text-sm';
+
+export interface ThemeConfig {
+  primaryColor: ThemePrimaryColor;
+  darkMode: boolean;
+  themeMode?: ThemeMode;
+  fontFamily: ThemeFontFamily;
+  fontSize: ThemeFontSize;
+}
