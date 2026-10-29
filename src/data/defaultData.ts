@@ -63,8 +63,8 @@ export const DEFAULT_PEJABAT: Pejabat[] = [
   {
     id: 'pejabat-pengurus-barang',
     role: 'pengurus_barang',
-    nama: 'Endang Kusnandar, S.AP.',
-    nip: '19870512 201101 1 007',
+    nama: 'Yati Cahyani, S.AP.',
+    nip: '19870512 201101 2 007',
     pangkatGolongan: 'Penata / III c',
     jabatan: 'Pengurus Barang Pembantu',
     unitKerja: 'Pengelola Persediaan Barang'

@@ -81,13 +81,15 @@ export const TransactionForm: React.FC<Props> = ({
 
   const autoPengurusBarang = useMemo(() => {
     return (
+      pejabatList.find(p => p.nama.toLowerCase().includes('yati cahyani') || p.nama.toLowerCase().includes('yati')) ||
+      pejabatList.find(p => p.role === 'pengurus_barang') ||
       pejabatList.find(p => p.id === 'pejabat-pengurus-barang') ||
       pejabatList.find(p => p.jabatan.toLowerCase().includes('pengurus barang') || p.jabatan.toLowerCase().includes('penyimpan')) ||
       pejabatList[2] ||
       pejabatList[0] || {
         id: 'pejabat-pengurus-barang',
-        nama: 'Pengurus Barang Pembantu',
-        nip: '-',
+        nama: 'Yati Cahyani, S.AP.',
+        nip: '19870512 201101 2 007',
         jabatan: 'Pengurus Barang Pembantu'
       }
     );

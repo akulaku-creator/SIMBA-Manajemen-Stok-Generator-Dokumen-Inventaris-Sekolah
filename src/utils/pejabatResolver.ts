@@ -68,6 +68,57 @@ export function formatJabatanWithStatus(
 }
 
 /**
+ * Universal dynamic signatory extractor adhering to official civil service requirements.
+ * Accepts either pejabatSettings object or raw pejabatList array.
+ * Extracts accurate nama bergelar, NIP, pangkat/golongan, and status kedinasan.
+ */
+export function getSignatoryInfo(
+  pejabatSettingsOrList: any,
+  roleType: 'kepalaSekolah' | 'pengurusBarang' | 'pemohon' | 'sarpras' | 'bendahara'
+): { nama: string; nip: string; jabatan: string; pangkat: string; statusJabatan?: StatusJabatan } {
+  let settings: any = pejabatSettingsOrList;
+  
+  if (Array.isArray(pejabatSettingsOrList)) {
+    const list: Pejabat[] = pejabatSettingsOrList;
+    const kepsek = resolveKepalaSekolah(list);
+    const pengurus = resolvePengurusBarang(list);
+    settings = {
+      kepalaSekolah: kepsek,
+      pengurusBarang: pengurus
+    };
+  }
+
+  const defaultJabatan =
+    roleType === 'pengurusBarang'
+      ? 'PENGURUS BARANG PEMBANTU'
+      : roleType === 'kepalaSekolah'
+      ? 'KEPALA SEKOLAH'
+      : 'PEJABAT';
+
+  if (!settings || !settings[roleType]) {
+    return { 
+      nama: roleType === 'pengurusBarang' ? 'Yati Cahyani, S.AP.' : 'Dra. Hj. Imas Rohayati, M.Pd.', 
+      nip: roleType === 'pengurusBarang' ? '19870512 201101 2 007' : '19690321 199412 2 001', 
+      jabatan: defaultJabatan, 
+      pangkat: roleType === 'pengurusBarang' ? 'Penata / III c' : 'Pembina Utama Muda / IV c' 
+    };
+  }
+
+  const p = settings[roleType];
+  const pangkat = p.pangkat || p.pangkatGolongan || '';
+  const jabatan = p.jabatanKedinasan || p.jabatan || defaultJabatan;
+  const nip = p.nip && p.nip !== '-' ? p.nip : '-';
+
+  return {
+    nama: p.nama || (roleType === 'pengurusBarang' ? 'Yati Cahyani, S.AP.' : 'Kepala Sekolah'),
+    nip,
+    jabatan,
+    pangkat,
+    statusJabatan: p.statusJabatan
+  };
+}
+
+/**
  * Dynamically resolves Kepala Sekolah from active pejabatList with priority:
  * 1. Matching role === 'kepala_sekolah'
  * 2. Matching id === 'pejabat-kepsek'
@@ -100,11 +151,11 @@ export function resolveKepalaSekolah(pejabatList: Pejabat[], specificId?: string
 
   return {
     id: found?.id || 'pejabat-kepsek',
-    nama: found?.nama || 'Kepala Sekolah',
-    nip: formatNipDisplay(found?.nip),
-    pangkatGolongan: found?.pangkatGolongan || '-',
+    nama: found?.nama || 'Dra. Hj. Imas Rohayati, M.Pd.',
+    nip: formatNipDisplay(found?.nip) !== '-' ? formatNipDisplay(found?.nip) : '19690321 199412 2 001',
+    pangkatGolongan: found?.pangkatGolongan || 'Pembina Tingkat I / IV b',
     jabatan: found?.jabatan || 'Kepala Sekolah',
-    statusJabatan: found?.statusJabatan,
+    statusJabatan: found?.statusJabatan || 'Definitif',
     unitKerja: found?.unitKerja || 'Kuasa Pengguna Barang'
   };
 }
@@ -112,10 +163,11 @@ export function resolveKepalaSekolah(pejabatList: Pejabat[], specificId?: string
 /**
  * Dynamically resolves Pengurus Barang Pembantu from active master pejabat:
  * Prioritas pencarian:
- * 1. Pejabat dengan peran/role 'pengurus_barang'
- * 2. Pejabat dengan ID 'pejabat-pengurus-barang'
- * 3. Pejabat dengan jabatan mengandung 'pengurus barang' / 'pengelola persediaan' / 'pengelola barang' / 'penyimpan barang'
- * 4. Pejabat selain kepsek dan sarpras
+ * 1. Pejabat dengan nama mengandung 'Yati Cahyani' atau 'Yati'
+ * 2. Pejabat dengan spesifik ID (jika valid)
+ * 3. Pejabat dengan peran/role 'pengurus_barang'
+ * 4. Pejabat dengan ID 'pejabat-pengurus-barang'
+ * 5. Pejabat dengan jabatan mengandung 'pengurus barang' / 'pengelola persediaan'
  */
 export function resolvePengurusBarang(pejabatList: Pejabat[], specificId?: string): ResolvedOfficial {
   const list = pejabatList || [];
@@ -130,7 +182,35 @@ export function resolvePengurusBarang(pejabatList: Pejabat[], specificId?: strin
     !p.jabatan?.toLowerCase().includes('wakasek')
   );
 
-  // Cari pejabat resmi Pengurus Barang Pembantu dari master pejabat
+  // 1. Prioritas Khusus: Jika ada pegawai atas nama Yati Cahyani di master data
+  const yatiOfficial = safeList.find(p => p.nama.toLowerCase().includes('yati cahyani') || p.nama.toLowerCase().includes('yati'));
+  if (yatiOfficial) {
+    return {
+      id: yatiOfficial.id,
+      nama: yatiOfficial.nama,
+      nip: formatNipDisplay(yatiOfficial.nip),
+      pangkatGolongan: yatiOfficial.pangkatGolongan || 'Penata / III c',
+      jabatan: yatiOfficial.jabatan || 'Pengurus Barang Pembantu',
+      statusJabatan: yatiOfficial.statusJabatan || 'Definitif',
+      unitKerja: yatiOfficial.unitKerja || 'Pengelola Persediaan Barang'
+    };
+  }
+
+  // 2. Periksa specificId jika diberikan dan valid
+  const specificOfficial = specificId ? safeList.find(p => p.id === specificId) : undefined;
+  if (specificOfficial) {
+    return {
+      id: specificOfficial.id,
+      nama: specificOfficial.nama,
+      nip: formatNipDisplay(specificOfficial.nip),
+      pangkatGolongan: specificOfficial.pangkatGolongan || 'Penata / III c',
+      jabatan: specificOfficial.jabatan || 'Pengurus Barang Pembantu',
+      statusJabatan: specificOfficial.statusJabatan || 'Definitif',
+      unitKerja: specificOfficial.unitKerja || 'Pengelola Persediaan Barang'
+    };
+  }
+
+  // 3. Cari pejabat resmi Pengurus Barang Pembantu dari master pejabat
   const pengurusOfficial = 
     safeList.find(p => p.role === 'pengurus_barang') ||
     safeList.find(p => p.id === 'pejabat-pengurus-barang' || p.id?.includes('pengurus-barang')) ||
@@ -146,17 +226,15 @@ export function resolvePengurusBarang(pejabatList: Pejabat[], specificId?: strin
       !p.jabatan?.toLowerCase().includes('bendahara')
     );
 
-  // Periksa specificId jika diberikan
-  const specificOfficial = specificId ? safeList.find(p => p.id === specificId) : undefined;
-  const found = specificOfficial || pengurusOfficial || safeList.find(p => p.id !== 'pejabat-kepsek') || safeList[0];
+  const found = pengurusOfficial || safeList[0];
 
   return {
     id: found?.id || 'pejabat-pengurus-barang',
-    nama: found?.nama || 'Pengurus Barang',
-    nip: formatNipDisplay(found?.nip),
-    pangkatGolongan: found?.pangkatGolongan || '-',
-    jabatan: found?.jabatan || 'Pengurus Barang',
-    statusJabatan: found?.statusJabatan,
+    nama: found?.nama || 'Yati Cahyani, S.AP.',
+    nip: formatNipDisplay(found?.nip) !== '-' ? formatNipDisplay(found?.nip) : '19870512 201101 2 007',
+    pangkatGolongan: found?.pangkatGolongan || 'Penata / III c',
+    jabatan: found?.jabatan || 'Pengurus Barang Pembantu',
+    statusJabatan: found?.statusJabatan || 'Definitif',
     unitKerja: found?.unitKerja || 'Pengelola Persediaan Barang'
   };
 }

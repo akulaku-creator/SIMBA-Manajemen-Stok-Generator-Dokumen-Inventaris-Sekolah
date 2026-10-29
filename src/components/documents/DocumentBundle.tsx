@@ -10,6 +10,7 @@ interface Props {
   transaksi: TransaksiPengeluaran;
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  pejabatSettings?: any;
   minRows?: number;
   paperSize?: 'A4' | 'F4';
 }
@@ -18,6 +19,7 @@ export const DocumentBundle: React.FC<Props> = ({
   transaksi,
   kopConfig,
   pejabatList,
+  pejabatSettings,
   minRows = 10,
   paperSize = 'A4'
 }) => {
@@ -39,6 +41,7 @@ export const DocumentBundle: React.FC<Props> = ({
           transaksi={transaksi} 
           kopConfig={kopConfig} 
           pejabatList={pejabatList} 
+          pejabatSettings={pejabatSettings}
           minRows={minRows} 
         />
       </A4Container>
@@ -59,6 +62,7 @@ export const DocumentBundle: React.FC<Props> = ({
           transaksi={transaksi} 
           kopConfig={kopConfig} 
           pejabatList={pejabatList} 
+          pejabatSettings={pejabatSettings}
           minRows={minRows} 
         />
       </A4Container>

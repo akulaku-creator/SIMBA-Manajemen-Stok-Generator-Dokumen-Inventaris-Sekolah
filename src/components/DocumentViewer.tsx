@@ -523,6 +523,7 @@ export const DocumentViewer: React.FC<Props> = ({
               transaksi={activeTransaksi}
               kopConfig={kopConfig}
               pejabatList={effectivePejabatList}
+              pejabatSettings={effectivePejabatSettings}
               minRows={minRows}
               paperSize={paperSize}
             />
@@ -548,6 +549,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksi={activeTransaksi}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  pejabatSettings={effectivePejabatSettings}
                   minRows={minRows}
                 />
               )}
@@ -566,6 +568,7 @@ export const DocumentViewer: React.FC<Props> = ({
                   transaksi={activeTransaksi}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
+                  pejabatSettings={effectivePejabatSettings}
                   minRows={minRows}
                 />
               )}

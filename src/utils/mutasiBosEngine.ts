@@ -115,13 +115,34 @@ export function calculateMutasiBOSData(
     return y === targetYear;
   });
 
-  // 2. Eksklusi Belanja Modal: Laporan Mutasi BHP BOS hanya memuat Barang Habis Pakai (BHP)
-  // Barang dengan status Belanja Modal secara otomatis DIKECUALIKAN
+  // 2. Eksklusi Belanja Modal & Deduplikasi Otomatis Barang Unik:
+  // Memastikan laporan mutasi hanya memuat 1 baris per barang unik (mencegah duplikasi baris & mutasi ganda)
   const masterBarangBHP = (masterBarang || []).filter(b => b.jenisBarang !== 'Belanja Modal');
+
+  const uniqueBhpMap = new Map<string, Barang>();
+  const idAliasMap = new Map<string, string>(); // duplicate ID -> primary unique ID
+
+  masterBarangBHP.forEach(b => {
+    const normKode = (b.kodeBarang || '').trim().toLowerCase();
+    const normNama = (b.namaBarang || '').trim().toLowerCase();
+    const uniqueKey = normKode && normNama ? `${normKode}|${normNama}` : normNama;
+
+    if (!uniqueBhpMap.has(uniqueKey)) {
+      uniqueBhpMap.set(uniqueKey, { ...b });
+    } else {
+      // Gabungkan relasi barang ganda ke entri master unik pertama
+      const primary = uniqueBhpMap.get(uniqueKey)!;
+      idAliasMap.set(b.id, primary.id);
+      primary.stokAwal = (primary.stokAwal || 0) + (b.stokAwal || 0);
+      primary.stokSekarang = (primary.stokSekarang || 0) + (b.stokSekarang || 0);
+    }
+  });
+
+  const uniqueMasterBarangBHP = Array.from(uniqueBhpMap.values());
 
   const groupedMap = new Map<string, { namaRekening: string; items: Barang[] }>();
 
-  masterBarangBHP.forEach(b => {
+  uniqueMasterBarangBHP.forEach(b => {
     const kodering = b.kodeRekening || '5.1.02.01.01.0024';
     const namaRekening = b.namaRekening || 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor';
     if (!groupedMap.has(kodering)) {
@@ -168,9 +189,10 @@ export function calculateMutasiBOSData(
           const dt = new Date(p.tanggal);
           if (dt.getMonth() === m) {
             p.items?.forEach(it => {
-              // 1. Validasi kecocokan barang (ID, Kode, atau Nama)
-              const isIdMatch = Boolean(it.barangId && it.barangId === barang.id);
-              const isCodeMatch = Boolean(it.kodeBarang && barang.kodeBarang && it.kodeBarang === barang.kodeBarang);
+              // 1. Validasi kecocokan barang (ID langsung, Alias ID yang dimerge, Kode, atau Nama)
+              const resolvedId = it.barangId ? (idAliasMap.get(it.barangId) || it.barangId) : '';
+              const isIdMatch = Boolean(resolvedId && resolvedId === barang.id);
+              const isCodeMatch = Boolean(it.kodeBarang && barang.kodeBarang && it.kodeBarang.trim().toLowerCase() === barang.kodeBarang.trim().toLowerCase());
               const isNameMatch = Boolean(it.namaBarang && barang.namaBarang && it.namaBarang.toLowerCase().trim() === barang.namaBarang.toLowerCase().trim());
               
               // 2. Validasi keterikatan Kode Rekening (mencegah phantom inter-kodering cross match)
@@ -201,8 +223,9 @@ export function calculateMutasiBOSData(
           const dt = new Date(t.tanggal);
           if (dt.getMonth() === m) {
             t.items?.forEach(it => {
-              const isIdMatch = Boolean(it.barangId && it.barangId === barang.id);
-              const isCodeMatch = Boolean(it.kodeBarang && barang.kodeBarang && it.kodeBarang === barang.kodeBarang);
+              const resolvedId = it.barangId ? (idAliasMap.get(it.barangId) || it.barangId) : '';
+              const isIdMatch = Boolean(resolvedId && resolvedId === barang.id);
+              const isCodeMatch = Boolean(it.kodeBarang && barang.kodeBarang && it.kodeBarang.trim().toLowerCase() === barang.kodeBarang.trim().toLowerCase());
               const isNameMatch = Boolean(it.namaBarang && barang.namaBarang && it.namaBarang.toLowerCase().trim() === barang.namaBarang.toLowerCase().trim());
 
               const isRekeningMatch = !it.kodeRekening || it.kodeRekening === kodering;

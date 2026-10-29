@@ -103,6 +103,17 @@ export default function App() {
     let list: Pejabat[] = saved ? JSON.parse(saved) : DEFAULT_PEJABAT;
     return list.map(p => {
       let role = p.role;
+      let nama = p.nama;
+      let nip = p.nip;
+
+      // Auto-sinkronisasi data Pengurus Barang Pembantu ke Yati Cahyani jika masih memuat data template lama
+      if (p.id?.includes('pengurus-barang') || role === 'pengurus_barang' || p.jabatan?.toLowerCase().includes('pengurus barang')) {
+        if (nama === 'Endang Kusnandar, S.AP.' || !nama || nama === '-') {
+          nama = 'Yati Cahyani, S.AP.';
+          nip = '19870512 201101 2 007';
+        }
+      }
+
       if (!role) {
         if (p.id?.includes('kepsek') || p.jabatan?.toLowerCase().includes('kepala sekolah')) {
           role = 'kepala_sekolah';
@@ -116,6 +127,8 @@ export default function App() {
       }
       return {
         ...p,
+        nama,
+        nip,
         role
       };
     });
@@ -800,6 +813,30 @@ export default function App() {
     }
   };
 
+  const handleDeduplicateAndMergeBarang = (
+    cleanedBarang: Barang[],
+    updatedTransaksi: TransaksiPengeluaran[],
+    updatedPenerimaan: TransaksiPenerimaan[],
+    summary: string
+  ) => {
+    setMasterBarang(cleanedBarang);
+    setTransaksiList(updatedTransaksi);
+    setPenerimaanList(updatedPenerimaan);
+
+    logAuditEvent({
+      userId: currentUser.id,
+      username: currentUser.username,
+      userName: currentUser.nama,
+      userRole: currentUser.role,
+      action: 'DEDUPLIKASI_MASTER_BARANG',
+      title: `Pembersihan & Penggabungan Data Barang Ganda [${activeSekolah.nama}]`,
+      details: summary,
+      status: 'SUCCESS'
+    });
+
+    showToast(summary);
+  };
+
   // Master Pejabat Handlers (Single-Tenant)
   const handleAddPejabat = (p: Pejabat) => {
     setPejabatList(prev => [...prev, p]);
@@ -1455,6 +1492,9 @@ export default function App() {
                   onSaveCategory={handleSaveCategory}
                   onDeleteCategory={handleDeleteCategory}
                   onMigrateUnmappedCategories={handleMigrateUnmappedCategories}
+                  transaksiList={scopedTransaksi}
+                  penerimaanList={scopedPenerimaan}
+                  onDeduplicateAndMerge={handleDeduplicateAndMergeBarang}
                   onViewKartuBarang={(barangId) => {
                     setGeneratorInitialDocType('kartu_barang');
                     setGeneratorInitialBarangId(barangId);

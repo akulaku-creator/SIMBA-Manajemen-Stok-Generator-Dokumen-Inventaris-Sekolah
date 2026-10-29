@@ -4,9 +4,11 @@ import {
   Boxes, 
   Building2, 
   Check, 
+  Copy,
   Download,
   Edit3, 
   FileSpreadsheet, 
+  GitMerge,
   Layers, 
   Package, 
   Plus, 
@@ -27,12 +29,14 @@ import {
   getNamaRekeningDefault 
 } from '../data/kodeRekeningData';
 import { DEFAULT_KATEGORI_LIST } from '../data/defaultData';
-import { Barang, JenisBarang, KategoriBarangItem } from '../types';
+import { Barang, JenisBarang, KategoriBarangItem, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
 import { exportMasterBarangToExcel } from '../utils/excelHelper';
 import { formatRupiah } from '../utils/numberGenerator';
 import { ImportBarangModal } from './ImportBarangModal';
 import { KategoriRekeningSelect, SelectedRekening } from './KategoriRekeningSelect';
 import { MasterKategoriManager, CategoryFormData } from './MasterKategoriManager';
+import { auditDuplicateMasterBarang } from '../utils/barangDeduplicationHelper';
+import { DeduplicateBarangModal } from './DeduplicateBarangModal';
 
 interface Props {
   barangList: Barang[];
@@ -48,6 +52,14 @@ interface Props {
   onDeleteCategory?: (id: string) => void;
   onMigrateUnmappedCategories?: (targetCategoryName?: string) => void;
   showToast?: (message: string) => void;
+  transaksiList?: TransaksiPengeluaran[];
+  penerimaanList?: TransaksiPenerimaan[];
+  onDeduplicateAndMerge?: (
+    cleanedBarang: Barang[],
+    updatedTransaksi: TransaksiPengeluaran[],
+    updatedPenerimaan: TransaksiPenerimaan[],
+    summary: string
+  ) => void;
 }
 
 export const MasterBarangTable: React.FC<Props> = ({
@@ -63,12 +75,21 @@ export const MasterBarangTable: React.FC<Props> = ({
   onSaveCategory,
   onDeleteCategory,
   onMigrateUnmappedCategories,
-  showToast
+  showToast,
+  transaksiList = [],
+  penerimaanList = [],
+  onDeduplicateAndMerge
 }) => {
   const [search, setSearch] = useState('');
   const [filterJenis, setFilterJenis] = useState<'Semua' | 'BHP' | 'Belanja Modal'>('Semua');
   const [filterKategori, setFilterKategori] = useState<string>('Semua');
   const [isKategoriModalOpen, setIsKategoriModalOpen] = useState<boolean>(false);
+  const [isDeduplicateModalOpen, setIsDeduplicateModalOpen] = useState<boolean>(false);
+  
+  // Audit data barang ganda
+  const duplicateStats = useMemo(() => {
+    return auditDuplicateMasterBarang(barangList, transaksiList, penerimaanList);
+  }, [barangList, transaksiList, penerimaanList]);
   
   // Fitur Pencarian Cepat Kolom Kategori & Kode Rekening
   const [categorySearch, setCategorySearch] = useState<string>('');
@@ -579,6 +600,26 @@ export const MasterBarangTable: React.FC<Props> = ({
           >
             <Tag className="w-4 h-4" />
             <span>Kelola Kategori &amp; Rekening</span>
+          </button>
+
+          {/* Bersihkan Data Ganda (Deduplikasi & Penggabungan Transaksi) */}
+          <button
+            type="button"
+            onClick={() => setIsDeduplicateModalOpen(true)}
+            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer ${
+              duplicateStats.totalBarangGanda > 0
+                ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-300'
+                : 'bg-slate-700 hover:bg-slate-800 text-white'
+            }`}
+            title={`Audit & Bersihkan Data Barang Duplikat (${duplicateStats.totalBarangGanda} duplikat terdeteksi)`}
+          >
+            <GitMerge className="w-4 h-4" />
+            <span>Bersihkan Data Ganda</span>
+            {duplicateStats.totalBarangGanda > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-white text-amber-700 leading-none">
+                {duplicateStats.totalBarangGanda}
+              </span>
+            )}
           </button>
 
           {/* Tambah Barang Baru Button (Biru Utama) */}
@@ -1387,6 +1428,25 @@ export const MasterBarangTable: React.FC<Props> = ({
           onSaveCategory={handleCategorySave}
           onDeleteCategory={handleCategoryDelete}
           onClose={() => setIsKategoriModalOpen(false)}
+        />
+      )}
+
+      {/* Modal Audit & Pembersihan Data Barang Ganda (Deduplikasi & Penggabungan Transaksi) */}
+      {isDeduplicateModalOpen && (
+        <DeduplicateBarangModal
+          isOpen={isDeduplicateModalOpen}
+          onClose={() => setIsDeduplicateModalOpen(false)}
+          masterBarang={barangList}
+          transaksiPengeluaranList={transaksiList}
+          transaksiPenerimaanList={penerimaanList}
+          onApplyCleanedData={(cleaned, updatedTrx, updatedRcv, summary) => {
+            if (onDeduplicateAndMerge) {
+              onDeduplicateAndMerge(cleaned, updatedTrx, updatedRcv, summary);
+            } else {
+              showToast?.(summary);
+            }
+            setIsDeduplicateModalOpen(false);
+          }}
         />
       )}
     </div>

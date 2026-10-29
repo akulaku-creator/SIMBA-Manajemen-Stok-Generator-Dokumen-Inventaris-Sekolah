@@ -1,7 +1,7 @@
 import React from 'react';
 import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatTanggalIndonesia } from '../../utils/numberGenerator';
-import { resolvePemohon, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { getSignatoryInfo, resolvePemohon } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
 import { DocQRCode } from './DocQRCode';
 
@@ -9,20 +9,25 @@ interface Props {
   transaksi: TransaksiPengeluaran;
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  pejabatSettings?: any;
   minRows?: number;
 }
 
 export const DocSPB: React.FC<Props> = ({
   transaksi,
   kopConfig,
-  pejabatList
+  pejabatList,
+  pejabatSettings
 }) => {
-  // Direct Binding: Penandatangan SPB otomatis dari Pengaturan Master Pejabat & Header Transaksi
-  // 1. Kolom Kiri: Pemohon / Yang Meminta (Otomatis dari header transaksi / master pemohon)
-  const pemohon = resolvePemohon(pejabatList, transaksi);
+  // Direct Dynamic Binding: Mengambil data langsung dari Master Pegawai / Pejabat Settings
+  // 1. Kepala Sekolah (Mengetahui)
+  const kepalaSekolah = getSignatoryInfo(pejabatSettings || pejabatList, 'kepalaSekolah');
 
-  // 2. Kolom Kanan: Pengurus Barang Pembantu (Otomatis dari Master Pejabat)
-  const pengurusBarang = resolvePengurusBarang(pejabatList, transaksi.pengurusBarangId);
+  // 2. Pengurus Barang Pembantu / Penyalur (Menyerahkan - Yati Cahyani dari Master Data)
+  const pengurusBarang = getSignatoryInfo(pejabatSettings || pejabatList, 'pengurusBarang');
+
+  // 3. Pemohon / Penanggung Jawab Unit
+  const pemohon = resolvePemohon(pejabatList, transaksi);
 
   return (
     <div className="doc-content font-serif text-black select-text w-full">
@@ -187,46 +192,51 @@ export const DocSPB: React.FC<Props> = ({
         </tbody>
       </table>
 
-      {/* 4. Blok Tanda Tangan SPB (2 Kolom Sejajar Standar Resmi) */}
+      {/* 4. Blok Tanda Tangan SPB (2 Kolom Sejajar Standar Resmi: Kiri Mengetahui Kepala Sekolah, Kanan Pengurus Barang) */}
       <div className="doc-signature-block avoid-break break-inside-avoid mt-6 print:mt-4 text-xs font-sans">
         <div className="grid grid-cols-2 gap-8 text-center">
-          {/* Kolom Kiri: Pemohon / Yang Meminta */}
+          {/* Kolom Kiri: Kepala Sekolah (Mengetahui) */}
           <div>
             <div className="invisible select-none leading-tight print:hidden">&nbsp;</div>
-            <p className="font-semibold text-slate-900">Pemohon,</p>
-            <p className="text-[8pt] text-slate-600 italic">
-              {transaksi.unitPemohon || pemohon.jabatan || 'Penanggung Jawab Unit'}
+            <p className="font-semibold uppercase text-slate-900">MENGETAHUI,</p>
+            <p className="font-semibold uppercase text-slate-900">
+              {kepalaSekolah.statusJabatan && kepalaSekolah.statusJabatan !== 'Definitif' ? `${kepalaSekolah.statusJabatan}. ` : ''}
+              {kepalaSekolah.jabatan || 'KEPALA SEKOLAH'}
             </p>
+            <p className="text-[8pt] text-slate-600 italic">Kuasa Pengguna Anggaran</p>
             <div className="h-16 print:h-14 flex items-center justify-center">
-              {/* Optional Signature area placeholder */}
+              {/* Signature area */}
             </div>
-            <p className="font-bold underline text-slate-900 text-sm">{pemohon.nama}</p>
+            <p className="font-bold underline text-slate-900 text-sm uppercase">{kepalaSekolah.nama || '-'}</p>
             <p className="text-xs text-slate-700 font-mono mt-0.5">
-              NIP. {pemohon.nip && pemohon.nip !== '-' ? pemohon.nip : '-'}
+              NIP. {kepalaSekolah.nip && kepalaSekolah.nip !== '-' ? kepalaSekolah.nip : '-'}
             </p>
-            {pemohon.pangkatGolongan && pemohon.pangkatGolongan !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pemohon.pangkatGolongan}</p>
+            {kepalaSekolah.pangkat && kepalaSekolah.pangkat !== '-' && (
+              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {kepalaSekolah.pangkat}</p>
             )}
           </div>
 
-          {/* Kolom Kanan: Pengurus Barang Pembantu */}
+          {/* Kolom Kanan: Pengurus Barang / Pembantu (Menyerahkan) */}
           <div>
             <p className="text-slate-800 mb-0.5">
               {kopConfig.kotaSurat || 'Ciamis'}, {formatTanggalIndonesia(transaksi.tanggal)}
             </p>
-            <p className="font-semibold text-slate-900">Pengurus Barang Pembantu,</p>
+            <p className="font-semibold uppercase text-slate-900">Menyerahkan,</p>
+            <p className="font-semibold uppercase text-slate-900">
+              {pengurusBarang.jabatan || 'PENGURUS BARANG PEMBANTU'}
+            </p>
             <p className="text-[8pt] text-slate-600 italic">
               Pengelola Persediaan Barang
             </p>
             <div className="h-16 print:h-14 flex items-center justify-center">
-              {/* Optional Signature area placeholder */}
+              {/* Signature area */}
             </div>
-            <p className="font-bold underline text-slate-900 text-sm">{pengurusBarang.nama}</p>
+            <p className="font-bold underline text-slate-900 text-sm uppercase">{pengurusBarang.nama || 'Yati Cahyani, S.AP.'}</p>
             <p className="text-xs text-slate-700 font-mono mt-0.5">
               NIP. {pengurusBarang.nip && pengurusBarang.nip !== '-' ? pengurusBarang.nip : '-'}
             </p>
-            {pengurusBarang.pangkatGolongan && pengurusBarang.pangkatGolongan !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pengurusBarang.pangkatGolongan}</p>
+            {pengurusBarang.pangkat && pengurusBarang.pangkat !== '-' && (
+              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pengurusBarang.pangkat}</p>
             )}
           </div>
         </div>

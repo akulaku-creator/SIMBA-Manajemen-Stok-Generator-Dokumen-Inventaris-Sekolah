@@ -66,9 +66,9 @@ export const ExportPdfLaporanPenyaluran: React.FC<ExportPdfLaporanPenyaluranProp
   const pengurusBarang = pejabatSettings?.pengurusBarang || {
     nama: resolvedPengurus.nama && resolvedPengurus.nama !== 'Pengurus Barang' 
       ? resolvedPengurus.nama 
-      : 'RATNA INDRAWATI, S.KOM.',
-    nip: resolvedPengurus.nip,
-    pangkatGolongan: resolvedPengurus.pangkatGolongan,
+      : 'Yati Cahyani, S.AP.',
+    nip: resolvedPengurus.nip && resolvedPengurus.nip !== '-' ? resolvedPengurus.nip : '19870512 201101 2 007',
+    pangkatGolongan: resolvedPengurus.pangkatGolongan || 'Penata / III c',
     statusJabatan: resolvedPengurus.statusJabatan
   };
 

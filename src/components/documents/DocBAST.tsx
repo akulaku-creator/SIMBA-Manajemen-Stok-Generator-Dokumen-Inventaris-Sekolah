@@ -1,7 +1,7 @@
 import React from 'react';
 import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatTanggalIndonesia, getKalimatBast } from '../../utils/numberGenerator';
-import { resolveKepalaSekolah, resolvePemohon, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { getSignatoryInfo, resolvePemohon } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
 import { DocQRCode } from './DocQRCode';
 
@@ -9,23 +9,25 @@ interface Props {
   transaksi: TransaksiPengeluaran;
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  pejabatSettings?: any;
   minRows?: number;
 }
 
 export const DocBAST: React.FC<Props> = ({ 
   transaksi, 
   kopConfig, 
-  pejabatList 
+  pejabatList,
+  pejabatSettings
 }) => {
   // Direct Binding Pejabat Penandatangan dari Master Pejabat (Otomatis tanpa input manual):
-  // 1. Pihak Pertama (Yang Menyerahkan): Pengurus Barang Pembantu
-  const pihakPertama = resolvePengurusBarang(pejabatList, transaksi.pengurusBarangId);
+  // 1. Pihak Pertama (Yang Menyerahkan): Pengurus Barang Pembantu (Yati Cahyani dari master data)
+  const pihakPertama = getSignatoryInfo(pejabatSettings || pejabatList, 'pengurusBarang');
 
   // 2. Pihak Kedua (Yang Menerima): Pemohon / Penerima Barang
   const pihakKedua = resolvePemohon(pejabatList, transaksi);
 
   // 3. Mengetahui / Menyetujui: Kepala Sekolah (Kuasa Pengguna Barang)
-  const kepsek = resolveKepalaSekolah(pejabatList, transaksi.kepsekId);
+  const kepsek = getSignatoryInfo(pejabatSettings || pejabatList, 'kepalaSekolah');
 
   const pembukaBast = getKalimatBast(transaksi.tanggal);
 
@@ -213,8 +215,8 @@ export const DocBAST: React.FC<Props> = ({
             <p className="text-xs text-slate-700 font-mono mt-0.5">
               NIP. {pihakPertama.nip && pihakPertama.nip !== '-' ? pihakPertama.nip : '-'}
             </p>
-            {pihakPertama.pangkatGolongan && pihakPertama.pangkatGolongan !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pihakPertama.pangkatGolongan}</p>
+            {(pihakPertama.pangkat || (pihakPertama as any).pangkatGolongan) && (pihakPertama.pangkat || (pihakPertama as any).pangkatGolongan) !== '-' && (
+              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pihakPertama.pangkat || (pihakPertama as any).pangkatGolongan}</p>
             )}
           </div>
 
@@ -255,7 +257,8 @@ export const DocBAST: React.FC<Props> = ({
           <div className="w-2/4 text-center">
             <p className="font-semibold text-slate-900 text-xs">Mengetahui / Menyetujui,</p>
             <p className="font-bold text-slate-900 uppercase text-[9pt]">
-              KEPALA SEKOLAH
+              {kepsek.statusJabatan && kepsek.statusJabatan !== 'Definitif' ? `${kepsek.statusJabatan}. ` : ''}
+              {kepsek.jabatan || 'KEPALA SEKOLAH'}
             </p>
             <p className="text-[8pt] text-slate-600 italic">Selaku Kuasa Pengguna Barang</p>
             <div className="h-14 print:h-12 flex items-center justify-center">
@@ -265,8 +268,8 @@ export const DocBAST: React.FC<Props> = ({
             <p className="text-xs text-slate-700 font-mono mt-0.5">
               NIP. {kepsek.nip && kepsek.nip !== '-' ? kepsek.nip : '-'}
             </p>
-            {kepsek.pangkatGolongan && kepsek.pangkatGolongan !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {kepsek.pangkatGolongan}</p>
+            {(kepsek.pangkat || (kepsek as any).pangkatGolongan) && (kepsek.pangkat || (kepsek as any).pangkatGolongan) !== '-' && (
+              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {kepsek.pangkat || (kepsek as any).pangkatGolongan}</p>
             )}
           </div>
 

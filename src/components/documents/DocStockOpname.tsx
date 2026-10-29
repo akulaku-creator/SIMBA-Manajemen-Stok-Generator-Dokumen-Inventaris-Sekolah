@@ -78,24 +78,39 @@ export const DocStockOpname: React.FC<Props> = ({
   const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0);
   const cutoffDateString = lastDayOfMonth.toISOString().split('T')[0];
 
-  // Calculate stock opname per item up to the cutoff date (Eksklusi Belanja Modal: Hanya BHP)
+  // Calculate stock opname per item up to the cutoff date (Eksklusi Belanja Modal: Hanya BHP, Unique Deduplicated)
   const stockOpnameItems = useMemo(() => {
-    return masterBarang
-      .filter(barang => barang.jenisBarang !== 'Belanja Modal')
-      .map(barang => {
-      // Incoming up to cutoff date
+    const bhpItems = masterBarang.filter(barang => barang.jenisBarang !== 'Belanja Modal');
+    const uniqueMap = new Map<string, Barang>();
+    const aliasToPrimaryId = new Map<string, string>();
+
+    bhpItems.forEach(b => {
+      const key = `${(b.kodeBarang || '').trim().toLowerCase()}|${(b.namaBarang || '').trim().toLowerCase()}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, b);
+        aliasToPrimaryId.set(b.id, b.id);
+      } else {
+        const primary = uniqueMap.get(key)!;
+        aliasToPrimaryId.set(b.id, primary.id);
+      }
+    });
+
+    const uniqueList = Array.from(uniqueMap.values());
+
+    return uniqueList.map(barang => {
+      // Incoming up to cutoff date (matching primary or duplicate alias IDs)
       const masuk = transaksiPenerimaanList
         .filter(t => new Date(t.tanggal) <= lastDayOfMonth)
         .reduce((sum, t) => {
-          const item = t.items.find(i => i.barangId === barang.id);
+          const item = t.items.find(i => aliasToPrimaryId.get(i.barangId) === barang.id || i.barangId === barang.id);
           return sum + (item ? item.jumlahMasuk : 0);
         }, 0);
 
-      // Outgoing up to cutoff date
+      // Outgoing up to cutoff date (matching primary or duplicate alias IDs)
       const keluar = transaksiPengeluaranList
         .filter(t => new Date(t.tanggal) <= lastDayOfMonth)
         .reduce((sum, t) => {
-          const item = t.items.find(i => i.barangId === barang.id);
+          const item = t.items.find(i => aliasToPrimaryId.get(i.barangId) === barang.id || i.barangId === barang.id);
           return sum + (item ? item.usulanJumlah : 0);
         }, 0);
 
