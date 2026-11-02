@@ -1,5 +1,8 @@
 import { Barang, JenisBarang, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
 import { getNamaRekeningByKode } from '../data/kodeRekeningData';
+import { sanitizeMutationReport } from './dataMaintenanceHelper';
+
+export { sanitizeMutationReport };
 
 export interface DuplicateGroupItem {
   barang: Barang;
@@ -729,15 +732,17 @@ export const getCleanMutationData = (
     item.saldoAkhirJumlahRp = runningVolume * item.hargaSatuan;
   });
 
-  // 5. Filter Sanitasi Barang Aktif (Rule 1 & Rule 2):
+  // 5. Filter Sanitasi Barang Aktif & Ghost Record Removal (Rule 1 & Rule 2):
   // Hilangkan baris kosong jika barang pada master tidak memiliki riwayat transaksi DAN tidak memiliki saldo awal sah (> 0)
-  const result = Array.from(uniqueMap.values()).filter(item => {
+  const activeItems = Array.from(uniqueMap.values()).filter(item => {
     if (!requireActivity) return true;
     const hasInitial = (item.saldoAwalVolume > 0);
     const hasMasuk = (item.totalMasukVolume > 0);
     const hasKeluar = (item.totalKeluarVolume > 0);
-    return hasInitial || hasMasuk || hasKeluar;
+    const hasSaldoAkhir = (item.saldoAkhirVolume > 0);
+    return hasInitial || hasMasuk || hasKeluar || hasSaldoAkhir;
   });
 
-  return result;
+  // Terapkan sanitizeMutationReport untuk validasi relasi join & pencegahan data hantu/yatim
+  return sanitizeMutationReport(activeItems, masterBarang, penerimaanList, pengeluaranList);
 };

@@ -251,7 +251,7 @@ export default function App() {
   const [isKopSettingsOpen, setIsKopSettingsOpen] = useState(false);
   const [isNumberingSettingsOpen, setIsNumberingSettingsOpen] = useState(false);
   const [isUnifiedSettingsOpen, setIsUnifiedSettingsOpen] = useState(false);
-  const [unifiedSettingsTab, setUnifiedSettingsTab] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme'>('all');
+  const [unifiedSettingsTab, setUnifiedSettingsTab] = useState<'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme' | 'maintenance'>('all');
   const [lastBackupTime, setLastBackupTime] = useState<string | null>(getLastBackupTime());
 
   // Inisialisasi Tema & Gaya Tampilan tersimpan secara instan pada saat aplikasi dimuat
@@ -1209,6 +1209,18 @@ export default function App() {
     showToast(`Seluruh data barang berhasil diselaraskan ke Master Rekening Resmi.`);
   };
 
+  // Handler Sanitasi Data & Rekalkulasi Stok Otomatis
+  const handleDataCleanupComplete = (cleaned: {
+    masterBarang: Barang[];
+    transaksiList: TransaksiPengeluaran[];
+    penerimaanList: TransaksiPenerimaan[];
+  }) => {
+    setMasterBarang(cleaned.masterBarang);
+    setTransaksiList(cleaned.transaksiList);
+    setPenerimaanList(cleaned.penerimaanList);
+    showToast('Data master, riwayat transaksi, dan stok aktif berhasil disinkronkan!');
+  };
+
   // Restore Database Handler (Replace All or Merge)
   const handleRestoreDatabase = (
     restoredData: {
@@ -1601,6 +1613,7 @@ export default function App() {
           setIsUnifiedSettingsOpen(false);
           setIsResetTransaksiOpen(true);
         }}
+        onDataCleanupComplete={handleDataCleanupComplete}
       />
 
       {/* MODAL: Pengaturan Kop Surat & Logo Sekolah */}

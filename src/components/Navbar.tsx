@@ -22,7 +22,8 @@ import {
   Users,
   Database,
   Download,
-  Github
+  Github,
+  Sparkles
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { AppUser, PaperSize, UserRole } from '../types';
@@ -36,7 +37,7 @@ interface Props {
   onOpenNewPenerimaan: () => void;
   onOpenKopSettings: () => void;
   onOpenNumberingSettings: () => void;
-  onOpenUnifiedSettings?: (tab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme') => void;
+  onOpenUnifiedSettings?: (tab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme' | 'maintenance') => void;
   onExecuteBackup?: () => void;
   lastBackupTime?: string | null;
   onOpenSchemaModal: () => void;
@@ -422,6 +423,17 @@ export const Navbar: React.FC<Props> = ({
                           >
                             <Github className="w-4 h-4 text-slate-400" />
                             <span>Sinkronisasi GitHub / Developer</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsRoleDropdownOpen(false);
+                              onOpenUnifiedSettings('maintenance');
+                            }}
+                            className="w-full text-left px-3 py-1.5 text-amber-300 hover:bg-slate-800 rounded-lg flex items-center gap-2 font-medium"
+                          >
+                            <Sparkles className="w-4 h-4 text-amber-400" />
+                            <span>Pemeliharaan &amp; Sanitasi Data</span>
                           </button>
                         </>
                       )}

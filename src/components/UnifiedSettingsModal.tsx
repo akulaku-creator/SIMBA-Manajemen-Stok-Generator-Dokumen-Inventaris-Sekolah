@@ -75,11 +75,12 @@ import {
 } from '../utils/numberGenerator';
 import { KopSuratView } from './KopSuratView';
 import { ThemeSettingsComponent } from './ThemeSettingsComponent';
+import { DataMaintenanceSettings } from './DataMaintenanceSettings';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme';
+  initialTab?: 'all' | 'kop' | 'numbering' | 'pejabat' | 'backup' | 'github' | 'danger' | 'theme' | 'maintenance';
   kopConfig: KopSuratConfig;
   numberingConfig: NumberingPatternConfig;
   pejabatList: Pejabat[];
@@ -109,9 +110,14 @@ interface Props {
   ) => void;
   onShowToast?: (message: string) => void;
   onOpenResetTransaksi?: () => void;
+  onDataCleanupComplete?: (cleaned: {
+    masterBarang: Barang[];
+    transaksiList: TransaksiPengeluaran[];
+    penerimaanList: TransaksiPenerimaan[];
+  }) => void;
 }
 
-const VALID_SETTING_SECTIONS = ['all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger', 'theme'] as const;
+const VALID_SETTING_SECTIONS = ['all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger', 'theme', 'maintenance'] as const;
 type SettingSection = typeof VALID_SETTING_SECTIONS[number];
 
 function resolveSettingTab(tab: unknown): SettingSection {
@@ -137,7 +143,8 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   onSaveUnifiedSettings,
   onRestoreDatabase,
   onShowToast,
-  onOpenResetTransaksi
+  onOpenResetTransaksi,
+  onDataCleanupComplete
 }) => {
   // Navigation tabs within settings
   const [activeSection, setActiveSection] = useState<SettingSection>(() => resolveSettingTab(initialTab));
@@ -786,6 +793,18 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           >
             <Palette className="w-3.5 h-3.5 text-indigo-600" />
             7. Tema &amp; Tampilan
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('maintenance')}
+            className={`px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeSection === 'maintenance'
+                ? 'bg-amber-600 text-white shadow-2xs'
+                : 'text-amber-800 hover:bg-amber-100/70 bg-amber-50/60'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            8. Pemeliharaan &amp; Sanitasi Data
           </button>
         </div>
 
@@ -2532,6 +2551,20 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
             <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden p-6">
               <ThemeSettingsComponent onShowToast={onShowToast} />
             </div>
+          )}
+
+          {/* ========================================================================= */}
+          {/* SECTION 8: PEMELIHARAAN & SANITASI DATA (SANITY CHECK, DEDUPLIKASI, STOK) */}
+          {/* ========================================================================= */}
+          {(activeSection === 'all' || activeSection === 'maintenance') && (
+            <DataMaintenanceSettings
+              masterBarang={masterBarang}
+              transaksiList={transaksiList}
+              penerimaanList={penerimaanList}
+              currentUser={currentUser}
+              onCleanupComplete={onDataCleanupComplete}
+              onShowToast={onShowToast}
+            />
           )}
 
         </div>
