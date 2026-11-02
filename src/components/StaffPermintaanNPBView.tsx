@@ -272,7 +272,11 @@ export const StaffPermintaanNPBView: React.FC<Props> = ({
     const matchSearch = b.namaBarang.toLowerCase().includes(searchKatalog.toLowerCase()) ||
       b.kodeBarang.toLowerCase().includes(searchKatalog.toLowerCase()) ||
       (b.spesifikasi && b.spesifikasi.toLowerCase().includes(searchKatalog.toLowerCase()));
-    const matchKategori = filterKategori === 'all' || b.kategori === filterKategori;
+    const matchKategori = 
+      filterKategori === 'all' || 
+      b.kategori === filterKategori || 
+      b.kodeRekening === filterKategori || 
+      b.namaRekening === filterKategori;
     return matchSearch && matchKategori;
   });
 

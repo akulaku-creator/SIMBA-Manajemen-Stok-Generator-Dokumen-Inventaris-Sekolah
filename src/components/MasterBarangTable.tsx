@@ -327,43 +327,110 @@ export const MasterBarangTable: React.FC<Props> = ({
   }, [barangList, allCategoryItems]);
 
   // Counts for tabs
-  const bhpCount = barangList.filter(b => b.jenisBarang !== 'Belanja Modal').length;
-  const modalCount = barangList.filter(b => b.jenisBarang === 'Belanja Modal').length;
+  const bhpCount = barangList.filter(b => b.jenisBarang !== 'Belanja Modal' && !b.kodeRekening?.startsWith('5.2')).length;
+  const modalCount = barangList.filter(b => b.jenisBarang === 'Belanja Modal' || b.kodeRekening?.startsWith('5.2')).length;
 
+  /**
+   * Fungsi filter master barang berdasarkan kategori / kode rekening
+   * Memenuhi kriteria:
+   * 1. Pencocokan Data (Matching Rule): Mencocokkan data barang berdasarkan kodeRekening atau ID Kategori secara presisi.
+   * 2. Sinkronisasi Dynamic Master: Membandingkan kode rekening belanja pada barang (item.kodeRekening)
+   *    dengan kode rekening pada kategori yang sedang dipilih pada dropdown filter (allCategoryItems).
+   * 3. Reset State: Opsi default "Semua" menampilkan seluruh data tanpa menyaring berlebihan.
+   */
   const filtered = useMemo(() => {
-    const qSearch = search.trim().toLowerCase();
-    const qCat = categorySearch.trim().toLowerCase();
+    const normSelected = (filterKategori || '').trim();
+    const isAllCategory = !normSelected || normSelected === 'Semua' || normSelected.toLowerCase() === 'semua' || normSelected === 'all';
 
-    return barangList.filter(b => {
-      const matchSearch = !qSearch ||
-        b.namaBarang.toLowerCase().includes(qSearch) ||
-        b.kodeBarang.toLowerCase().includes(qSearch) ||
-        b.nusp.toLowerCase().includes(qSearch) ||
-        (b.spesifikasi && b.spesifikasi.toLowerCase().includes(qSearch)) ||
-        (b.kodeRekening && b.kodeRekening.toLowerCase().includes(qSearch)) ||
-        (b.kategori && b.kategori.toLowerCase().includes(qSearch)) ||
-        (b.namaRekening && b.namaRekening.toLowerCase().includes(qSearch));
+    // Sinkronisasi Dynamic Master: Dapatkan target kode rekening dan nama dari master kategori aktif
+    let targetKodeRekening = '';
+    let targetCategoryName = '';
 
-      const matchJenis = 
-        filterJenis === 'Semua' ||
-        (filterJenis === 'BHP' && b.jenisBarang !== 'Belanja Modal') ||
-        (filterJenis === 'Belanja Modal' && b.jenisBarang === 'Belanja Modal');
-
-      const matchCat = 
-        filterKategori === 'Semua' || 
-        b.kategori === filterKategori || 
-        b.namaRekening === filterKategori ||
-        b.kodeRekening === filterKategori;
-
-      const matchCatSearch = !qCat || (
-        (b.kategori && b.kategori.toLowerCase().includes(qCat)) ||
-        (b.kodeRekening && b.kodeRekening.toLowerCase().includes(qCat)) ||
-        (b.namaRekening && b.namaRekening.toLowerCase().includes(qCat))
+    if (!isAllCategory) {
+      const matchedCategory = allCategoryItems.find(
+        c => c.kodeRekening?.trim() === normSelected ||
+             c.id === normSelected ||
+             c.nama?.trim().toLowerCase() === normSelected.toLowerCase() ||
+             c.namaRekening?.trim().toLowerCase() === normSelected.toLowerCase()
       );
 
-      return matchSearch && matchJenis && matchCat && matchCatSearch;
+      if (matchedCategory) {
+        targetKodeRekening = (matchedCategory.kodeRekening || '').trim();
+        targetCategoryName = (matchedCategory.nama || matchedCategory.namaRekening || '').trim().toLowerCase();
+      } else {
+        if (normSelected.startsWith('5.')) {
+          targetKodeRekening = normSelected;
+        } else {
+          targetCategoryName = normSelected.toLowerCase();
+        }
+      }
+    }
+
+    const query = search ? search.trim().toLowerCase() : '';
+    const qCat = categorySearch ? categorySearch.trim().toLowerCase() : '';
+
+    return barangList.filter(item => {
+      // 1. Filter berdasarkan Tab Jenis Aset (Semua / BHP / Modal)
+      const isModal = 
+        item.jenisBarang === 'Belanja Modal' || 
+        (item as any).jenisAset?.toLowerCase().includes('modal') ||
+        (item as any).jenisAset?.toLowerCase().includes('aset') ||
+        item.kodeRekening?.startsWith('5.2');
+
+      const matchTab = 
+        filterJenis === 'Semua' || !filterJenis ? true :
+        filterJenis === 'BHP' ? !isModal :
+        (filterJenis === 'Belanja Modal' || filterJenis === 'Modal') ? isModal : true;
+
+      // 2. Filter berdasarkan Kategori / Kode Rekening yang dipilih di Dropdown (Dynamic Master Sync)
+      const itemKode = (item.kodeRekening || '').trim();
+      const itemKategori = (item.kategori || '').trim().toLowerCase();
+      const itemNamaRekening = (item.namaRekening || '').trim().toLowerCase();
+
+      const matchCategory = isAllCategory ? true : Boolean(
+        // Cocokkan persis kode rekening barang dengan kode rekening kategori yang dipilih
+        (targetKodeRekening && itemKode === targetKodeRekening) ||
+        // Cocokkan langsung dengan string yang dipilih
+        (itemKode === normSelected) ||
+        // Cocokkan nama kategori atau nama rekening
+        (targetCategoryName && (itemKategori === targetCategoryName || itemNamaRekening === targetCategoryName)) ||
+        (itemKategori === normSelected.toLowerCase()) ||
+        (itemNamaRekening === normSelected.toLowerCase())
+      );
+
+      // 3. Filter berdasarkan Kolom Pencarian Teks (Nama, Kode, NUSP, Rekening, Spesifikasi)
+      const matchSearch = !query || Boolean(
+        item.namaBarang?.toLowerCase().includes(query) ||
+        item.kodeBarang?.toLowerCase().includes(query) ||
+        item.kodeRekening?.toLowerCase().includes(query) ||
+        item.nusp?.toLowerCase().includes(query) ||
+        (item.spesifikasi && item.spesifikasi.toLowerCase().includes(query)) ||
+        (item.kategori && item.kategori.toLowerCase().includes(query)) ||
+        (item.namaRekening && item.namaRekening.toLowerCase().includes(query))
+      );
+
+      // 4. Filter kolom pencarian kategori tambahan jika aktif
+      const matchCatSearch = !qCat || Boolean(
+        (item.kategori && item.kategori.toLowerCase().includes(qCat)) ||
+        (item.kodeRekening && item.kodeRekening.toLowerCase().includes(qCat)) ||
+        (item.namaRekening && item.namaRekening.toLowerCase().includes(qCat))
+      );
+
+      return matchTab && matchCategory && matchSearch && matchCatSearch;
     });
-  }, [barangList, search, filterJenis, filterKategori, categorySearch]);
+  }, [barangList, search, filterJenis, filterKategori, categorySearch, allCategoryItems]);
+
+  // Label display untuk kategori yang sedang aktif difilter
+  const selectedCategoryDisplayLabel = useMemo(() => {
+    if (!filterKategori || filterKategori === 'Semua') return '';
+    const found = allCategoryItems.find(
+      c => c.kodeRekening === filterKategori || c.id === filterKategori || c.nama === filterKategori
+    );
+    if (found) {
+      return found.kodeRekening ? `${found.kodeRekening} - ${found.nama}` : found.nama;
+    }
+    return filterKategori;
+  }, [filterKategori, allCategoryItems]);
 
   // Async Export Excel Handler (Non-blocking & Progress-aware)
   const handleExportExcelAsync = async () => {
@@ -733,8 +800,8 @@ export const MasterBarangTable: React.FC<Props> = ({
               {bhpCategories.length > 0 && (
                 <optgroup label="Barang Habis Pakai (BHP)">
                   {bhpCategories.map((item) => (
-                    <option key={item.id} value={item.nama}>
-                      {item.kodeRekening} - {item.nama}
+                    <option key={item.id} value={item.kodeRekening || item.id}>
+                      {item.kodeRekening ? `${item.kodeRekening} - ${item.nama}` : item.nama}
                     </option>
                   ))}
                 </optgroup>
@@ -742,8 +809,8 @@ export const MasterBarangTable: React.FC<Props> = ({
               {modalCategories.length > 0 && (
                 <optgroup label="Belanja Modal (Aset Tetap)">
                   {modalCategories.map((item) => (
-                    <option key={item.id} value={item.nama}>
-                      {item.kodeRekening} - {item.nama}
+                    <option key={item.id} value={item.kodeRekening || item.id}>
+                      {item.kodeRekening ? `${item.kodeRekening} - ${item.nama}` : item.nama}
                     </option>
                   ))}
                 </optgroup>
@@ -761,25 +828,42 @@ export const MasterBarangTable: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Active Category Search Filter Tag */}
-        {categorySearch && (
+        {/* Active Filter Tags */}
+        {(categorySearch || filterKategori !== 'Semua') && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
-            <span className="text-slate-500 font-medium">Filter Aktif Kolom Kategori:</span>
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 font-semibold text-xs">
-              <Tag className="w-3 h-3 text-blue-600" />
-              &quot;{categorySearch}&quot;
-              <button
-                type="button"
-                onClick={() => {
-                  setCategorySearch('');
-                  setIsCatSearchOpen(false);
-                }}
-                className="hover:bg-blue-200/60 p-0.5 rounded-full text-blue-700 hover:text-blue-900 cursor-pointer ml-0.5 transition-colors"
-                title="Hapus filter kolom kategori"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </span>
+            {filterKategori !== 'Semua' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-800 font-semibold text-xs">
+                <Tag className="w-3 h-3 text-indigo-600" />
+                <span>Kategori: {selectedCategoryDisplayLabel}</span>
+                <button
+                  type="button"
+                  onClick={() => setFilterKategori('Semua')}
+                  className="hover:bg-indigo-200/60 p-0.5 rounded-full text-indigo-700 hover:text-indigo-900 cursor-pointer ml-0.5 transition-colors"
+                  title="Hapus filter kategori"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {categorySearch && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 font-semibold text-xs">
+                <Search className="w-3 h-3 text-blue-600" />
+                <span>Kolom: &quot;{categorySearch}&quot;</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategorySearch('');
+                    setIsCatSearchOpen(false);
+                  }}
+                  className="hover:bg-blue-200/60 p-0.5 rounded-full text-blue-700 hover:text-blue-900 cursor-pointer ml-0.5 transition-colors"
+                  title="Hapus filter kolom kategori"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
             <span className="text-[11px] text-slate-400">
               ({filtered.length} barang cocok)
             </span>
