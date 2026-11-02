@@ -5,6 +5,8 @@ import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabat
 import { KopSuratView } from '../KopSuratView';
 import { SignatoryBukuPersediaan } from './SignatoryBlocks';
 
+import { buildMergeKey } from '../../utils/barangDeduplicationHelper';
+
 interface Props {
   transaksiPengeluaranList: TransaksiPengeluaran[];
   transaksiPenerimaanList: TransaksiPenerimaan[];
@@ -19,6 +21,7 @@ interface Props {
 
 interface RekapRow {
   id: string;
+  mergeKey: string;
   tanggal: string;
   noBukti: string;
   kodeBarang: string;
@@ -50,61 +53,126 @@ export const DocBukuRekap: React.FC<Props> = ({
   const kepsek = resolveKepalaSekolah(pejabatList);
   const pengurusBarang = resolvePengurusBarang(pejabatList);
 
+  // 1. Initial balance map by unique identity key (Nama + Kode Rekening + Harga Satuan)
+  const initialStockMap = new Map<string, number>();
+  masterBarang.forEach(b => {
+    const key = buildMergeKey(b);
+    initialStockMap.set(key, (initialStockMap.get(key) || 0) + (Number(b.stokAwal) || 0));
+  });
+
+  // 2. Deduplicate incoming transactions by unique ID or signature
+  const uniqueTrxMasuk: TransaksiPenerimaan[] = [];
+  const seenTrxMasukKeys = new Set<string>();
+  transaksiPenerimaanList.forEach(trx => {
+    const trxKey = trx.id ? `id_${trx.id}` : `${trx.noBukti}_${trx.tanggal}_${trx.penyedia}`;
+    if (!seenTrxMasukKeys.has(trxKey)) {
+      seenTrxMasukKeys.add(trxKey);
+      uniqueTrxMasuk.push(trx);
+    }
+  });
+
+  // 3. Deduplicate outgoing transactions by unique ID or signature
+  const uniqueTrxKeluar: TransaksiPengeluaran[] = [];
+  const seenTrxKeluarKeys = new Set<string>();
+  transaksiPengeluaranList.forEach(trx => {
+    const trxKey = trx.id ? `id_${trx.id}` : `${trx.noSPPB}_${trx.noBAST}_${trx.tanggal}_${trx.unitPemohon}`;
+    if (!seenTrxKeluarKeys.has(trxKey)) {
+      seenTrxKeluarKeys.add(trxKey);
+      uniqueTrxKeluar.push(trx);
+    }
+  });
+
   // Compile combined ledger entries chronologically
   const rows: RekapRow[] = [];
 
-  // 1. Add incoming items
-  transaksiPenerimaanList.forEach(trx => {
-    trx.items.forEach(item => {
-      const subtotal = item.subtotal || (item.jumlahMasuk * item.hargaSatuan);
+  // Add incoming items
+  uniqueTrxMasuk.forEach(trx => {
+    trx.items?.forEach((item, itemIdx) => {
+      const matchedMaster = masterBarang.find(mb => mb.id === item.barangId);
+      const effectiveKode = (item.kodeRekening || matchedMaster?.kodeRekening || '5.1.02.01.01.0024').trim();
+      const effectiveHarga = Number(item.hargaSatuan) || Number(matchedMaster?.hargaSatuan) || 0;
+      const mergeKey = buildMergeKey({
+        namaBarang: item.namaBarang,
+        kodeRekening: effectiveKode,
+        hargaSatuan: effectiveHarga
+      });
+      const subtotal = item.subtotal || (item.jumlahMasuk * effectiveHarga);
       rows.push({
-        id: `rcv-${trx.id}-${item.barangId}`,
+        id: `rcv-${trx.id || trx.noBukti}-${itemIdx}-${item.barangId || ''}`,
+        mergeKey,
         tanggal: trx.tanggal,
         noBukti: trx.noBukti,
-        kodeBarang: item.kodeBarang,
-        nusp: item.nusp,
+        kodeBarang: item.kodeBarang || matchedMaster?.kodeBarang || '',
+        nusp: item.nusp || matchedMaster?.nusp || '',
         namaBarang: item.namaBarang,
-        satuan: item.satuan,
+        satuan: item.satuan || matchedMaster?.satuan || 'Pcs',
         tipe: 'masuk',
-        jumlahMasuk: item.jumlahMasuk,
-        hargaSatuanMasuk: item.hargaSatuan,
+        jumlahMasuk: Number(item.jumlahMasuk) || 0,
+        hargaSatuanMasuk: effectiveHarga,
         totalMasuk: subtotal,
         jumlahKeluar: 0,
         hargaSatuanKeluar: 0,
         totalKeluar: 0,
-        saldoJumlah: item.jumlahMasuk,
-        keterangan: `${trx.sumberDana} (${trx.penyedia})`
+        saldoJumlah: 0, // Calculated sequentially below
+        keterangan: `${trx.sumberDana || 'BOS'} (${trx.penyedia || 'Penyedia'})`
       });
     });
   });
 
-  // 2. Add outgoing disbursement items
-  transaksiPengeluaranList.forEach(trx => {
-    trx.items.forEach(item => {
-      const subtotal = item.usulanJumlah * item.hargaSatuan;
-      rows.push({
-        id: `out-${trx.id}-${item.barangId}`,
-        tanggal: trx.tanggal,
-        noBukti: trx.noBAST,
-        kodeBarang: item.kodeBarang,
-        nusp: item.nusp,
+  // Add outgoing disbursement items
+  uniqueTrxKeluar.forEach(trx => {
+    trx.items?.forEach((item, itemIdx) => {
+      const matchedMaster = masterBarang.find(mb => mb.id === item.barangId);
+      const effectiveKode = (item.kodeRekening || matchedMaster?.kodeRekening || '5.1.02.01.01.0024').trim();
+      const effectiveHarga = Number(item.hargaSatuan) || Number(matchedMaster?.hargaSatuan) || 0;
+      const mergeKey = buildMergeKey({
         namaBarang: item.namaBarang,
-        satuan: item.satuan,
+        kodeRekening: effectiveKode,
+        hargaSatuan: effectiveHarga
+      });
+      const subtotal = (Number(item.usulanJumlah) || 0) * effectiveHarga;
+      rows.push({
+        id: `out-${trx.id || trx.noSPPB}-${itemIdx}-${item.barangId || ''}`,
+        mergeKey,
+        tanggal: trx.tanggal,
+        noBukti: trx.noBAST || trx.noSPPB,
+        kodeBarang: item.kodeBarang || matchedMaster?.kodeBarang || '',
+        nusp: item.nusp || matchedMaster?.nusp || '',
+        namaBarang: item.namaBarang,
+        satuan: item.satuan || matchedMaster?.satuan || 'Pcs',
         tipe: 'keluar',
         jumlahMasuk: 0,
         hargaSatuanMasuk: 0,
         totalMasuk: 0,
-        jumlahKeluar: item.usulanJumlah,
-        hargaSatuanKeluar: item.hargaSatuan,
+        jumlahKeluar: Number(item.usulanJumlah) || 0,
+        hargaSatuanKeluar: effectiveHarga,
         totalKeluar: subtotal,
-        saldoJumlah: Math.max(0, item.sisaBarang - item.usulanJumlah),
-        keterangan: `${trx.unitPemohon}: ${item.keperluan || trx.keperluanUmum}`
+        saldoJumlah: 0, // Calculated sequentially below
+        keterangan: `${trx.unitPemohon || 'Unit'}: ${item.keperluan || trx.keperluanUmum || 'Operasional'}`
       });
     });
   });
 
   // Sort rows chronologically
   rows.sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
+
+  // Sequential calculation of running balance per unique item identity:
+  // Saldo Awal + Masuk - Keluar = Saldo Akhir (guaranteed non-negative)
+  const runningStockMap = new Map<string, number>();
+  rows.forEach(r => {
+    const current = runningStockMap.has(r.mergeKey)
+      ? runningStockMap.get(r.mergeKey)!
+      : (initialStockMap.get(r.mergeKey) || 0);
+
+    let nextStock = current;
+    if (r.tipe === 'masuk') {
+      nextStock = current + r.jumlahMasuk;
+    } else if (r.tipe === 'keluar') {
+      nextStock = Math.max(0, current - r.jumlahKeluar);
+    }
+    runningStockMap.set(r.mergeKey, nextStock);
+    r.saldoJumlah = nextStock;
+  });
 
   // Accumulate totals
   const grandTotalMasuk = rows.reduce((acc, r) => acc + r.totalMasuk, 0);

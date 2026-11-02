@@ -1,5 +1,5 @@
 import React from 'react';
-import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
+import { Barang, KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatRupiah, formatTanggalIndonesia, MONTHS_ID } from '../../utils/numberGenerator';
 import { ResolvedOfficial } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
@@ -7,6 +7,7 @@ import { SignatoryBukuPengeluaran } from './SignatoryBlocks';
 
 interface Props {
   transaksiPengeluaranList: TransaksiPengeluaran[];
+  masterBarang?: Barang[];
   kopConfig: KopSuratConfig;
   pejabatList?: Pejabat[];
   settings?: {
@@ -28,6 +29,7 @@ interface Props {
 
 export const DocBukuPengeluaran: React.FC<Props> = ({
   transaksiPengeluaranList,
+  masterBarang = [],
   kopConfig,
   pejabatList = [],
   settings,
@@ -39,12 +41,22 @@ export const DocBukuPengeluaran: React.FC<Props> = ({
   minRows = 14
 }) => {
 
-  // Filter transactions by month/year if selected
-  const filteredTrx = transaksiPengeluaranList.filter(trx => {
+  // 1. Filter transactions by month/year if selected and deduplicate identical transactions
+  const seenTrxKeys = new Set<string>();
+  const filteredTrx: TransaksiPengeluaran[] = [];
+
+  transaksiPengeluaranList.forEach(trx => {
+    if (!trx.tanggal) return;
     const d = new Date(trx.tanggal);
     const matchYear = d.getFullYear() === selectedYear;
     const matchMonth = selectedMonth !== undefined && selectedMonth !== -1 ? d.getMonth() === selectedMonth : true;
-    return matchYear && matchMonth;
+    if (!matchYear || !matchMonth) return;
+
+    const trxKey = trx.id ? `id_${trx.id}` : `${trx.noSPPB}_${trx.noBAST}_${trx.tanggal}_${trx.unitPemohon}`;
+    if (!seenTrxKeys.has(trxKey)) {
+      seenTrxKeys.add(trxKey);
+      filteredTrx.push(trx);
+    }
   });
 
   // Flatten disbursement items
@@ -65,20 +77,26 @@ export const DocBukuPengeluaran: React.FC<Props> = ({
 
   const rows: FlatDisbursementRow[] = [];
   filteredTrx.forEach(trx => {
-    trx.items.forEach((item, i) => {
+    trx.items?.forEach((item, i) => {
+      const matchedMaster = masterBarang.find(mb => mb.id === item.barangId);
+      const effectiveKode = (item.kodeRekening || matchedMaster?.kodeRekening || '5.1.02.01.01.0024').trim();
+      const effectiveHarga = Number(item.hargaSatuan) || Number(matchedMaster?.hargaSatuan) || 0;
+      const qty = Number(item.usulanJumlah) || 0;
+      const totalNilai = qty * effectiveHarga;
+
       rows.push({
-        id: `${trx.id}-${i}`,
+        id: `${trx.id || trx.noSPPB}-${i}-${item.barangId || ''}`,
         tanggal: trx.tanggal,
-        noSPPB: trx.noSPPB,
-        noBAST: trx.noBAST,
-        unitPemohon: trx.unitPemohon,
-        kodeRekening: item.kodeRekening || '5.1.02.01.01.0024',
+        noSPPB: trx.noSPPB || '-',
+        noBAST: trx.noBAST || '-',
+        unitPemohon: trx.unitPemohon || 'Unit Kerja',
+        kodeRekening: effectiveKode,
         namaBarang: item.namaBarang,
-        satuan: item.satuan,
-        jumlahKeluar: item.usulanJumlah,
-        hargaSatuan: item.hargaSatuan,
-        totalNilai: item.usulanJumlah * item.hargaSatuan,
-        keperluan: item.keperluan || trx.keperluanUmum
+        satuan: item.satuan || matchedMaster?.satuan || 'Pcs',
+        jumlahKeluar: qty,
+        hargaSatuan: effectiveHarga,
+        totalNilai: totalNilai,
+        keperluan: item.keperluan || trx.keperluanUmum || 'Operasional'
       });
     });
   });

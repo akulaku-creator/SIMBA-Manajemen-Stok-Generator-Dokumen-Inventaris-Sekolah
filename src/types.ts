@@ -178,6 +178,7 @@ export interface ItemPenerimaan {
   nusp: string;
   kodeRekening?: string;
   namaRekening?: string;
+  spesifikasi?: string;
   satuan: string;
   jumlahMasuk: number;
   hargaSatuan: number;

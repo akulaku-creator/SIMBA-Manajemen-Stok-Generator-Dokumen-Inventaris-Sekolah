@@ -81,56 +81,67 @@ export const DocStockOpname: React.FC<Props> = ({
 
   // Calculate stock opname per item up to the cutoff date (Eksklusi Belanja Modal: Hanya BHP, Unique Deduplicated)
   const stockOpnameItems = useMemo(() => {
-    const bhpItems = masterBarang.filter(barang => barang.jenisBarang !== 'Belanja Modal');
-    const uniqueMap = new Map<string, Barang>();
-    const aliasToPrimaryId = new Map<string, string>();
+    const bhpItems = masterBarang.filter(barang => barang.jenisBarang !== 'Belanja Modal' && !barang.kodeRekening?.startsWith('5.2'));
+    const uniqueMap = new Map<string, { barang: Barang; idSet: Set<string>; accumulatedStokAwal: number }>();
 
     bhpItems.forEach(b => {
       const key = buildMergeKey(b);
+      const initial = Math.max(0, Number(b.stokAwal) || 0);
       if (!uniqueMap.has(key)) {
-        uniqueMap.set(key, b);
-        aliasToPrimaryId.set(b.id, b.id);
+        uniqueMap.set(key, {
+          barang: { ...b },
+          idSet: new Set([b.id]),
+          accumulatedStokAwal: initial
+        });
       } else {
-        const primary = uniqueMap.get(key)!;
-        aliasToPrimaryId.set(b.id, primary.id);
+        const entry = uniqueMap.get(key)!;
+        entry.idSet.add(b.id);
+        entry.accumulatedStokAwal += initial;
       }
     });
 
-    const uniqueList = Array.from(uniqueMap.values());
+    return Array.from(uniqueMap.entries())
+      .map(([key, { barang, idSet, accumulatedStokAwal }]) => {
+        // Incoming up to cutoff date (matching any ID in group or matching key)
+        const masuk = transaksiPenerimaanList
+          .filter(t => t.tanggal && new Date(t.tanggal) <= lastDayOfMonth)
+          .reduce((sum, t) => {
+            const itemSum = (t.items || []).reduce((iSum, i) => {
+              const matched = (i.barangId && idSet.has(i.barangId)) || (buildMergeKey(i) === key);
+              return iSum + (matched ? (Number(i.jumlahMasuk) || 0) : 0);
+            }, 0);
+            return sum + itemSum;
+          }, 0);
 
-    return uniqueList.map(barang => {
-      // Incoming up to cutoff date (matching primary or duplicate alias IDs)
-      const masuk = transaksiPenerimaanList
-        .filter(t => new Date(t.tanggal) <= lastDayOfMonth)
-        .reduce((sum, t) => {
-          const item = t.items.find(i => aliasToPrimaryId.get(i.barangId) === barang.id || i.barangId === barang.id);
-          return sum + (item ? item.jumlahMasuk : 0);
-        }, 0);
+        // Outgoing up to cutoff date (matching any ID in group or matching key)
+        const keluar = transaksiPengeluaranList
+          .filter(t => t.tanggal && new Date(t.tanggal) <= lastDayOfMonth)
+          .reduce((sum, t) => {
+            const itemSum = (t.items || []).reduce((iSum, i) => {
+              const matched = (i.barangId && idSet.has(i.barangId)) || (buildMergeKey(i) === key);
+              return iSum + (matched ? (Number(i.usulanJumlah) || 0) : 0);
+            }, 0);
+            return sum + itemSum;
+          }, 0);
 
-      // Outgoing up to cutoff date (matching primary or duplicate alias IDs)
-      const keluar = transaksiPengeluaranList
-        .filter(t => new Date(t.tanggal) <= lastDayOfMonth)
-        .reduce((sum, t) => {
-          const item = t.items.find(i => aliasToPrimaryId.get(i.barangId) === barang.id || i.barangId === barang.id);
-          return sum + (item ? item.usulanJumlah : 0);
-        }, 0);
+        // Current physical stock: Saldo Awal + Masuk - Keluar
+        const sisaFisik = Math.max(0, accumulatedStokAwal + masuk - keluar);
+        const harga = Math.max(0, Number(barang.hargaSatuan) || 0);
+        const totalNilaiSisa = sisaFisik * harga;
 
-      // Current physical stock
-      const sisaFisik = Math.max(0, barang.stokAwal + masuk - keluar);
-      const totalNilaiSisa = sisaFisik * barang.hargaSatuan;
-
-      return {
-        ...barang,
-        saldoAwalVolume: barang.stokAwal,
-        saldoAwalNilai: barang.stokAwal * barang.hargaSatuan,
-        masukVolume: masuk,
-        masukNilai: masuk * barang.hargaSatuan,
-        keluarVolume: keluar,
-        keluarNilai: keluar * barang.hargaSatuan,
-        sisaFisikVolume: sisaFisik,
-        sisaFisikNilai: totalNilaiSisa
-      };
-    });
+        return {
+          ...barang,
+          saldoAwalVolume: accumulatedStokAwal,
+          saldoAwalNilai: accumulatedStokAwal * harga,
+          masukVolume: masuk,
+          masukNilai: masuk * harga,
+          keluarVolume: keluar,
+          keluarNilai: keluar * harga,
+          sisaFisikVolume: sisaFisik,
+          sisaFisikNilai: totalNilaiSisa
+        };
+      })
+      .filter(item => (item.saldoAwalVolume > 0 || item.masukVolume > 0 || item.keluarVolume > 0 || item.sisaFisikVolume > 0));
   }, [masterBarang, transaksiPenerimaanList, transaksiPengeluaranList, cutoffDateString]);
 
   // Group summary by standard Kode Rekening Belanja

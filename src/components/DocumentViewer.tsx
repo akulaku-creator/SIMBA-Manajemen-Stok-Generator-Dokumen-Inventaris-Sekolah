@@ -597,6 +597,7 @@ export const DocumentViewer: React.FC<Props> = ({
               {docType === 'buku_penerimaan' && (
                 <DocBukuPenerimaan
                   transaksiPenerimaanList={transaksiPenerimaanList}
+                  masterBarang={masterBarang}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
                   settings={{
@@ -614,6 +615,7 @@ export const DocumentViewer: React.FC<Props> = ({
               {docType === 'buku_pengeluaran' && (
                 <DocBukuPengeluaran
                   transaksiPengeluaranList={transaksiList}
+                  masterBarang={masterBarang}
                   kopConfig={kopConfig}
                   pejabatList={effectivePejabatList}
                   settings={{

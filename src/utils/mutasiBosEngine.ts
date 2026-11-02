@@ -1,5 +1,5 @@
 import { Barang, KopSuratConfig, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
-import { buildMergeKey } from './barangDeduplicationHelper';
+import { buildMergeKey, getCleanMutationData, CleanMutationItem } from './barangDeduplicationHelper';
 
 export const NAMA_BULAN = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -93,6 +93,7 @@ export interface MutasiBOSCalculationResult {
 /**
  * Core Engine: Menghitung seluruh mutasi saldo barang per bulan (Januari - Desember)
  * dan mengelompokkannya per Kode Rekening Belanja.
+ * Menggunakan Single Source of Truth terpusat (getCleanMutationData).
  */
 export function calculateMutasiBOSData(
   masterBarang: Barang[],
@@ -103,54 +104,28 @@ export function calculateMutasiBOSData(
 ): MutasiBOSCalculationResult {
   const dynamicSchool = kopConfig?.namaSekolah?.trim() || 'SMAN 1 CIHAURBEUTI';
 
-  // 1. Filter transaksi berdasarkan tahun
-  const penerimaanTahunIni = (transaksiPenerimaanList || []).filter(p => {
-    if (!p.tanggal) return false;
-    const y = new Date(p.tanggal).getFullYear();
-    return y === targetYear;
-  });
+  // 1. Ekstraksi data mutasi bersih dengan Left Join dari transaksi riil & deduplikasi terpusat
+  // Menghilangkan baris kosong/ganda yang tidak memiliki riwayat transaksi atau saldo awal sah
+  const cleanItems: CleanMutationItem[] = getCleanMutationData(
+    masterBarang,
+    transaksiPenerimaanList,
+    transaksiPengeluaranList,
+    { targetYear, excludeBelanjaModal: true, requireActivity: true }
+  );
 
-  const pengeluaranTahunIni = (transaksiPengeluaranList || []).filter(t => {
-    if (!t.tanggal) return false;
-    const y = new Date(t.tanggal).getFullYear();
-    return y === targetYear;
-  });
+  // 2. Kelompokkan per Kode Rekening Belanja
+  const groupedMap = new Map<string, { namaRekening: string; items: CleanMutationItem[] }>();
 
-  // 2. Eksklusi Belanja Modal & Deduplikasi Otomatis Barang Unik:
-  // Memastikan laporan mutasi hanya memuat 1 baris per barang unik (mencegah duplikasi baris & mutasi ganda)
-  const masterBarangBHP = (masterBarang || []).filter(b => b.jenisBarang !== 'Belanja Modal');
-
-  const uniqueBhpMap = new Map<string, Barang>();
-  const idAliasMap = new Map<string, string>(); // duplicate ID -> primary unique ID
-
-  masterBarangBHP.forEach(b => {
-    const uniqueKey = buildMergeKey(b);
-
-    if (!uniqueBhpMap.has(uniqueKey)) {
-      uniqueBhpMap.set(uniqueKey, { ...b });
-    } else {
-      // Gabungkan relasi barang kembar ke entri master unik pertama & akumulasikan stok
-      const primary = uniqueBhpMap.get(uniqueKey)!;
-      idAliasMap.set(b.id, primary.id);
-      primary.stokAwal = (primary.stokAwal || 0) + (b.stokAwal || 0);
-      primary.stokSekarang = (primary.stokSekarang || 0) + (b.stokSekarang || 0);
-    }
-  });
-
-  const uniqueMasterBarangBHP = Array.from(uniqueBhpMap.values());
-
-  const groupedMap = new Map<string, { namaRekening: string; items: Barang[] }>();
-
-  uniqueMasterBarangBHP.forEach(b => {
-    const kodering = b.kodeRekening || '5.1.02.01.01.0024';
-    const namaRekening = b.namaRekening || 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor';
+  cleanItems.forEach(item => {
+    const kodering = item.kodeRekening || '5.1.02.01.01.0024';
+    const namaRekening = item.namaRekening || 'Belanja Alat/Bahan untuk Kegiatan Kantor-Alat Tulis Kantor';
     if (!groupedMap.has(kodering)) {
       groupedMap.set(kodering, { namaRekening, items: [] });
     }
-    groupedMap.get(kodering)!.items.push(b);
+    groupedMap.get(kodering)!.items.push(item);
   });
 
-  // Urutkan kode rekening
+  // Urutkan kode rekening secara leksikografis standar BAS Pemda
   const sortedKoderings = Array.from(groupedMap.keys()).sort();
 
   const kelompokRekening: KelompokKodeRekening[] = [];
@@ -159,7 +134,6 @@ export function calculateMutasiBOSData(
     const group = groupedMap.get(kodering)!;
     const itemsResult: MutasiBarangItem[] = [];
 
-    // Subtotal penampung
     let subtotalSaldoAwal = 0;
     const subtotalBulanan = NAMA_BULAN.map((namaBulan, bulanIndex) => ({
       bulanIndex,
@@ -169,159 +143,52 @@ export function calculateMutasiBOSData(
       totalSaldoAkhirRp: 0,
     }));
 
-    group.items.forEach(barang => {
-      const saldoAwalVolume = barang.stokAwal || 0;
-      const hargaSatuan = barang.hargaSatuan || 0;
-      const saldoAwalJumlahRp = saldoAwalVolume * hargaSatuan;
-      subtotalSaldoAwal += saldoAwalJumlahRp;
+    // Urutkan barang di dalam rekening berdasarkan nama barang
+    const sortedGroupItems = [...group.items].sort((a, b) => a.namaBarang.localeCompare(b.namaBarang));
 
-      let runningVolume = saldoAwalVolume;
-      const mutasiBulanan: MutasiBulanDetail[] = [];
+    sortedGroupItems.forEach(item => {
+      subtotalSaldoAwal += item.saldoAwalJumlahRp;
 
-      for (let m = 0; m < 12; m++) {
-        // Cari barang masuk pada bulan m dengan validasi relasi langsung ke Tabel Penerimaan
-        let masukVol = 0;
-        let masukRp = 0;
-        let hasRealPenerimaanTrx = false;
+      const mutasiBulanan: MutasiBulanDetail[] = item.mutasiBulanan.map(mb => {
+        // Akumulasikan ke subtotal kodering
+        subtotalBulanan[mb.bulanIndex].totalMasukRp += mb.masukJumlahRp;
+        subtotalBulanan[mb.bulanIndex].totalKeluarRp += mb.keluarJumlahRp;
+        subtotalBulanan[mb.bulanIndex].totalSaldoAkhirRp += mb.saldoAkhirJumlahRp;
 
-        penerimaanTahunIni.forEach(p => {
-          const dt = new Date(p.tanggal);
-          if (dt.getMonth() === m) {
-            p.items?.forEach(it => {
-              // 1. Validasi kecocokan barang (ID langsung, Alias ID yang dimerge, Kode, atau Nama)
-              const resolvedId = it.barangId ? (idAliasMap.get(it.barangId) || it.barangId) : '';
-              const isIdMatch = Boolean(resolvedId && resolvedId === barang.id);
-              const isCodeMatch = Boolean(it.kodeBarang && barang.kodeBarang && it.kodeBarang.trim().toLowerCase() === barang.kodeBarang.trim().toLowerCase());
-              const isNameMatch = Boolean(it.namaBarang && barang.namaBarang && it.namaBarang.toLowerCase().trim() === barang.namaBarang.toLowerCase().trim());
-              
-              // 2. Validasi keterikatan Kode Rekening (mencegah phantom inter-kodering cross match)
-              const isRekeningMatch = !it.kodeRekening || it.kodeRekening === kodering;
-
-              if ((isIdMatch || isCodeMatch || isNameMatch) && isRekeningMatch && it.jumlahMasuk > 0) {
-                hasRealPenerimaanTrx = true;
-                masukVol += it.jumlahMasuk;
-                const effectivePrice = it.hargaSatuan && it.hargaSatuan > 0 ? it.hargaSatuan : hargaSatuan;
-                masukRp += (it.jumlahMasuk * effectivePrice);
-              }
-            });
-          }
-        });
-
-        // Validasi anti-phantom: Jika tidak ada transaksi penerimaan riil pada bulan bersangkutan, paksa 0
-        if (!hasRealPenerimaanTrx) {
-          masukVol = 0;
-          masukRp = 0;
-        }
-
-        // Cari barang keluar pada bulan m dengan validasi relasi langsung ke Tabel Pengeluaran (SPB/BAST)
-        let keluarVol = 0;
-        let keluarRp = 0;
-        let hasRealPengeluaranTrx = false;
-
-        pengeluaranTahunIni.forEach(t => {
-          const dt = new Date(t.tanggal);
-          if (dt.getMonth() === m) {
-            t.items?.forEach(it => {
-              const resolvedId = it.barangId ? (idAliasMap.get(it.barangId) || it.barangId) : '';
-              const isIdMatch = Boolean(resolvedId && resolvedId === barang.id);
-              const isCodeMatch = Boolean(it.kodeBarang && barang.kodeBarang && it.kodeBarang.trim().toLowerCase() === barang.kodeBarang.trim().toLowerCase());
-              const isNameMatch = Boolean(it.namaBarang && barang.namaBarang && it.namaBarang.toLowerCase().trim() === barang.namaBarang.toLowerCase().trim());
-
-              const isRekeningMatch = !it.kodeRekening || it.kodeRekening === kodering;
-
-              if ((isIdMatch || isCodeMatch || isNameMatch) && isRekeningMatch && (it.usulanJumlah || 0) > 0) {
-                hasRealPengeluaranTrx = true;
-                const qty = it.usulanJumlah || 0;
-                const effectivePrice = it.hargaSatuan && it.hargaSatuan > 0 ? it.hargaSatuan : hargaSatuan;
-                keluarVol += qty;
-                keluarRp += (qty * effectivePrice);
-              }
-            });
-          }
-        });
-
-        // Validasi anti-phantom: Jika tidak ada transaksi pengeluaran riil pada bulan bersangkutan, paksa 0
-        if (!hasRealPengeluaranTrx) {
-          keluarVol = 0;
-          keluarRp = 0;
-        }
-
-        // Saldo akhir bulan m
-        runningVolume = Math.max(0, runningVolume + masukVol - keluarVol);
-        const saldoAkhirRp = runningVolume * hargaSatuan;
-
-        mutasiBulanan.push({
-          bulanIndex: m,
-          namaBulan: NAMA_BULAN[m],
-          masukVolume: masukVol,
-          masukSatuan: barang.satuan,
-          masukHargaSatuan: hargaSatuan,
-          masukJumlahRp: masukRp,
-          keluarVolume: keluarVol,
-          keluarSatuan: barang.satuan,
-          keluarHargaSatuan: hargaSatuan,
-          keluarJumlahRp: keluarRp,
-          saldoAkhirVolume: runningVolume,
-          saldoAkhirSatuan: barang.satuan,
-          saldoAkhirHargaSatuan: hargaSatuan,
-          saldoAkhirJumlahRp: saldoAkhirRp,
-        });
-
-        // Akumulasikan ke subtotal rekening
-        subtotalBulanan[m].totalMasukRp += masukRp;
-        subtotalBulanan[m].totalKeluarRp += keluarRp;
-        subtotalBulanan[m].totalSaldoAkhirRp += saldoAkhirRp;
-      }
+        return {
+          bulanIndex: mb.bulanIndex,
+          namaBulan: mb.namaBulan,
+          masukVolume: mb.masukVolume,
+          masukSatuan: item.satuan,
+          masukHargaSatuan: item.hargaSatuan,
+          masukJumlahRp: mb.masukJumlahRp,
+          keluarVolume: mb.keluarVolume,
+          keluarSatuan: item.satuan,
+          keluarHargaSatuan: item.hargaSatuan,
+          keluarJumlahRp: mb.keluarJumlahRp,
+          saldoAkhirVolume: mb.saldoAkhirVolume,
+          saldoAkhirSatuan: item.satuan,
+          saldoAkhirHargaSatuan: item.hargaSatuan,
+          saldoAkhirJumlahRp: mb.saldoAkhirJumlahRp,
+        };
+      });
 
       itemsResult.push({
-        id: barang.id,
-        kodeBarang: barang.kodeBarang,
-        namaBarang: barang.namaBarang,
+        id: item.id,
+        kodeBarang: item.kodeBarang,
+        namaBarang: item.namaBarang,
         kodeRekening: kodering,
         namaRekening: group.namaRekening,
-        satuan: barang.satuan,
-        hargaSatuan,
-        saldoAwalVolume,
-        saldoAwalSatuan: barang.satuan,
-        saldoAwalHargaSatuan: hargaSatuan,
-        saldoAwalJumlahRp,
+        satuan: item.satuan,
+        hargaSatuan: item.hargaSatuan,
+        saldoAwalVolume: item.saldoAwalVolume,
+        saldoAwalSatuan: item.satuan,
+        saldoAwalHargaSatuan: item.hargaSatuan,
+        saldoAwalJumlahRp: item.saldoAwalJumlahRp,
         mutasiBulanan,
-        keterangan: barang.spesifikasi || barang.lokasiGudang || '',
+        keterangan: item.spesifikasi || item.keterangan || '',
       });
     });
-
-    // Validasi Rekapitulasi Tingkat Kodering:
-    // Pastikan jika tidak ada transaksi riil masuk/keluar untuk kodering ini, nominal dipaksa 0 secara konsisten
-    for (let m = 0; m < 12; m++) {
-      let anyPenerimaanThisKodering = false;
-      penerimaanTahunIni.forEach(p => {
-        const dt = new Date(p.tanggal);
-        if (dt.getMonth() === m) {
-          p.items?.forEach(it => {
-            const matchKodering = it.kodeRekening === kodering || group.items.some(b => b.id === it.barangId);
-            if (matchKodering && it.jumlahMasuk > 0) anyPenerimaanThisKodering = true;
-          });
-        }
-      });
-
-      let anyPengeluaranThisKodering = false;
-      pengeluaranTahunIni.forEach(t => {
-        const dt = new Date(t.tanggal);
-        if (dt.getMonth() === m) {
-          t.items?.forEach(it => {
-            const matchKodering = it.kodeRekening === kodering || group.items.some(b => b.id === it.barangId);
-            if (matchKodering && (it.usulanJumlah || 0) > 0) anyPengeluaranThisKodering = true;
-          });
-        }
-      });
-
-      if (!anyPenerimaanThisKodering) {
-        subtotalBulanan[m].totalMasukRp = 0;
-      }
-      if (!anyPengeluaranThisKodering) {
-        subtotalBulanan[m].totalKeluarRp = 0;
-      }
-    }
 
     kelompokRekening.push({
       kodeRekening: kodering,
