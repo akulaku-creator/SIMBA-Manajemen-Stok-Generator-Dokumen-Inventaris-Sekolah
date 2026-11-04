@@ -4,6 +4,7 @@ import {
   Boxes, 
   Building2, 
   Check, 
+  ChevronDown,
   Copy,
   Download,
   Edit3, 
@@ -91,19 +92,18 @@ export const MasterBarangTable: React.FC<Props> = ({
     return auditDuplicateMasterBarang(barangList, transaksiList, penerimaanList);
   }, [barangList, transaksiList, penerimaanList]);
   
-  // Fitur Pencarian Cepat Kolom Kategori & Kode Rekening
-  const [categorySearch, setCategorySearch] = useState<string>('');
-  const [isCatSearchOpen, setIsCatSearchOpen] = useState<boolean>(false);
-  const catSearchContainerRef = useRef<HTMLDivElement>(null);
+  // Dropdown 'Aksi Lainnya' State & Ref
+  const [isAksiLainnyaOpen, setIsAksiLainnyaOpen] = useState<boolean>(false);
+  const aksiLainnyaRef = useRef<HTMLDivElement>(null);
 
-  // Close suggestions dropdown when clicking outside
+  // Close dropdown 'Aksi Lainnya' when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        catSearchContainerRef.current &&
-        !catSearchContainerRef.current.contains(event.target as Node)
+        aksiLainnyaRef.current &&
+        !aksiLainnyaRef.current.contains(event.target as Node)
       ) {
-        setIsCatSearchOpen(false);
+        setIsAksiLainnyaOpen(false);
       }
     };
 
@@ -203,44 +203,7 @@ export const MasterBarangTable: React.FC<Props> = ({
     }
   };
 
-  // Saran Kategori berdasarkan teks yang diketik pada kolom kategori (Dinamis dari master aktif)
-  const categorySuggestions = useMemo(() => {
-    const q = categorySearch.trim().toLowerCase();
-    const source = allCategoryItems.map(item => ({
-      kode: item.kodeRekening || '',
-      nama: item.namaRekening || item.nama,
-      jenisAset: item.jenisDefault || (item.kodeRekening?.startsWith('5.2') ? 'Belanja Modal' : 'BHP')
-    }));
 
-    if (!q) {
-      return source.slice(0, 10);
-    }
-    return source.filter(
-      item =>
-        item.kode.toLowerCase().includes(q) ||
-        item.nama.toLowerCase().includes(q)
-    ).slice(0, 15);
-  }, [categorySearch, allCategoryItems]);
-
-  // Helper untuk menyorot kata kunci pencarian kategori
-  const highlightMatch = (text: string, query: string) => {
-    if (!query.trim() || !text) return text;
-    const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === query.trim().toLowerCase() ? (
-            <mark key={i} className="bg-yellow-200 text-yellow-950 px-0.5 rounded font-bold">
-              {part}
-            </mark>
-          ) : (
-            part
-          )
-        )}
-      </>
-    );
-  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
@@ -367,7 +330,6 @@ export const MasterBarangTable: React.FC<Props> = ({
     }
 
     const query = search ? search.trim().toLowerCase() : '';
-    const qCat = categorySearch ? categorySearch.trim().toLowerCase() : '';
 
     return barangList.filter(item => {
       // 1. Filter berdasarkan Tab Jenis Aset (Semua / BHP / Modal)
@@ -409,16 +371,9 @@ export const MasterBarangTable: React.FC<Props> = ({
         (item.namaRekening && item.namaRekening.toLowerCase().includes(query))
       );
 
-      // 4. Filter kolom pencarian kategori tambahan jika aktif
-      const matchCatSearch = !qCat || Boolean(
-        (item.kategori && item.kategori.toLowerCase().includes(qCat)) ||
-        (item.kodeRekening && item.kodeRekening.toLowerCase().includes(qCat)) ||
-        (item.namaRekening && item.namaRekening.toLowerCase().includes(qCat))
-      );
-
-      return matchTab && matchCategory && matchSearch && matchCatSearch;
+      return matchTab && matchCategory && matchSearch;
     });
-  }, [barangList, search, filterJenis, filterKategori, categorySearch, allCategoryItems]);
+  }, [barangList, search, filterJenis, filterKategori, allCategoryItems]);
 
   // Label display untuk kategori yang sedang aktif difilter
   const selectedCategoryDisplayLabel = useMemo(() => {
@@ -458,13 +413,15 @@ export const MasterBarangTable: React.FC<Props> = ({
     }
   };
 
-  const handleOpenAdd = () => {
+  const handleOpenAdd = (targetJenis?: JenisBarang) => {
     setEditingId(null);
     setAutoGenerateKode(true);
+    const chosenJenis: JenisBarang = targetJenis || (filterJenis === 'Belanja Modal' ? 'Belanja Modal' : 'BHP');
     const nextNusp = `${String(barangList.length + 1).padStart(4, '0')}/2026`;
-    const defaultKode = '5.1.02.01.01.0024';
+    const defaultKode = chosenJenis === 'Belanja Modal' ? '5.2.02.05.01.0005' : '5.1.02.01.01.0024';
     const defaultNama = getNamaRekeningByKode(defaultKode);
-    const autoKode = generateAutoKode(defaultNama, 'BHP', null);
+    const autoKode = generateAutoKode(defaultNama, chosenJenis, null);
+    const defaultHarga = chosenJenis === 'Belanja Modal' ? 7500000 : 25000;
 
     setFormData({
       kodeBarang: autoKode,
@@ -474,14 +431,14 @@ export const MasterBarangTable: React.FC<Props> = ({
       namaBarang: '',
       spesifikasi: '',
       kategori: defaultNama,
-      satuan: 'Pcs',
-      hargaSatuan: 25000,
-      stokAwal: 10,
-      stokSekarang: 10,
-      lokasiGudang: 'Gudang TU',
-      jenisBarang: 'BHP'
+      satuan: chosenJenis === 'Belanja Modal' ? 'Unit' : 'Pcs',
+      hargaSatuan: defaultHarga,
+      stokAwal: chosenJenis === 'Belanja Modal' ? 1 : 10,
+      stokSekarang: chosenJenis === 'Belanja Modal' ? 1 : 10,
+      lokasiGudang: chosenJenis === 'Belanja Modal' ? 'Lab Komputer / Ruang Guru' : 'Gudang TU',
+      jenisBarang: chosenJenis
     });
-    setDisplayHarga('25.000');
+    setDisplayHarga(defaultHarga.toLocaleString('id-ID'));
     setIsModalOpen(true);
   };
 
@@ -619,84 +576,152 @@ export const MasterBarangTable: React.FC<Props> = ({
           </p>
         </div>
 
-        {/* 3 Tombol Aksi Utama: Export ke Excel, Import dari Excel, + Tambah Barang Baru */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Export Excel Button (Hijau / Emerald) dengan Proteksi Non-blocking & Loading State */}
-          <button
-            type="button"
-            id="btn-export-excel"
-            onClick={handleExportExcelAsync}
-            disabled={isExportingExcel}
-            className={`inline-flex items-center gap-1.5 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 ${
-              isExportingExcel 
-                ? 'bg-emerald-700/80 cursor-wait opacity-85' 
-                : 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
-            }`}
-            title={`Ekspor ${filtered.length} data barang ke berkas Excel (.xlsx) secara non-blocking`}
-          >
-            {isExportingExcel ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0"></div>
-                <span>{exportProgress?.statusText || 'Memproses File Excel...'}</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-4 h-4" />
-                <span>Export ke Excel</span>
-              </>
+        {/* Grup Tombol Aksi: Aksi Lainnya (Dropdown) & + Tambah Barang Baru (Utama) */}
+        <div className="flex items-center gap-2">
+          {/* Dropdown Menu Aksi Lainnya */}
+          <div className="relative inline-block text-left" ref={aksiLainnyaRef}>
+            <button
+              type="button"
+              id="btn-aksi-lainnya"
+              onClick={() => setIsAksiLainnyaOpen(prev => !prev)}
+              className={`inline-flex items-center gap-2 text-xs font-semibold px-3.5 py-2 rounded-lg border transition-all active:scale-98 cursor-pointer shadow-2xs ${
+                isAksiLainnyaOpen
+                  ? 'bg-slate-100 text-slate-900 border-slate-300 ring-2 ring-blue-500/20'
+                  : duplicateStats.totalBarangGanda > 0
+                  ? 'bg-amber-50 hover:bg-amber-100/80 text-amber-900 border-amber-300'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
+              }`}
+              title="Aksi Tambahan: Export, Import, Kelola Kategori, dan Gabung Data Kembar"
+              aria-haspopup="true"
+              aria-expanded={isAksiLainnyaOpen}
+            >
+              <span>Aksi Lainnya</span>
+              {duplicateStats.totalBarangGanda > 0 && (
+                <span className="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500 text-white leading-none">
+                  {duplicateStats.totalBarangGanda}
+                </span>
+              )}
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform duration-200 ${isAksiLainnyaOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown Popup Content */}
+            {isAksiLainnyaOpen && (
+              <div className="absolute right-0 mt-1.5 w-72 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-1.5 border-b border-slate-100 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Opsi &amp; Alat Inventaris
+                </div>
+
+                {/* 1. Export ke Excel */}
+                <button
+                  type="button"
+                  disabled={isExportingExcel}
+                  onClick={() => {
+                    setIsAksiLainnyaOpen(false);
+                    handleExportExcelAsync();
+                  }}
+                  className="w-full text-left px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-emerald-50/60 text-slate-700 hover:text-emerald-800 transition-colors cursor-pointer group disabled:opacity-50"
+                  title="Unduh data barang saat ini dalam format berkas Excel (.xlsx)"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 group-hover:bg-emerald-100 transition-colors">
+                    {isExportingExcel ? (
+                      <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 group-hover:text-emerald-800">Export ke Excel (.xlsx)</div>
+                    <div className="text-[10px] text-slate-500">Unduh {filtered.length} data inventaris aktif</div>
+                  </div>
+                </button>
+
+                {/* 2. Import dari Excel */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAksiLainnyaOpen(false);
+                    setIsImportModalOpen(true);
+                  }}
+                  className="w-full text-left px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-blue-50/60 text-slate-700 hover:text-blue-800 transition-colors cursor-pointer group"
+                  title="Impor data barang dari template Excel atau CSV"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+                    <FileSpreadsheet className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 group-hover:text-blue-800">Import dari Excel</div>
+                    <div className="text-[10px] text-slate-500">Unggah berkas .xlsx, .xls, .csv</div>
+                  </div>
+                </button>
+
+                {/* 3. Gabung Data Kembar (Deduplikasi) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAksiLainnyaOpen(false);
+                    setIsDeduplicateModalOpen(true);
+                  }}
+                  className="w-full text-left px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-amber-50/60 text-slate-700 hover:text-amber-800 transition-colors cursor-pointer group"
+                  title="Audit dan gabungkan barang yang memiliki kesamaan nama, rekening, dan harga"
+                >
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                    duplicateStats.totalBarangGanda > 0
+                      ? 'bg-amber-100 text-amber-700 group-hover:bg-amber-200'
+                      : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                  }`}>
+                    <GitMerge className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 font-semibold text-slate-900 group-hover:text-amber-800">
+                      <span>Gabung Data Kembar</span>
+                      {duplicateStats.totalBarangGanda > 0 && (
+                        <span className="px-1.5 py-0.2 text-[9px] font-bold rounded-full bg-amber-500 text-white">
+                          {duplicateStats.totalBarangGanda}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-500">
+                      {duplicateStats.totalBarangGanda > 0
+                        ? `${duplicateStats.totalBarangGanda} barang ganda terdeteksi`
+                        : 'Audit & gabungkan barang dobel'}
+                    </div>
+                  </div>
+                </button>
+
+                <div className="my-1 border-t border-slate-100"></div>
+
+                {/* 4. Kelola Kategori & Rekening */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAksiLainnyaOpen(false);
+                    setIsKategoriModalOpen(true);
+                  }}
+                  className="w-full text-left px-3.5 py-2.5 text-xs flex items-center gap-2.5 hover:bg-indigo-50/60 text-slate-700 hover:text-indigo-800 transition-colors cursor-pointer group"
+                  title="Manajemen 40 kode rekening belanja resmi dan kategori dinamis"
+                >
+                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
+                    <Tag className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-slate-900 group-hover:text-indigo-800">Kelola Kategori &amp; Rekening</div>
+                    <div className="text-[10px] text-slate-500">40 Akun belanja resmi Pemda</div>
+                  </div>
+                </button>
+              </div>
             )}
-          </button>
-
-          {/* Import Excel Button (Hijau / Emerald) */}
-          <button
-            type="button"
-            onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
-            title="Import inventaris barang dari file Excel (.xlsx, .xls, .csv)"
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            Import dari Excel
-          </button>
-
-          {/* Kelola Kategori & Kode Rekening Belanja Button */}
-          <button
-            type="button"
-            onClick={() => setIsKategoriModalOpen(true)}
-            className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
-            title="Kelola Master Kategori & Kode Rekening Belanja secara dinamis"
-          >
-            <Tag className="w-4 h-4" />
-            <span>Kelola Kategori &amp; Rekening</span>
-          </button>
-
-          {/* Bersihkan Data Ganda (Deduplikasi & Penggabungan Transaksi) */}
-          <button
-            type="button"
-            onClick={() => setIsDeduplicateModalOpen(true)}
-            className={`inline-flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer ${
-              duplicateStats.totalBarangGanda > 0
-                ? 'bg-amber-600 hover:bg-amber-700 text-white ring-2 ring-amber-300'
-                : 'bg-slate-700 hover:bg-slate-800 text-white'
-            }`}
-            title={`Audit & Gabungkan Data Barang Kembar (${duplicateStats.totalBarangGanda} terdeteksi berdasarkan kesamaan Nama, Rekening, dan Harga)`}
-          >
-            <GitMerge className="w-4 h-4" />
-            <span>Gabung Data Kembar</span>
-            {duplicateStats.totalBarangGanda > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-white text-amber-700 leading-none">
-                {duplicateStats.totalBarangGanda}
-              </span>
-            )}
-          </button>
+          </div>
 
           {/* Tambah Barang Baru Button (Biru Utama) */}
           <button
             type="button"
-            onClick={handleOpenAdd}
-            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
+            id="btn-tambah-barang-utama"
+            onClick={() => handleOpenAdd()}
+            className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer shrink-0"
+            title="Tambah item inventaris barang baru ke sistem"
           >
             <Plus className="w-4 h-4" />
-            Tambah Barang Baru
+            <span>Tambah Barang Baru</span>
           </button>
         </div>
       </div>
@@ -829,7 +854,7 @@ export const MasterBarangTable: React.FC<Props> = ({
         </div>
 
         {/* Active Filter Tags */}
-        {(categorySearch || filterKategori !== 'Semua') && (
+        {(filterKategori !== 'Semua' || search) && (
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 text-xs">
             {filterKategori !== 'Semua' && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-800 font-semibold text-xs">
@@ -846,18 +871,15 @@ export const MasterBarangTable: React.FC<Props> = ({
               </span>
             )}
 
-            {categorySearch && (
+            {search && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-800 font-semibold text-xs">
                 <Search className="w-3 h-3 text-blue-600" />
-                <span>Kolom: &quot;{categorySearch}&quot;</span>
+                <span>Pencarian: &quot;{search}&quot;</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setCategorySearch('');
-                    setIsCatSearchOpen(false);
-                  }}
+                  onClick={() => setSearch('')}
                   className="hover:bg-blue-200/60 p-0.5 rounded-full text-blue-700 hover:text-blue-900 cursor-pointer ml-0.5 transition-colors"
-                  title="Hapus filter kolom kategori"
+                  title="Hapus kata kunci pencarian"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -904,110 +926,11 @@ export const MasterBarangTable: React.FC<Props> = ({
                 <th className="p-3.5 w-28">NUSP</th>
                 <th className="p-3.5">Nama &amp; Spesifikasi Barang</th>
                 
-                {/* Kolom Kategori dengan Fitur Pencarian Cepat */}
-                <th className="p-3 w-80 align-top normal-case">
-                  <div className="flex items-center justify-between gap-1 mb-1.5 uppercase tracking-wider text-[11px] font-semibold text-slate-700">
-                    <span className="flex items-center gap-1">
-                      <Tag className="w-3.5 h-3.5 text-blue-600" />
-                      Kategori &amp; Rekening
-                    </span>
-                    {categorySearch && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCategorySearch('');
-                          setIsCatSearchOpen(false);
-                        }}
-                        className="inline-flex items-center gap-0.5 text-[10px] text-rose-600 hover:text-rose-700 font-semibold bg-rose-50 hover:bg-rose-100 border border-rose-200 px-1.5 py-0.5 rounded cursor-pointer transition-colors normal-case"
-                        title="Reset filter kategori"
-                      >
-                        <X className="w-3 h-3" />
-                        <span>Reset</span>
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Search input pada kolom kategori */}
-                  <div className="relative font-normal" ref={catSearchContainerRef}>
-                    <div className="relative">
-                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={categorySearch}
-                        onChange={(e) => {
-                          setCategorySearch(e.target.value);
-                          setIsCatSearchOpen(true);
-                        }}
-                        onFocus={() => setIsCatSearchOpen(true)}
-                        placeholder="Ketik kode (0024) atau nama..."
-                        className={`w-full text-xs font-normal normal-case pl-8 pr-7 py-1.5 bg-white border rounded-lg text-slate-800 placeholder-slate-400 focus:outline-hidden transition-all shadow-2xs ${
-                          categorySearch
-                            ? 'border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/20 font-medium'
-                            : 'border-slate-300 hover:border-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
-                        }`}
-                      />
-                      {categorySearch && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCategorySearch('');
-                            setIsCatSearchOpen(false);
-                          }}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer p-0.5 rounded"
-                          title="Kosongkan filter kategori"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Popover Suggestions */}
-                    {isCatSearchOpen && (
-                      <div className="absolute left-0 top-full mt-1 w-88 max-w-[90vw] bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 text-left normal-case">
-                        <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                          <span className="font-semibold text-slate-700">Pilih dari Master Rekening</span>
-                          <span className="text-[10px]">Ketik untuk memfilter</span>
-                        </div>
-                        <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
-                          {categorySuggestions.length === 0 ? (
-                            <div className="p-3 text-center text-xs text-slate-500">
-                              Tidak ditemukan rekening &quot;{categorySearch}&quot;
-                            </div>
-                          ) : (
-                            categorySuggestions.map((item) => {
-                              const isSelected =
-                                categorySearch.toLowerCase() === item.nama.toLowerCase() ||
-                                categorySearch.toLowerCase() === item.kode.toLowerCase();
-                              return (
-                                <button
-                                  key={item.kode}
-                                  type="button"
-                                  onClick={() => {
-                                    setCategorySearch(item.nama);
-                                    setIsCatSearchOpen(false);
-                                  }}
-                                  className={`w-full text-left px-3 py-2 text-xs hover:bg-blue-50/80 transition-colors flex flex-col gap-0.5 cursor-pointer ${
-                                    isSelected ? 'bg-blue-50 text-blue-900 font-semibold' : 'text-slate-800'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.2 rounded">
-                                      {item.kode}
-                                    </span>
-                                    <span className="text-[10px] text-slate-500 uppercase font-medium">
-                                      {item.jenisAset}
-                                    </span>
-                                  </div>
-                                  <div className="text-[11px] text-slate-700 line-clamp-1 leading-snug">
-                                    {item.nama}
-                                  </div>
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
+                {/* Kolom Kategori & Rekening (Header Bersih & Rapi) */}
+                <th className="p-3.5 w-60 text-left">
+                  <div className="flex items-center gap-1.5 uppercase tracking-wider text-[11px] font-semibold text-slate-700">
+                    <Tag className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Kategori &amp; Rekening</span>
                   </div>
                 </th>
 
@@ -1020,28 +943,170 @@ export const MasterBarangTable: React.FC<Props> = ({
             <tbody className="divide-y divide-slate-100">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="p-8 text-center text-slate-500">
-                    <div className="max-w-md mx-auto flex flex-col items-center gap-2">
-                      <Package className="w-8 h-8 text-slate-300" />
-                      <p className="font-medium text-slate-700">
-                        {categorySearch
-                          ? `Tidak ditemukan barang untuk kategori atau kode rekening "${categorySearch}".`
-                          : 'Tidak ditemukan data barang yang sesuai kriteria pencarian.'}
-                      </p>
-                      {(search || categorySearch || filterKategori !== 'Semua' || filterJenis !== 'Semua') && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSearch('');
-                            setCategorySearch('');
-                            setIsCatSearchOpen(false);
-                            setFilterKategori('Semua');
-                            setFilterJenis('Semua');
-                          }}
-                          className="mt-1 px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
-                        >
-                          Reset Semua Filter
-                        </button>
+                  <td colSpan={10} className="p-10 text-center">
+                    <div className="max-w-lg mx-auto flex flex-col items-center justify-center text-center py-4">
+                      {/* 1. Kasus Tab Belanja Modal Kosong */}
+                      {filterJenis === 'Belanja Modal' ? (
+                        <div className="space-y-3.5 animate-in fade-in duration-200">
+                          <div className="w-14 h-14 rounded-2xl bg-purple-100 text-purple-600 flex items-center justify-center mx-auto ring-8 ring-purple-50 shadow-xs">
+                            <Building2 className="w-7 h-7" />
+                          </div>
+                          <div>
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200 mb-1.5">
+                              Tab Belanja Modal / Aset Tetap
+                            </span>
+                            <h3 className="text-base font-bold text-slate-900">
+                              Belum Ada Aset Belanja Modal
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                              {search || filterKategori !== 'Semua'
+                                ? `Tidak ditemukan aset modal yang cocok dengan filter pencarian.`
+                                : 'Belum ada aset tetap yang tercatat (seperti PC, Laptop, Proyektor, atau Meubelair). Aset modal akan terakumulasi di Buku Inventaris & Aset Tetap.'}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdd('Belanja Modal')}
+                              className="inline-flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
+                              title="Tambah inventaris belanja modal baru"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Tambah Aset Belanja Modal Baru</span>
+                            </button>
+                            {(search || filterKategori !== 'Semua') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSearch('');
+                                  setFilterKategori('Semua');
+                                }}
+                                className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>Reset Filter</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : filterJenis === 'BHP' ? (
+                        /* 2. Kasus Tab BHP Kosong */
+                        <div className="space-y-3.5 animate-in fade-in duration-200">
+                          <div className="w-14 h-14 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto ring-8 ring-blue-50 shadow-xs">
+                            <Package className="w-7 h-7" />
+                          </div>
+                          <div>
+                            <span className="inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200 mb-1.5">
+                              Tab Barang Habis Pakai (BHP)
+                            </span>
+                            <h3 className="text-base font-bold text-slate-900">
+                              Belum Ada Barang Habis Pakai (BHP)
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                              {search || filterKategori !== 'Semua'
+                                ? `Tidak ditemukan barang BHP yang sesuai dengan pencarian atau kategori yang dipilih.`
+                                : 'Belum ada barang habis pakai operasional (ATK, kertas, perlengkapan kebersihan, toner, bahan praktikum) yang tercatat di sistem.'}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdd('BHP')}
+                              className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
+                              title="Tambah barang habis pakai baru"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Tambah Barang Habis Pakai Baru</span>
+                            </button>
+                            {(search || filterKategori !== 'Semua') && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSearch('');
+                                  setFilterKategori('Semua');
+                                }}
+                                className="inline-flex items-center gap-1 px-3.5 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                <span>Reset Filter</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (search || filterKategori !== 'Semua') ? (
+                        /* 3. Kasus Pencarian / Filter Kategori Tidak Ditemukan */
+                        <div className="space-y-3.5 animate-in fade-in duration-200">
+                          <div className="w-14 h-14 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto ring-8 ring-slate-50 shadow-xs">
+                            <Search className="w-7 h-7" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-slate-900">
+                              Tidak Ditemukan Data Barang
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
+                              Tidak ada barang inventaris yang sesuai dengan {search ? `kata kunci "${search}"` : ''} {selectedCategoryDisplayLabel ? `pada kategori "${selectedCategoryDisplayLabel}"` : ''}.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSearch('');
+                                setFilterKategori('Semua');
+                                setFilterJenis('Semua');
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5" />
+                              <span>Reset Semua Filter</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdd()}
+                              className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Tambah Barang Baru</span>
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* 4. Kasus Master Inventaris Masih Kosong Total */
+                        <div className="space-y-3.5 animate-in fade-in duration-200">
+                          <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto ring-8 ring-blue-50/50 shadow-xs">
+                            <Boxes className="w-7 h-7" />
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-slate-900">
+                              Master Inventaris Barang Masih Kosong
+                            </h3>
+                            <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                              Mulai kelola inventaris sekolah dengan menambahkan barang baru secara manual atau impor dari berkas Excel.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAdd()}
+                              className="inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-xs transition-all active:scale-98 cursor-pointer"
+                            >
+                              <Plus className="w-4 h-4" />
+                              <span>Tambah Barang Pertama</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setIsImportModalOpen(true)}
+                              className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors cursor-pointer"
+                            >
+                              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                              <span>Import dari Excel</span>
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
                   </td>
@@ -1077,16 +1142,12 @@ export const MasterBarangTable: React.FC<Props> = ({
                     </td>
                     <td className="p-3.5 text-slate-600">
                       <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                        <span className={`font-mono text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                          categorySearch && (b.kodeRekening || '5.1.02.01.01.0024').toLowerCase().includes(categorySearch.toLowerCase().trim())
-                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                            : 'text-blue-700 bg-blue-50 border border-blue-200/80'
-                        }`}>
-                          {highlightMatch(b.kodeRekening || '5.1.02.01.01.0024', categorySearch)}
+                        <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded text-blue-700 bg-blue-50 border border-blue-200/80">
+                          {b.kodeRekening || '5.1.02.01.01.0024'}
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-800 font-semibold leading-snug line-clamp-2" title={b.kategori || b.namaRekening}>
-                        {highlightMatch(b.kategori || b.namaRekening, categorySearch)}
+                        {b.kategori || b.namaRekening}
                       </div>
                     </td>
                     <td className="p-3.5 text-center font-medium text-slate-700">{b.satuan}</td>
