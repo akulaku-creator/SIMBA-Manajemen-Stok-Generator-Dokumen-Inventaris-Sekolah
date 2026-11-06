@@ -13,10 +13,10 @@ import {
 } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
 import { Barang, KopSuratConfig, Pejabat, TAHUN_ANGGARAN_OPTIONS, TransaksiPenerimaan, TransaksiPengeluaran } from '../../types';
-import { downloadBOSExcelFile } from '../../utils/excelBosGenerator';
+import { downloadBOSExcelFile, exportMutationToExcel } from '../../utils/excelBosGenerator';
 import { calculateMutasiBOSData, NAMA_BULAN } from '../../utils/mutasiBosEngine';
 import { formatRupiah } from '../../utils/numberGenerator';
-import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { resolveBendaharaBOS, resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
 import { SignatorySheetBOS } from './SignatoryBlocks';
 
 interface Props {
@@ -25,6 +25,7 @@ interface Props {
   transaksiPenerimaanList: TransaksiPenerimaan[];
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  pejabatSettings?: any;
   targetYear?: number;
   onOpenImportModal?: () => void;
 }
@@ -69,6 +70,7 @@ export const DocMutasiBOS: React.FC<Props> = ({
   transaksiPenerimaanList,
   kopConfig,
   pejabatList,
+  pejabatSettings,
   targetYear = 2026,
   onOpenImportModal
 }) => {
@@ -79,9 +81,10 @@ export const DocMutasiBOS: React.FC<Props> = ({
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(100);
 
-  // Pejabat for Signatures
-  const kepsek = resolveKepalaSekolah(pejabatList);
-  const pengurusBarang = resolvePengurusBarang(pejabatList);
+  // Pejabat for Signatures (Prioritas pejabatSettings aktif / master pegawai)
+  const kepsek = pejabatSettings?.kepalaSekolah || resolveKepalaSekolah(pejabatList);
+  const pengurusBarang = pejabatSettings?.pengurusBarang || pejabatSettings?.pengelolaPersediaan || resolvePengurusBarang(pejabatList);
+  const bendaharaBos = pejabatSettings?.bendahara || pejabatSettings?.bendaharaBos || resolveBendaharaBOS(pejabatList);
 
   // Calculate mutation data
   const calculation = useMemo(() => {
@@ -143,13 +146,36 @@ export const DocMutasiBOS: React.FC<Props> = ({
         kopConfig,
         pejabatList,
         selectedYear,
-        12 // Full 12 months in excel
+        12, // Full 12 months in excel
+        pejabatSettings
       );
     } catch (err) {
       console.error('Failed to export Excel:', err);
       alert('Gagal mengunduh file Excel. Pastikan data barang valid.');
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleExportSimpleExcel = () => {
+    try {
+      exportMutationToExcel(
+        calculation,
+        pejabatSettings || {
+          namaSekolah: kopConfig?.namaSekolah,
+          kepalaSekolah: { nama: kepsek.nama, nip: kepsek.nip, pangkat: kepsek.pangkat, jabatan: kepsek.jabatan },
+          bendahara: { nama: bendaharaBos.nama, nip: bendaharaBos.nip, pangkat: bendaharaBos.pangkat, jabatan: bendaharaBos.jabatan },
+          pengurusBarang: { nama: pengurusBarang.nama, nip: pengurusBarang.nip, pangkat: pengurusBarang.pangkat, jabatan: pengurusBarang.jabatan }
+        },
+        {
+          namaSekolah: kopConfig?.namaSekolah || 'SMAN 1 CIHAURBEUTI',
+          targetYear: selectedYear,
+          kotaSurat: kopConfig?.kota || 'Ciamis'
+        }
+      );
+    } catch (err) {
+      console.error('Failed to export quick Excel:', err);
+      alert('Gagal mengekspor file Excel.');
     }
   };
 
@@ -656,6 +682,10 @@ export const DocMutasiBOS: React.FC<Props> = ({
         <SignatorySheetBOS
           pejabatList={pejabatList}
           kopConfig={kopConfig}
+          pejabatSettings={pejabatSettings}
+          customKepalaSekolah={kepsek}
+          customBendaharaBos={bendaharaBos}
+          customPengurusBarang={pengurusBarang}
           tanggalSurat={`${selectedYear}-12-31`}
         />
       </div>

@@ -1,6 +1,12 @@
 import ExcelJS from 'exceljs';
 import { Barang, KopSuratConfig, Pejabat, TransaksiPenerimaan, TransaksiPengeluaran } from '../types';
 import { calculateMutasiBOSData, NAMA_BULAN } from './mutasiBosEngine';
+import { 
+  formatJabatanWithStatus, 
+  resolveBendaharaBOS, 
+  resolveKepalaSekolah, 
+  resolvePengurusBarang 
+} from './pejabatResolver';
 
 /**
  * Utility helper: convert 1-based column index to Excel column letter (1 -> A, 27 -> AA)
@@ -48,7 +54,8 @@ export async function generateBOSExcelWorkbook(
   kopConfig: KopSuratConfig,
   pejabatList: Pejabat[],
   targetYear: number = 2026,
-  monthsCount: number = 12 // default: all 12 months (Jan - Dec)
+  monthsCount: number = 12, // default: all 12 months (Jan - Dec)
+  pejabatSettings?: any
 ): Promise<ExcelJS.Workbook> {
   const calculation = calculateMutasiBOSData(
     masterBarang,
@@ -58,27 +65,44 @@ export async function generateBOSExcelWorkbook(
     targetYear
   );
 
-  const schoolName = calculation.namaSekolah;
+  const schoolName = calculation.namaSekolah || kopConfig?.namaSekolah || 'SMAN 1 CIHAURBEUTI';
   const numMonths = Math.min(12, Math.max(1, monthsCount));
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'SIMBA - Sistem Manajemen Mutasi Barang Sekolah';
   workbook.created = new Date();
 
-  // Find Pejabat for Signatures
-  const kepsek = pejabatList.find(p => p.id === 'pejabat-kepsek') || pejabatList[0] || {
-    nama: 'Drs. H. Bambang Suhartono, M.Pd.',
-    nip: '19680512 199303 1 005',
-    pangkatGolongan: 'Pembina Utama Muda / IV c',
-    jabatan: 'Kepala Sekolah'
-  };
+  // Resolve dynamic signatories from pejabatSettings / master pejabatList
+  // 1. KEPALA SEKOLAH (Kuasa Pengguna Anggaran)
+  const resolvedKepsek = resolveKepalaSekolah(pejabatList);
+  const rawKepsek = pejabatSettings?.kepalaSekolah || resolvedKepsek;
+  const kepsekNama = rawKepsek?.nama || 'Dadang Hendrayana, S.Pd.';
+  const kepsekNip = (rawKepsek?.nip && rawKepsek.nip !== '-' ? rawKepsek.nip : '197210101996031006');
+  const kepsekPangkat = rawKepsek?.pangkatGolongan || rawKepsek?.pangkat || 'Pembina Tk. I / IV b';
+  const kepsekJabatan = formatJabatanWithStatus(rawKepsek, {
+    defaultTitle: 'KEPALA SEKOLAH',
+    namaSekolah: schoolName,
+    includeSchoolName: true
+  }).toUpperCase();
 
-  const pengurusBarang = pejabatList.find(p => p.id === 'pejabat-pengurus-barang') || pejabatList[2] || {
-    nama: 'Rina Kartikasari, S.AP.',
-    nip: '19890820 201402 2 003',
-    pangkatGolongan: 'Penata Muda / III a',
-    jabatan: 'Pengurus Barang Pembantu'
-  };
+  // 2. BENDAHARA BOS (Pengelola Keuangan Sekolah)
+  const resolvedBendahara = resolveBendaharaBOS(pejabatList);
+  const rawBendahara = pejabatSettings?.bendahara || pejabatSettings?.bendaharaBos || resolvedBendahara;
+  const bendaharaNama = rawBendahara?.nama || 'Hj. Ai Nurhayati, S.Pd.';
+  const bendaharaNip = (rawBendahara?.nip && rawBendahara.nip !== '-' ? rawBendahara.nip : '19780814 200501 2 006');
+  const bendaharaPangkat = rawBendahara?.pangkatGolongan || rawBendahara?.pangkat || 'Penata Tk. I / III d';
+  const bendaharaJabatan = (rawBendahara?.jabatanKedinasan || rawBendahara?.jabatan || 'BENDAHARA BOS').toUpperCase();
+
+  // 3. PENGURUS BARANG / PENYALUR (Tenaga Kependidikan / Pengurus Persediaan)
+  const resolvedPengurus = resolvePengurusBarang(pejabatList);
+  const rawPengurus = pejabatSettings?.pengurusBarang || pejabatSettings?.pengelolaPersediaan || resolvedPengurus;
+  const pengurusNama = rawPengurus?.nama || 'Yati Cahyani';
+  const pengurusNip = (rawPengurus?.nip && rawPengurus.nip !== '-' ? rawPengurus.nip : '199501222025211084');
+  const pengurusPangkat = rawPengurus?.pangkatGolongan || rawPengurus?.pangkat || 'Pengatur / II c';
+  const pengurusJabatan = (rawPengurus?.jabatanKedinasan || rawPengurus?.jabatan || 'TENAGA KEPENDIDIKAN').toUpperCase();
+
+  const kotaSurat = pejabatSettings?.lokasi || kopConfig?.kotaSurat || 'Ciamis';
+  const tanggalCetakDisplay = pejabatSettings?.tanggalCetak || `${kotaSurat}, 31 Desember ${targetYear}`;
 
   // ==========================================
   // SHEET 1: "BOS"
@@ -640,24 +664,76 @@ export async function generateBOSExcelWorkbook(
 
   currentRow += 2;
 
-  // SIGNATURE SECTION
+  // SIGNATURE SECTION (3 KOLOM DINAMIS RESMI)
   const sigRowStart = currentRow;
-  const sigColLeft = 'C';
-  const sigColRight = getExcelColLetter(Math.max(10, totalColsBOS - 8));
+  const colLeftIdx = 3; // Kolom C
+  const colMidIdx = Math.max(12, Math.round(totalColsBOS * 0.45)); // Tengah (Bendahara BOS)
+  const colRightIdx = Math.max(colMidIdx + 12, totalColsBOS - 10); // Kanan (Pengurus Barang)
 
-  const kotaSurat = kopConfig?.kotaSurat || 'Bekasi';
+  const sigColLeft = getExcelColLetter(colLeftIdx);
+  const sigColMid = getExcelColLetter(colMidIdx);
+  const sigColRight = getExcelColLetter(colRightIdx);
 
-  wsBOS.getCell(`${sigColLeft}${sigRowStart}`).value = 'Mengetahui,';
-  wsBOS.getCell(`${sigColLeft}${sigRowStart + 1}`).value = kepsek.jabatan;
-  wsBOS.getCell(`${sigColLeft}${sigRowStart + 5}`).value = kepsek.nama;
-  wsBOS.getCell(`${sigColLeft}${sigRowStart + 5}`).font = { bold: true, underline: true };
-  wsBOS.getCell(`${sigColLeft}${sigRowStart + 6}`).value = `NIP. ${kepsek.nip}`;
+  // Baris 1: Mengetahui / Tanggal
+  wsBOS.getCell(`${sigColLeft}${sigRowStart}`).value = 'Mengetahui / Menyetujui,';
+  wsBOS.getCell(`${sigColLeft}${sigRowStart}`).font = { name: 'Arial', size: 9, bold: true };
 
-  wsBOS.getCell(`${sigColRight}${sigRowStart}`).value = `${kotaSurat}, 31 Desember ${targetYear}`;
-  wsBOS.getCell(`${sigColRight}${sigRowStart + 1}`).value = pengurusBarang.jabatan;
-  wsBOS.getCell(`${sigColRight}${sigRowStart + 5}`).value = pengurusBarang.nama;
-  wsBOS.getCell(`${sigColRight}${sigRowStart + 5}`).font = { bold: true, underline: true };
-  wsBOS.getCell(`${sigColRight}${sigRowStart + 6}`).value = `NIP. ${pengurusBarang.nip}`;
+  wsBOS.getCell(`${sigColRight}${sigRowStart}`).value = tanggalCetakDisplay;
+  wsBOS.getCell(`${sigColRight}${sigRowStart}`).font = { name: 'Arial', size: 9, bold: true };
+
+  // Baris 2: Jabatan Utama
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 1}`).value = kepsekJabatan;
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 1}`).font = { name: 'Arial', size: 9, bold: true };
+
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 1}`).value = bendaharaJabatan;
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 1}`).font = { name: 'Arial', size: 9, bold: true };
+
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 1}`).value = pengurusJabatan;
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 1}`).font = { name: 'Arial', size: 9, bold: true };
+
+  // Baris 3: Sub-jabatan Kedinasan
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 2}`).value = 'Kuasa Pengguna Anggaran';
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 2}`).font = { name: 'Arial', size: 8, italic: true };
+
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 2}`).value = 'Pengelola Keuangan Sekolah';
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 2}`).font = { name: 'Arial', size: 8, italic: true };
+
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 2}`).value = 'Pengurus / Penyimpan Barang Persediaan';
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 2}`).font = { name: 'Arial', size: 8, italic: true };
+
+  // Baris 6: Nama Pejabat Bergelar (Underline & Bold)
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 6}`).value = kepsekNama;
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 6}`).font = { name: 'Arial', size: 9, bold: true, underline: true };
+
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 6}`).value = bendaharaNama;
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 6}`).font = { name: 'Arial', size: 9, bold: true, underline: true };
+
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 6}`).value = pengurusNama;
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 6}`).font = { name: 'Arial', size: 9, bold: true, underline: true };
+
+  // Baris 7: NIP
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 7}`).value = `NIP. ${kepsekNip}`;
+  wsBOS.getCell(`${sigColLeft}${sigRowStart + 7}`).font = { name: 'Arial', size: 8 };
+
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 7}`).value = `NIP. ${bendaharaNip}`;
+  wsBOS.getCell(`${sigColMid}${sigRowStart + 7}`).font = { name: 'Arial', size: 8 };
+
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 7}`).value = `NIP. ${pengurusNip}`;
+  wsBOS.getCell(`${sigColRight}${sigRowStart + 7}`).font = { name: 'Arial', size: 8 };
+
+  // Baris 8: Pangkat / Golongan
+  if (kepsekPangkat) {
+    wsBOS.getCell(`${sigColLeft}${sigRowStart + 8}`).value = `Pangkat/Gol: ${kepsekPangkat}`;
+    wsBOS.getCell(`${sigColLeft}${sigRowStart + 8}`).font = { name: 'Arial', size: 8, color: { argb: 'FF64748B' } };
+  }
+  if (bendaharaPangkat) {
+    wsBOS.getCell(`${sigColMid}${sigRowStart + 8}`).value = `Pangkat/Gol: ${bendaharaPangkat}`;
+    wsBOS.getCell(`${sigColMid}${sigRowStart + 8}`).font = { name: 'Arial', size: 8, color: { argb: 'FF64748B' } };
+  }
+  if (pengurusPangkat) {
+    wsBOS.getCell(`${sigColRight}${sigRowStart + 8}`).value = `Pangkat/Gol: ${pengurusPangkat}`;
+    wsBOS.getCell(`${sigColRight}${sigRowStart + 8}`).font = { name: 'Arial', size: 8, color: { argb: 'FF64748B' } };
+  }
 
 
   // ==========================================
@@ -918,19 +994,70 @@ export async function generateBOSExcelWorkbook(
 
   rCurRow += 2;
 
-  // Signatures on Rekap sheet
-  wsRekap.getCell(`C${rCurRow}`).value = 'Mengetahui,';
-  wsRekap.getCell(`C${rCurRow + 1}`).value = kepsek.jabatan;
-  wsRekap.getCell(`C${rCurRow + 5}`).value = kepsek.nama;
-  wsRekap.getCell(`C${rCurRow + 5}`).font = { bold: true, underline: true };
-  wsRekap.getCell(`C${rCurRow + 6}`).value = `NIP. ${kepsek.nip}`;
+  // Signatures on Rekap sheet (3 KOLOM DINAMIS RESMI)
+  const sigRowRekap = rCurRow;
+  const colLeftRekap = 2; // Kolom B
+  const colMidRekap = Math.max(8, Math.round(totalColsRekap * 0.45)); // Tengah (Bendahara BOS)
+  const colRightRekap = Math.max(colMidRekap + 6, totalColsRekap - 3); // Kanan (Pengurus Barang)
 
-  const sigRightRekap = getExcelColLetter(Math.max(6, totalColsRekap - 3));
-  wsRekap.getCell(`${sigRightRekap}${rCurRow}`).value = `${kotaSurat}, 31 Desember ${targetYear}`;
-  wsRekap.getCell(`${sigRightRekap}${rCurRow + 1}`).value = pengurusBarang.jabatan;
-  wsRekap.getCell(`${sigRightRekap}${rCurRow + 5}`).value = pengurusBarang.nama;
-  wsRekap.getCell(`${sigRightRekap}${rCurRow + 5}`).font = { bold: true, underline: true };
-  wsRekap.getCell(`${sigRightRekap}${rCurRow + 6}`).value = `NIP. ${pengurusBarang.nip}`;
+  const sigColLeftR = getExcelColLetter(colLeftRekap);
+  const sigColMidR = getExcelColLetter(colMidRekap);
+  const sigColRightR = getExcelColLetter(colRightRekap);
+
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap}`).value = 'Mengetahui / Menyetujui,';
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap}`).font = { name: 'Arial', size: 9, bold: true };
+
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap}`).value = tanggalCetakDisplay;
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap}`).font = { name: 'Arial', size: 9, bold: true };
+
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 1}`).value = kepsekJabatan;
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 1}`).font = { name: 'Arial', size: 9, bold: true };
+
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 1}`).value = bendaharaJabatan;
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 1}`).font = { name: 'Arial', size: 9, bold: true };
+
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 1}`).value = pengurusJabatan;
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 1}`).font = { name: 'Arial', size: 9, bold: true };
+
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 2}`).value = 'Kuasa Pengguna Anggaran';
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 2}`).font = { name: 'Arial', size: 8, italic: true };
+
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 2}`).value = 'Pengelola Keuangan Sekolah';
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 2}`).font = { name: 'Arial', size: 8, italic: true };
+
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 2}`).value = 'Pengurus / Penyimpan Barang Persediaan';
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 2}`).font = { name: 'Arial', size: 8, italic: true };
+
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 6}`).value = kepsekNama;
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 6}`).font = { name: 'Arial', size: 9, bold: true, underline: true };
+
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 6}`).value = bendaharaNama;
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 6}`).font = { name: 'Arial', size: 9, bold: true, underline: true };
+
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 6}`).value = pengurusNama;
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 6}`).font = { name: 'Arial', size: 9, bold: true, underline: true };
+
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 7}`).value = `NIP. ${kepsekNip}`;
+  wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 7}`).font = { name: 'Arial', size: 8 };
+
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 7}`).value = `NIP. ${bendaharaNip}`;
+  wsRekap.getCell(`${sigColMidR}${sigRowRekap + 7}`).font = { name: 'Arial', size: 8 };
+
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 7}`).value = `NIP. ${pengurusNip}`;
+  wsRekap.getCell(`${sigColRightR}${sigRowRekap + 7}`).font = { name: 'Arial', size: 8 };
+
+  if (kepsekPangkat) {
+    wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 8}`).value = `Pangkat/Gol: ${kepsekPangkat}`;
+    wsRekap.getCell(`${sigColLeftR}${sigRowRekap + 8}`).font = { name: 'Arial', size: 8, color: { argb: 'FF64748B' } };
+  }
+  if (bendaharaPangkat) {
+    wsRekap.getCell(`${sigColMidR}${sigRowRekap + 8}`).value = `Pangkat/Gol: ${bendaharaPangkat}`;
+    wsRekap.getCell(`${sigColMidR}${sigRowRekap + 8}`).font = { name: 'Arial', size: 8, color: { argb: 'FF64748B' } };
+  }
+  if (pengurusPangkat) {
+    wsRekap.getCell(`${sigColRightR}${sigRowRekap + 8}`).value = `Pangkat/Gol: ${pengurusPangkat}`;
+    wsRekap.getCell(`${sigColRightR}${sigRowRekap + 8}`).font = { name: 'Arial', size: 8, color: { argb: 'FF64748B' } };
+  }
 
   return workbook;
 }
@@ -945,7 +1072,8 @@ export async function downloadBOSExcelFile(
   kopConfig: KopSuratConfig,
   pejabatList: Pejabat[],
   targetYear: number = 2026,
-  monthsCount: number = 12
+  monthsCount: number = 12,
+  pejabatSettings?: any
 ): Promise<void> {
   const workbook = await generateBOSExcelWorkbook(
     masterBarang,
@@ -954,7 +1082,8 @@ export async function downloadBOSExcelFile(
     kopConfig,
     pejabatList,
     targetYear,
-    monthsCount
+    monthsCount,
+    pejabatSettings
   );
 
   const buffer = await workbook.xlsx.writeBuffer();
@@ -1103,3 +1232,5 @@ export async function parseBOSExcelFile(file: File): Promise<ParsedBOSExcelResul
     warnings
   };
 }
+
+export { exportMutationToExcel } from './excelHelper';

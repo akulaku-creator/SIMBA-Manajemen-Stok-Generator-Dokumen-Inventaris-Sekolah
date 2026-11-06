@@ -292,9 +292,10 @@ export const DocumentViewer: React.FC<Props> = ({
         transaksiList,
         transaksiPenerimaanList,
         kopConfig,
-        pejabatList,
+        effectivePejabatList,
         selectedYear,
-        12
+        12,
+        effectivePejabatSettings
       );
     } catch (err) {
       console.error('Failed to export Excel BOS:', err);
@@ -697,6 +698,7 @@ export const DocumentViewer: React.FC<Props> = ({
             transaksiPenerimaanList={transaksiPenerimaanList}
             kopConfig={kopConfig}
             pejabatList={effectivePejabatList}
+            pejabatSettings={effectivePejabatSettings}
             targetYear={selectedYear}
             onOpenImportModal={() => setIsImportBOSModalOpen(true)}
           />

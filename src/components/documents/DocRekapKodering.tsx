@@ -12,7 +12,8 @@ import { Barang, KopSuratConfig, Pejabat, TAHUN_ANGGARAN_OPTIONS, TransaksiPener
 import { downloadBOSExcelFile } from '../../utils/excelBosGenerator';
 import { calculateMutasiBOSData, NAMA_BULAN } from '../../utils/mutasiBosEngine';
 import { formatRupiah } from '../../utils/numberGenerator';
-import { resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { resolveBendaharaBOS, resolveKepalaSekolah, resolvePengurusBarang } from '../../utils/pejabatResolver';
+import { SignatorySheetBOS } from './SignatoryBlocks';
 
 interface Props {
   masterBarang: Barang[];
@@ -20,6 +21,7 @@ interface Props {
   transaksiPenerimaanList: TransaksiPenerimaan[];
   kopConfig: KopSuratConfig;
   pejabatList: Pejabat[];
+  pejabatSettings?: any;
   targetYear?: number;
 }
 
@@ -29,6 +31,7 @@ export const DocRekapKodering: React.FC<Props> = ({
   transaksiPenerimaanList,
   kopConfig,
   pejabatList,
+  pejabatSettings,
   targetYear = 2026
 }) => {
   const [selectedYear, setSelectedYear] = useState<number>(targetYear);
@@ -37,9 +40,10 @@ export const DocRekapKodering: React.FC<Props> = ({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isExporting, setIsExporting] = useState<boolean>(false);
 
-  // Pejabat for Signatures
-  const kepsek = resolveKepalaSekolah(pejabatList);
-  const pengurusBarang = resolvePengurusBarang(pejabatList);
+  // Pejabat for Signatures (Prioritas pejabatSettings aktif / master pegawai)
+  const kepsek = pejabatSettings?.kepalaSekolah || resolveKepalaSekolah(pejabatList);
+  const pengurusBarang = pejabatSettings?.pengurusBarang || pejabatSettings?.pengelolaPersediaan || resolvePengurusBarang(pejabatList);
+  const bendaharaBos = pejabatSettings?.bendahara || pejabatSettings?.bendaharaBos || resolveBendaharaBOS(pejabatList);
 
   const calculation = useMemo(() => {
     return calculateMutasiBOSData(
@@ -88,7 +92,8 @@ export const DocRekapKodering: React.FC<Props> = ({
         kopConfig,
         pejabatList,
         selectedYear,
-        12
+        12,
+        pejabatSettings
       );
     } catch (err) {
       console.error('Failed to export Excel:', err);
@@ -349,24 +354,16 @@ export const DocRekapKodering: React.FC<Props> = ({
           </table>
         </div>
 
-        {/* Footer Signatures */}
-        <div className="mt-8 pt-4 border-t border-slate-200 grid grid-cols-2 text-xs text-slate-800 break-inside-avoid">
-          <div className="text-center space-y-1">
-            <p className="font-semibold text-slate-600">Mengetahui,</p>
-            <p className="font-bold uppercase text-slate-900">{kepsek.jabatan}</p>
-            <div className="h-16"></div>
-            <p className="font-bold underline text-slate-900">{kepsek.nama}</p>
-            <p className="text-[11px] text-slate-600">NIP. {kepsek.nip}</p>
-          </div>
-
-          <div className="text-center space-y-1">
-            <p className="text-slate-600">{kopConfig.kotaSurat || 'Bekasi'}, 31 Desember {selectedYear}</p>
-            <p className="font-bold uppercase text-slate-900">{pengurusBarang.jabatan}</p>
-            <div className="h-16"></div>
-            <p className="font-bold underline text-slate-900">{pengurusBarang.nama}</p>
-            <p className="text-[11px] text-slate-600">NIP. {pengurusBarang.nip}</p>
-          </div>
-        </div>
+        {/* Tanda Tangan Resmi Pejabat (Footer Laporan Rekap Kodering: 3 Kolom) */}
+        <SignatorySheetBOS
+          pejabatList={pejabatList}
+          kopConfig={kopConfig}
+          pejabatSettings={pejabatSettings}
+          customKepalaSekolah={kepsek}
+          customBendaharaBos={bendaharaBos}
+          customPengurusBarang={pengurusBarang}
+          tanggalSurat={`${selectedYear}-12-31`}
+        />
       </div>
     </div>
   );

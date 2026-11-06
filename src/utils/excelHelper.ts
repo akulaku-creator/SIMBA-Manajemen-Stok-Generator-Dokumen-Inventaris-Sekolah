@@ -800,3 +800,204 @@ export function exportTransaksiToExcel(
   const safeDate = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(workbook, `SIMBA_Penyaluran_${safeSekolah}_${safeDate}.xlsx`);
 }
+
+/**
+ * Export Laporan Mutasi BHP 12 Bulan ke Format Excel (.xlsx) dengan Blok Tanda Tangan 3 Kolom
+ * Sesuai data penandatangan aktif (Kepala Sekolah, Bendahara BOS, Pengurus Barang / Penyalur)
+ */
+export function exportMutationToExcel(
+  mutationData: any,
+  pejabatSettings: any = {},
+  options: {
+    namaSekolah?: string;
+    targetYear?: number;
+    kotaSurat?: string;
+    tanggalCetak?: string;
+  } = {}
+): void {
+  const schoolName = options.namaSekolah || pejabatSettings?.namaSekolah || 'SMAN 1 CIHAURBEUTI';
+  const targetYear = options.targetYear || 2026;
+  const kotaSurat = options.kotaSurat || pejabatSettings?.lokasi || 'Ciamis';
+  const tanggalCetak = options.tanggalCetak || pejabatSettings?.tanggalCetak || `31 Desember ${targetYear}`;
+
+  const kepalaSekolah = {
+    nama: pejabatSettings?.kepalaSekolah?.nama || 'DADANG HENDRAYANA, S.Pd.',
+    nip: pejabatSettings?.kepalaSekolah?.nip || '197210101996031006',
+    pangkat: pejabatSettings?.kepalaSekolah?.pangkatGolongan || pejabatSettings?.kepalaSekolah?.pangkat || 'Pembina Tk. I / IV b',
+    jabatan: pejabatSettings?.kepalaSekolah?.jabatanKedinasan || pejabatSettings?.kepalaSekolah?.jabatan || `KEPALA ${schoolName.toUpperCase()}`
+  };
+
+  const bendahara = {
+    nama: pejabatSettings?.bendahara?.nama || pejabatSettings?.bendaharaBos?.nama || 'HJ. AI NURHAYATI, S.Pd.',
+    nip: pejabatSettings?.bendahara?.nip || pejabatSettings?.bendaharaBos?.nip || '19780814 200501 2 006',
+    pangkat: pejabatSettings?.bendahara?.pangkatGolongan || pejabatSettings?.bendahara?.pangkat || 'Penata Tk. I / III d',
+    jabatan: pejabatSettings?.bendahara?.jabatanKedinasan || pejabatSettings?.bendahara?.jabatan || 'BENDAHARA BOS'
+  };
+
+  const pengurusBarang = {
+    nama: pejabatSettings?.pengurusBarang?.nama || 'YATI CAHYANI',
+    nip: pejabatSettings?.pengurusBarang?.nip || '199501222025211084',
+    pangkat: pejabatSettings?.pengurusBarang?.pangkatGolongan || pejabatSettings?.pengurusBarang?.pangkat || 'Pengatur / II c',
+    jabatan: pejabatSettings?.pengurusBarang?.jabatanKedinasan || pejabatSettings?.pengurusBarang?.jabatan || 'TENAGA KEPENDIDIKAN'
+  };
+
+  const excelRows: any[][] = [];
+
+  // 1. Header Laporan
+  excelRows.push([`DAFTAR MUTASI BARANG HABIS PAKAI BOS TAHUN ${targetYear}`]);
+  excelRows.push([`NAMA INSTANSI: ${schoolName.toUpperCase()}`]);
+  excelRows.push([]);
+
+  // Header Kolom Tabel
+  excelRows.push([
+    'NO',
+    'KODE BARANG / KODERING',
+    'NAMA & SPESIFIKASI BARANG',
+    'SATUAN',
+    'HARGA STANDAR (RP)',
+    'SALDO AWAL (VOL)',
+    'SALDO AWAL (RP)',
+    'TOTAL MASUK (RP)',
+    'TOTAL KELUAR (RP)',
+    'SALDO AKHIR (VOL)',
+    'SALDO AKHIR (RP)'
+  ]);
+
+  let idx = 1;
+  let totalSaldoAwal = 0;
+  let totalMasuk = 0;
+  let totalKeluar = 0;
+  let totalSaldoAkhir = 0;
+
+  if (mutationData?.kelompokRekening && Array.isArray(mutationData.kelompokRekening)) {
+    mutationData.kelompokRekening.forEach((grp: any) => {
+      excelRows.push([
+        '',
+        grp.kodeRekening || '',
+        `[REKENING] ${grp.namaRekening || ''}`,
+        '',
+        '',
+        '',
+        grp.subtotalSaldoAwalRp || 0,
+        '',
+        '',
+        '',
+        ''
+      ]);
+
+      (grp.items || []).forEach((it: any) => {
+        const masuk = it.bulanan ? it.bulanan.reduce((s: number, b: any) => s + (b.masukRp || 0), 0) : (it.totalMasukRp || 0);
+        const keluar = it.bulanan ? it.bulanan.reduce((s: number, b: any) => s + (b.keluarRp || 0), 0) : (it.totalKeluarRp || 0);
+        const saRp = it.bulanan && it.bulanan.length > 0 ? it.bulanan[it.bulanan.length - 1].saldoAkhirRp : (it.saldoAkhirRp || 0);
+        const saVol = it.bulanan && it.bulanan.length > 0 ? it.bulanan[it.bulanan.length - 1].saldoAkhirVolume : (it.saldoAkhirVolume || 0);
+
+        totalSaldoAwal += Number(it.saldoAwalRp || 0);
+        totalMasuk += Number(masuk || 0);
+        totalKeluar += Number(keluar || 0);
+        totalSaldoAkhir += Number(saRp || 0);
+
+        excelRows.push([
+          idx++,
+          it.kodeBarang || grp.kodeRekening || '',
+          it.namaBarang || '',
+          it.satuan || '',
+          it.hargaSatuan || 0,
+          it.saldoAwalVolume || 0,
+          it.saldoAwalRp || 0,
+          masuk,
+          keluar,
+          saVol,
+          saRp
+        ]);
+      });
+    });
+  } else if (Array.isArray(mutationData)) {
+    mutationData.forEach((it: any) => {
+      const masuk = it.totalMasukRp || 0;
+      const keluar = it.totalKeluarRp || 0;
+      const saVol = it.saldoAkhirVolume || 0;
+      const saRp = it.saldoAkhirRp || 0;
+
+      totalSaldoAwal += Number(it.saldoAwalRp || 0);
+      totalMasuk += Number(masuk || 0);
+      totalKeluar += Number(keluar || 0);
+      totalSaldoAkhir += Number(saRp || 0);
+
+      excelRows.push([
+        idx++,
+        it.kodeBarang || it.kodeRekening || '',
+        it.namaBarang || '',
+        it.satuan || '',
+        it.hargaSatuan || 0,
+        it.saldoAwalVolume || 0,
+        it.saldoAwalRp || 0,
+        masuk,
+        keluar,
+        saVol,
+        saRp
+      ]);
+    });
+  }
+
+  // Baris Total Keseluruhan
+  excelRows.push([
+    'TOTAL KESELURUHAN MUTASI',
+    '',
+    '',
+    '',
+    '',
+    '',
+    totalSaldoAwal,
+    totalMasuk,
+    totalKeluar,
+    '',
+    totalSaldoAkhir
+  ]);
+
+  // 2. Tambahkan baris kosong sebagai spasi sebelum tanda tangan
+  excelRows.push([]);
+  excelRows.push([]);
+
+  // 3. Tambahkan baris penandatangan agar ikut terekspor ke Excel (Format 3 Kolom)
+  excelRows.push([
+    "Mengetahui/Menyetujui,", "", "", "", "", "", 
+    `${kotaSurat}, ${tanggalCetak}`
+  ]);
+  excelRows.push([
+    kepalaSekolah.jabatan, "", "BENDAHARA BOS", "", "", "", 
+    "TENAGA KEPENDIDIKAN"
+  ]);
+  excelRows.push([
+    "Kuasa Pengguna Anggaran", "", "Pengelola Keuangan Sekolah", "", "", "", 
+    "Pengurus / Penyimpan Barang Persediaan"
+  ]);
+  
+  // Baris kosong untuk tanda tangan basah
+  excelRows.push([]);
+  excelRows.push([]);
+  
+  excelRows.push([
+    kepalaSekolah.nama, "", 
+    bendahara.nama, "", "", "", 
+    pengurusBarang.nama
+  ]);
+  excelRows.push([
+    `NIP. ${kepalaSekolah.nip}`, "", 
+    `NIP. ${bendahara.nip}`, "", "", "", 
+    `NIP. ${pengurusBarang.nip}`
+  ]);
+  if (kepalaSekolah.pangkat || bendahara.pangkat || pengurusBarang.pangkat) {
+    excelRows.push([
+      `Pangkat/Gol: ${kepalaSekolah.pangkat}`, "", 
+      `Pangkat/Gol: ${bendahara.pangkat}`, "", "", "", 
+      `Pangkat/Gol: ${pengurusBarang.pangkat}`
+    ]);
+  }
+
+  // 4. Buat Workbook dan export
+  const ws = XLSX.utils.aoa_to_sheet(excelRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Mutasi_BHP_12Bulan');
+  const safeSekolah = schoolName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 16);
+  XLSX.writeFile(wb, `Laporan_Mutasi_BHP_${targetYear}_${safeSekolah}.xlsx`);
+}
