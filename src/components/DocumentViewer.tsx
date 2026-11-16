@@ -148,7 +148,10 @@ export const DocumentViewer: React.FC<Props> = ({
         jabatanKedinasan: pengurus.jabatan || 'PENGURUS BARANG'
       },
       lokasi: kopConfig.kotaSurat || 'Ciamis',
-      namaSekolah: kopConfig.namaSekolah
+      namaSekolah: kopConfig.namaSekolah,
+      stempelUrl: kopConfig.stempelUrl,
+      tampilkanStempel: kopConfig.tampilkanStempel,
+      stempelMode: kopConfig.stempelMode
     };
   }, [effectivePejabatList, kopConfig]);
 

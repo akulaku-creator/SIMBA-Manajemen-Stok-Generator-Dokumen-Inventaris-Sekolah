@@ -4,6 +4,7 @@ import { formatTanggalIndonesia } from '../../utils/numberGenerator';
 import { resolvePemohon } from '../../utils/pejabatResolver';
 import { KopSuratView } from '../KopSuratView';
 import { DocQRCode } from './DocQRCode';
+import { RenderSignatureBlockWithImage } from './SignatoryBlocks';
 
 interface Props {
   transaksi: TransaksiPengeluaran;
@@ -142,27 +143,18 @@ export const DocNPB: React.FC<Props> = ({
 
           {/* Kolom Kanan: Pemohon / Penanggung Jawab Unit */}
           <div className="w-[280px] text-center">
-            <div>
-              {kopConfig.kotaSurat || 'Ciamis'}, {formatTanggalIndonesia(transaksi.tanggal)}
-            </div>
-            <div className="font-bold text-slate-900 mt-1">
-              Pemohon / Penanggung Jawab Unit,
-            </div>
-            <div className="font-bold uppercase text-slate-900">
-              {transaksi.unitPemohon || pemohon.jabatan || 'Unit Pengguna'}
-            </div>
-            <div style={{ height: '55px' }} />
-            <div className="font-bold underline text-slate-900">
-              {pemohon.nama}
-            </div>
-            <div>
-              {pemohon.nip && pemohon.nip !== '-' ? `NIP. ${pemohon.nip}` : 'NIP. -'}
-            </div>
-            {pemohon.pangkatGolongan && pemohon.pangkatGolongan !== '-' && (
-              <div>
-                Pangkat/Gol: {pemohon.pangkatGolongan}
-              </div>
-            )}
+            <RenderSignatureBlockWithImage
+              topLine={`${kopConfig.kotaSurat || 'Ciamis'}, ${formatTanggalIndonesia(transaksi.tanggal)}`}
+              secondaryTopLine="Pemohon / Penanggung Jawab Unit,"
+              pejabatInfo={{
+                jabatan: transaksi.unitPemohon || pemohon.jabatan || 'Unit Pengguna',
+                nama: pemohon.nama,
+                nip: pemohon.nip,
+                pangkatGolongan: pemohon.pangkatGolongan
+              }}
+              signatureImgUrl={pemohon.tandaTanganUrl}
+              showPangkat={true}
+            />
           </div>
         </div>
       </div>

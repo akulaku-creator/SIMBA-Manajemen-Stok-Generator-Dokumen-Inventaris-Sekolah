@@ -10,6 +10,7 @@ export interface ResolvedOfficial {
   statusJabatan?: StatusJabatan;
   unitKerja?: string;
   isNonAsn?: boolean;
+  tandaTanganUrl?: string;
 }
 
 /**
@@ -75,7 +76,7 @@ export function formatJabatanWithStatus(
 export function getSignatoryInfo(
   pejabatSettingsOrList: any,
   roleType: 'kepalaSekolah' | 'pengurusBarang' | 'pemohon' | 'sarpras' | 'bendahara'
-): { nama: string; nip: string; jabatan: string; pangkat: string; statusJabatan?: StatusJabatan } {
+): { nama: string; nip: string; jabatan: string; pangkat: string; statusJabatan?: StatusJabatan; tandaTanganUrl?: string } {
   let settings: any = pejabatSettingsOrList;
   
   if (Array.isArray(pejabatSettingsOrList)) {
@@ -114,7 +115,8 @@ export function getSignatoryInfo(
     nip,
     jabatan,
     pangkat,
-    statusJabatan: p.statusJabatan
+    statusJabatan: p.statusJabatan,
+    tandaTanganUrl: p.tandaTanganUrl
   };
 }
 
@@ -156,7 +158,8 @@ export function resolveKepalaSekolah(pejabatList: Pejabat[], specificId?: string
     pangkatGolongan: found?.pangkatGolongan || 'Pembina Tingkat I / IV b',
     jabatan: found?.jabatan || 'Kepala Sekolah',
     statusJabatan: found?.statusJabatan || 'Definitif',
-    unitKerja: found?.unitKerja || 'Kuasa Pengguna Barang'
+    unitKerja: found?.unitKerja || 'Kuasa Pengguna Barang',
+    tandaTanganUrl: found?.tandaTanganUrl
   };
 }
 
@@ -192,7 +195,8 @@ export function resolvePengurusBarang(pejabatList: Pejabat[], specificId?: strin
       pangkatGolongan: yatiOfficial.pangkatGolongan || 'Penata / III c',
       jabatan: yatiOfficial.jabatan || 'Pengurus Barang Pembantu',
       statusJabatan: yatiOfficial.statusJabatan || 'Definitif',
-      unitKerja: yatiOfficial.unitKerja || 'Pengelola Persediaan Barang'
+      unitKerja: yatiOfficial.unitKerja || 'Pengelola Persediaan Barang',
+      tandaTanganUrl: yatiOfficial.tandaTanganUrl
     };
   }
 
@@ -206,7 +210,8 @@ export function resolvePengurusBarang(pejabatList: Pejabat[], specificId?: strin
       pangkatGolongan: specificOfficial.pangkatGolongan || 'Penata / III c',
       jabatan: specificOfficial.jabatan || 'Pengurus Barang Pembantu',
       statusJabatan: specificOfficial.statusJabatan || 'Definitif',
-      unitKerja: specificOfficial.unitKerja || 'Pengelola Persediaan Barang'
+      unitKerja: specificOfficial.unitKerja || 'Pengelola Persediaan Barang',
+      tandaTanganUrl: specificOfficial.tandaTanganUrl
     };
   }
 
@@ -235,7 +240,8 @@ export function resolvePengurusBarang(pejabatList: Pejabat[], specificId?: strin
     pangkatGolongan: found?.pangkatGolongan || 'Penata / III c',
     jabatan: found?.jabatan || 'Pengurus Barang Pembantu',
     statusJabatan: found?.statusJabatan || 'Definitif',
-    unitKerja: found?.unitKerja || 'Pengelola Persediaan Barang'
+    unitKerja: found?.unitKerja || 'Pengelola Persediaan Barang',
+    tandaTanganUrl: found?.tandaTanganUrl
   };
 }
 
@@ -259,7 +265,8 @@ export function resolveBendaharaBOS(pejabatList: Pejabat[], specificId?: string)
       pangkatGolongan: specificOfficial.pangkatGolongan || '-',
       jabatan: specificOfficial.jabatan || 'Bendahara BOS',
       statusJabatan: specificOfficial.statusJabatan,
-      unitKerja: specificOfficial.unitKerja || 'Pengelola Keuangan BOS'
+      unitKerja: specificOfficial.unitKerja || 'Pengelola Keuangan BOS',
+      tandaTanganUrl: specificOfficial.tandaTanganUrl
     };
   }
 
@@ -276,7 +283,8 @@ export function resolveBendaharaBOS(pejabatList: Pejabat[], specificId?: string)
       pangkatGolongan: bendaharaOfficial.pangkatGolongan || '-',
       jabatan: bendaharaOfficial.jabatan || 'Bendahara BOS',
       statusJabatan: bendaharaOfficial.statusJabatan,
-      unitKerja: bendaharaOfficial.unitKerja || 'Pengelola Keuangan BOS'
+      unitKerja: bendaharaOfficial.unitKerja || 'Pengelola Keuangan BOS',
+      tandaTanganUrl: bendaharaOfficial.tandaTanganUrl
     };
   }
 
@@ -311,7 +319,8 @@ export function resolveTimPemeriksa(pejabatList: Pejabat[], specificId?: string)
       pangkatGolongan: specificOfficial.pangkatGolongan || '-',
       jabatan: specificOfficial.jabatan || 'Tim Pemeriksa Fisik',
       statusJabatan: specificOfficial.statusJabatan,
-      unitKerja: specificOfficial.unitKerja || 'Tim Pemeriksa Fisik Persediaan'
+      unitKerja: specificOfficial.unitKerja || 'Tim Pemeriksa Fisik Persediaan',
+      tandaTanganUrl: specificOfficial.tandaTanganUrl
     };
   }
 
@@ -330,7 +339,8 @@ export function resolveTimPemeriksa(pejabatList: Pejabat[], specificId?: string)
       pangkatGolongan: pemeriksaOfficial.pangkatGolongan || '-',
       jabatan: pemeriksaOfficial.jabatan.toLowerCase().includes('pemeriksa') ? pemeriksaOfficial.jabatan : 'Tim Pemeriksa Fisik Persediaan',
       statusJabatan: pemeriksaOfficial.statusJabatan,
-      unitKerja: pemeriksaOfficial.unitKerja || 'Tim Pemeriksa Fisik Persediaan'
+      unitKerja: pemeriksaOfficial.unitKerja || 'Tim Pemeriksa Fisik Persediaan',
+      tandaTanganUrl: pemeriksaOfficial.tandaTanganUrl
     };
   }
 
@@ -382,7 +392,8 @@ export function resolveWakasekSarpras(pejabatList: Pejabat[], specificId?: strin
     pangkatGolongan: found?.pangkatGolongan || '-',
     jabatan: found?.jabatan || 'WAKASEK SARANA PRASARANA',
     statusJabatan: found?.statusJabatan,
-    unitKerja: found?.unitKerja || 'Wakasek Bidang Sarpras'
+    unitKerja: found?.unitKerja || 'Wakasek Bidang Sarpras',
+    tandaTanganUrl: found?.tandaTanganUrl
   };
 }
 
@@ -414,6 +425,7 @@ export function resolvePemohon(
     jabatan: matched?.jabatan || transaksi.unitPemohon || 'Penanggung Jawab Unit',
     statusJabatan: matched?.statusJabatan,
     unitKerja: transaksi.unitPemohon || matched?.unitKerja || 'Unit Pengguna',
-    isNonAsn
+    isNonAsn,
+    tandaTanganUrl: matched?.tandaTanganUrl
   };
 }

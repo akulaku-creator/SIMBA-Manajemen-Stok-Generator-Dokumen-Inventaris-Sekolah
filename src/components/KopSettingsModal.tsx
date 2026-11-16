@@ -1,6 +1,7 @@
-import { Building2, Check, Eye, EyeOff, FileText, Image as ImageIcon, Link2, RotateCcw, Sparkles, Trash2, Upload, X } from 'lucide-react';
+import { Building2, Check, Eye, EyeOff, FileText, Image as ImageIcon, Link2, RotateCcw, Sparkles, Stamp, Trash2, Upload, X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { KopSuratConfig } from '../types';
+import { processTransparentPngUpload } from '../utils/signatureAssetHelper';
 import { KopSuratView } from './KopSuratView';
 
 interface Props {
@@ -140,6 +141,22 @@ export const KopSettingsModal: React.FC<Props> = ({
       logoSekolahType: 'custom',
       tampilkanLogoSekolah: true
     }));
+  };
+
+  const handleUploadStempel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const { dataUrl } = await processTransparentPngUpload(file, { maxWidth: 420, maxHeight: 420 });
+      setFormData(prev => ({
+        ...prev,
+        stempelUrl: dataUrl,
+        tampilkanStempel: prev.tampilkanStempel !== false
+      }));
+    } catch (err: any) {
+      alert(err?.message || 'Gagal memproses gambar stempel.');
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -606,6 +623,111 @@ export const KopSettingsModal: React.FC<Props> = ({
                       Logo sekolah di sisi kanan disembunyikan.
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* KARTU 3: STEMPEL RESMI INSTANSI (.PNG TRANSPARAN) */}
+              <div className="md:col-span-2 bg-slate-50/70 border border-slate-200 rounded-xl p-4.5 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-bold">
+                      <Stamp className="w-3.5 h-3.5" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-bold text-slate-900">Stempel Resmi Instansi / Sekolah (.PNG Transparan)</h4>
+                      <p className="text-[10px] text-slate-500">Otomatis dicetak menumpuk rapi di area tanda tangan pada SPB, BAST, dan Laporan Mutasi</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, tampilkanStempel: prev.tampilkanStempel === false ? true : false }))}
+                    className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-md transition-colors ${
+                      formData.tampilkanStempel !== false
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    {formData.tampilkanStempel !== false ? (
+                      <>
+                        <Eye className="w-3 h-3 text-emerald-600" />
+                        <span>Aktif di Dokumen</span>
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-3 h-3 text-slate-500" />
+                        <span>Nonaktif</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div
+                    className="w-20 h-20 rounded-xl border border-slate-300 flex items-center justify-center overflow-hidden p-1.5 shrink-0"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%)',
+                      backgroundSize: '10px 10px',
+                      backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    {formData.stempelUrl ? (
+                      <img src={formData.stempelUrl} alt="Stempel Instansi" className="max-h-full max-w-full object-contain opacity-90" />
+                    ) : (
+                      <Stamp className="w-7 h-7 text-slate-300" />
+                    )}
+                  </div>
+
+                  <div className="flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{formData.stempelUrl ? 'Ganti Gambar Stempel (.PNG)' : 'Unggah Stempel Resmi (.PNG)'}</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/webp,image/*"
+                          onChange={handleUploadStempel}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {formData.stempelUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, stempelUrl: undefined }))}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Hapus Stempel
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                      <span className="font-semibold text-slate-700">Penempatan Stempel:</span>
+                      <label className="inline-flex items-center gap-1.5 cursor-pointer text-slate-700">
+                        <input
+                          type="radio"
+                          name="kopStempelMode"
+                          checked={(formData.stempelMode || 'kepsek_and_single') === 'kepsek_and_single'}
+                          onChange={() => setFormData(prev => ({ ...prev, stempelMode: 'kepsek_and_single' }))}
+                          className="text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>Kepala Sekolah &amp; Pengesahan Utama</span>
+                      </label>
+                      <label className="inline-flex items-center gap-1.5 cursor-pointer text-slate-700">
+                        <input
+                          type="radio"
+                          name="kopStempelMode"
+                          checked={formData.stempelMode === 'all_officials'}
+                          onChange={() => setFormData(prev => ({ ...prev, stempelMode: 'all_officials' }))}
+                          className="text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <span>Semua Pejabat</span>
+                      </label>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

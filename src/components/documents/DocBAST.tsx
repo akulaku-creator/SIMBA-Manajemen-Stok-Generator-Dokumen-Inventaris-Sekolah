@@ -2,8 +2,10 @@ import React from 'react';
 import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatTanggalIndonesia, getKalimatBast } from '../../utils/numberGenerator';
 import { getSignatoryInfo, resolvePemohon } from '../../utils/pejabatResolver';
+import { resolveStampUrlForRole } from '../../utils/signatureAssetHelper';
 import { KopSuratView } from '../KopSuratView';
 import { DocQRCode } from './DocQRCode';
+import { RenderSignatureBlockWithImage } from './SignatoryBlocks';
 
 interface Props {
   transaksi: TransaksiPengeluaran;
@@ -202,42 +204,40 @@ export const DocBAST: React.FC<Props> = ({
         {/* Baris 1: PIHAK PERTAMA (Kiri) & PIHAK KEDUA (Kanan) */}
         <div className="grid grid-cols-2 gap-6 text-center mb-2">
           {/* PIHAK PERTAMA (Yang Menyerahkan) - Pengurus Barang Pembantu */}
-          <div>
-            <p className="font-bold text-slate-900 uppercase text-[9pt]">PIHAK PERTAMA</p>
-            <p className="text-[8pt] text-slate-600 italic">(Yang Menyerahkan)</p>
-            <p className="text-[8.5pt] font-semibold text-slate-800 uppercase mt-0.5">
-              PENGURUS BARANG PEMBANTU
-            </p>
-            <div className="h-14 print:h-12 flex items-center justify-center">
-              {/* Space for signature */}
-            </div>
-            <p className="font-bold underline text-slate-900 text-sm">{pihakPertama.nama || '-'}</p>
-            <p className="text-xs text-slate-700 font-mono mt-0.5">
-              NIP. {pihakPertama.nip && pihakPertama.nip !== '-' ? pihakPertama.nip : '-'}
-            </p>
-            {(pihakPertama.pangkat || (pihakPertama as any).pangkatGolongan) && (pihakPertama.pangkat || (pihakPertama as any).pangkatGolongan) !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pihakPertama.pangkat || (pihakPertama as any).pangkatGolongan}</p>
-            )}
-          </div>
+          <RenderSignatureBlockWithImage
+            secondaryTopLine="PIHAK PERTAMA"
+            subJabatan="(Yang Menyerahkan)"
+            pejabatInfo={{
+              jabatan: pihakPertama.jabatan || 'PENGURUS BARANG PEMBANTU',
+              statusJabatan: pihakPertama.statusJabatan,
+              nama: pihakPertama.nama || '-',
+              nip: pihakPertama.nip || '-',
+              pangkat: pihakPertama.pangkat || (pihakPertama as any).pangkatGolongan
+            }}
+            signatureImgUrl={pihakPertama.tandaTanganUrl}
+            stampImgUrl={resolveStampUrlForRole(kopConfig, 'pengurus_barang')}
+            showPangkat={true}
+            isCompact={true}
+            nameClassName="text-sm"
+            jabatanClassName="text-[8.5pt] font-semibold"
+          />
 
           {/* PIHAK KEDUA (Yang Menerima) - Pemohon / Penanggung Jawab Unit Kerja */}
-          <div>
-            <p className="font-bold text-slate-900 uppercase text-[9pt]">PIHAK KEDUA</p>
-            <p className="text-[8pt] text-slate-600 italic">(Yang Menerima)</p>
-            <p className="text-[8.5pt] font-semibold text-slate-800 uppercase mt-0.5">
-              {transaksi.unitPemohon || pihakKedua.jabatan || 'PENANGGUNG JAWAB UNIT'}
-            </p>
-            <div className="h-14 print:h-12 flex items-center justify-center">
-              {/* Space for signature */}
-            </div>
-            <p className="font-bold underline text-slate-900 text-sm">{pihakKedua.nama || '-'}</p>
-            <p className="text-xs text-slate-700 font-mono mt-0.5">
-              NIP. {pihakKedua.nip && pihakKedua.nip !== '-' ? pihakKedua.nip : '-'}
-            </p>
-            {pihakKedua.pangkatGolongan && pihakKedua.pangkatGolongan !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pihakKedua.pangkatGolongan}</p>
-            )}
-          </div>
+          <RenderSignatureBlockWithImage
+            secondaryTopLine="PIHAK KEDUA"
+            subJabatan="(Yang Menerima)"
+            pejabatInfo={{
+              jabatan: transaksi.unitPemohon || pihakKedua.jabatan || 'PENANGGUNG JAWAB UNIT',
+              nama: pihakKedua.nama || '-',
+              nip: pihakKedua.nip || '-',
+              pangkatGolongan: pihakKedua.pangkatGolongan
+            }}
+            signatureImgUrl={pihakKedua.tandaTanganUrl}
+            showPangkat={true}
+            isCompact={true}
+            nameClassName="text-sm"
+            jabatanClassName="text-[8.5pt] font-semibold"
+          />
         </div>
 
         {/* Baris 2: Mengetahui (Kepala Sekolah) & QR Code Validasi TTE */}
@@ -255,22 +255,23 @@ export const DocBAST: React.FC<Props> = ({
 
           {/* Mengetahui Kuasa Pengguna Barang (Kepala Sekolah) */}
           <div className="w-2/4 text-center">
-            <p className="font-semibold text-slate-900 text-xs">Mengetahui / Menyetujui,</p>
-            <p className="font-bold text-slate-900 uppercase text-[9pt]">
-              {kepsek.statusJabatan && kepsek.statusJabatan !== 'Definitif' ? `${kepsek.statusJabatan}. ` : ''}
-              {kepsek.jabatan || 'KEPALA SEKOLAH'}
-            </p>
-            <p className="text-[8pt] text-slate-600 italic">Selaku Kuasa Pengguna Barang</p>
-            <div className="h-14 print:h-12 flex items-center justify-center">
-              {/* Space for signature */}
-            </div>
-            <p className="font-bold underline text-slate-900 text-sm">{kepsek.nama || '-'}</p>
-            <p className="text-xs text-slate-700 font-mono mt-0.5">
-              NIP. {kepsek.nip && kepsek.nip !== '-' ? kepsek.nip : '-'}
-            </p>
-            {(kepsek.pangkat || (kepsek as any).pangkatGolongan) && (kepsek.pangkat || (kepsek as any).pangkatGolongan) !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {kepsek.pangkat || (kepsek as any).pangkatGolongan}</p>
-            )}
+            <RenderSignatureBlockWithImage
+              topLine="Mengetahui / Menyetujui,"
+              pejabatInfo={{
+                jabatan: kepsek.jabatan || 'KEPALA SEKOLAH',
+                statusJabatan: kepsek.statusJabatan,
+                nama: kepsek.nama || '-',
+                nip: kepsek.nip || '-',
+                pangkat: kepsek.pangkat || (kepsek as any).pangkatGolongan
+              }}
+              subJabatan="Selaku Kuasa Pengguna Barang"
+              signatureImgUrl={kepsek.tandaTanganUrl}
+              stampImgUrl={resolveStampUrlForRole(kopConfig, 'kepala_sekolah')}
+              showPangkat={true}
+              isCompact={true}
+              nameClassName="text-sm"
+              jabatanClassName="text-[9pt]"
+            />
           </div>
 
           {/* Spacer Penyeimbang Kanan */}

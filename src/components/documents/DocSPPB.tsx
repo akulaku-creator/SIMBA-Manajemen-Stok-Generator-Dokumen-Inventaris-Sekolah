@@ -2,8 +2,10 @@ import React from 'react';
 import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatTanggalIndonesia } from '../../utils/numberGenerator';
 import { resolvePemohon, resolvePengurusBarang, resolveWakasekSarpras } from '../../utils/pejabatResolver';
+import { resolveStampUrlForRole } from '../../utils/signatureAssetHelper';
 import { KopSuratView } from '../KopSuratView';
 import { DocQRCode } from './DocQRCode';
+import { RenderSignatureBlockWithImage } from './SignatoryBlocks';
 
 interface Props {
   transaksi: TransaksiPengeluaran;
@@ -176,16 +178,20 @@ export const DocSPPB: React.FC<Props> = ({
 
           {/* Kolom Kanan: Wakasek Sarana Prasarana */}
           <div className="w-[280px] text-center">
-            <div>Ditetapkan di: {kopConfig.kotaSurat || 'Ciamis'}</div>
-            <div>Pada tanggal: {formatTanggalIndonesia(transaksi.tanggal)}</div>
-            <div className="font-bold text-slate-900 mt-1">Menyetujui / Memerintahkan,</div>
-            <div className="font-bold uppercase text-slate-900">WAKASEK SARANA PRASARANA</div>
-            <div style={{ height: '55px' }} />
-            <div className="font-bold underline text-slate-900">{sarpras.nama || '-'}</div>
-            <div>{sarpras.nip && sarpras.nip !== '-' ? `NIP. ${sarpras.nip}` : 'NIP. -'}</div>
-            {sarpras.pangkatGolongan && sarpras.pangkatGolongan !== '-' && (
-              <div>Pangkat/Gol: {sarpras.pangkatGolongan}</div>
-            )}
+            <RenderSignatureBlockWithImage
+              topLine={`Ditetapkan di: ${kopConfig.kotaSurat || 'Ciamis'} • ${formatTanggalIndonesia(transaksi.tanggal)}`}
+              secondaryTopLine="Menyetujui / Memerintahkan,"
+              pejabatInfo={{
+                jabatan: sarpras.jabatan || 'WAKASEK SARANA PRASARANA',
+                statusJabatan: sarpras.statusJabatan,
+                nama: sarpras.nama || '-',
+                nip: sarpras.nip || '-',
+                pangkatGolongan: sarpras.pangkatGolongan
+              }}
+              signatureImgUrl={sarpras.tandaTanganUrl}
+              stampImgUrl={resolveStampUrlForRole(kopConfig, 'sarpras', true)}
+              showPangkat={true}
+            />
           </div>
         </div>
       </div>

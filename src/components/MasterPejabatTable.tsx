@@ -1,7 +1,8 @@
-import { Download, Edit2, FileSpreadsheet, Plus, Search, Trash2, UserCheck, Users, X } from 'lucide-react';
+import { Download, Edit2, FileSpreadsheet, Image as ImageIcon, PenTool, Plus, Search, Trash2, Upload, Users, X } from 'lucide-react';
 import React, { useState } from 'react';
 import { DAFTAR_JABATAN_KEDINASAN, Pejabat } from '../types';
 import { exportMasterPegawaiToExcel } from '../utils/excelHelper';
+import { processTransparentPngUpload } from '../utils/signatureAssetHelper';
 import { ImportPejabatModal } from './ImportPejabatModal';
 
 interface Props {
@@ -34,8 +35,11 @@ export const MasterPejabatTable: React.FC<Props> = ({
     pangkatGolongan: '',
     jabatan: '',
     statusJabatan: 'Definitif',
-    unitKerja: ''
+    unitKerja: '',
+    tandaTanganUrl: undefined
   });
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [isProcessingSignature, setIsProcessingSignature] = useState(false);
 
   const filteredPejabat = pejabatList.filter(p => {
     const q = search.toLowerCase();
@@ -73,21 +77,44 @@ export const MasterPejabatTable: React.FC<Props> = ({
 
   const handleOpenAdd = () => {
     setEditingId(null);
+    setSignatureError(null);
     setFormData({
       nama: '',
       nip: '',
       pangkatGolongan: 'Penata Muda / III a',
       jabatan: '',
       statusJabatan: 'Definitif',
-      unitKerja: ''
+      unitKerja: '',
+      tandaTanganUrl: undefined
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (pejabat: Pejabat) => {
     setEditingId(pejabat.id);
-    setFormData({ ...pejabat, statusJabatan: pejabat.statusJabatan || 'Definitif' });
+    setSignatureError(null);
+    setFormData({
+      ...pejabat,
+      statusJabatan: pejabat.statusJabatan || 'Definitif',
+      tandaTanganUrl: pejabat.tandaTanganUrl
+    });
     setIsModalOpen(true);
+  };
+
+  const handleUploadSignature = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setSignatureError(null);
+    setIsProcessingSignature(true);
+    try {
+      const { dataUrl } = await processTransparentPngUpload(file, { maxWidth: 480, maxHeight: 280 });
+      setFormData(prev => ({ ...prev, tandaTanganUrl: dataUrl }));
+    } catch (err: any) {
+      setSignatureError(err?.message || 'Gagal memproses gambar tanda tangan.');
+    } finally {
+      setIsProcessingSignature(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -98,6 +125,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
       onUpdatePejabat({
         ...(formData as Pejabat),
         statusJabatan: formData.statusJabatan || 'Definitif',
+        tandaTanganUrl: formData.tandaTanganUrl || undefined,
         id: editingId
       });
     } else {
@@ -108,7 +136,8 @@ export const MasterPejabatTable: React.FC<Props> = ({
         pangkatGolongan: formData.pangkatGolongan || '-',
         jabatan: formData.jabatan || '',
         statusJabatan: formData.statusJabatan || 'Definitif',
-        unitKerja: formData.unitKerja || ''
+        unitKerja: formData.unitKerja || '',
+        tandaTanganUrl: formData.tandaTanganUrl || undefined
       };
       onAddPejabat(newPejabat);
     }
@@ -238,11 +267,20 @@ export const MasterPejabatTable: React.FC<Props> = ({
                   <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="p-3.5 text-center text-slate-400 font-medium">{idx + 1}</td>
                     <td className="p-3.5">
-                      <div className="font-semibold text-slate-900 flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[11px] font-bold border border-blue-100">
+                      <div className="font-semibold text-slate-900 flex items-center gap-2 flex-wrap">
+                        <div className="w-6 h-6 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-[11px] font-bold border border-blue-100 shrink-0">
                           {p.nama.charAt(0)}
                         </div>
-                        {p.nama}
+                        <span>{p.nama}</span>
+                        {p.tandaTanganUrl && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded"
+                            title="Sudah memiliki tanda tangan digital PNG"
+                          >
+                            <PenTool className="w-2.5 h-2.5" />
+                            TTD Digital
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="p-3.5 font-mono text-[11px] text-slate-700">{p.nip}</td>
@@ -297,7 +335,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
       {/* Modal Add / Edit */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 ring-1 ring-slate-900/10 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 ring-1 ring-slate-900/10 animate-in fade-in zoom-in-95 duration-150">
             <div className="px-5 py-4 bg-gradient-to-r from-slate-900 to-blue-950 text-white flex items-center justify-between border-b border-slate-800">
               <h3 className="text-sm font-bold flex items-center gap-2">
                 <Users className="w-4 h-4 text-blue-400" />
@@ -331,7 +369,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="p-5 space-y-3.5">
+            <form onSubmit={handleSubmit} className="p-5 space-y-3.5 overflow-y-auto">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Nama Lengkap beserta Gelar
@@ -424,6 +462,68 @@ export const MasterPejabatTable: React.FC<Props> = ({
                   placeholder="Contoh: Manajemen Sarana / Lab Komputer"
                   className="w-full text-xs border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 focus:outline-hidden"
                 />
+              </div>
+
+              {/* Tanda Tangan Digital (.PNG Transparan) */}
+              <div className="pt-2 border-t border-slate-200">
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <PenTool className="w-3.5 h-3.5 text-blue-600" />
+                  Tanda Tangan Digital (.PNG Transparan)
+                </label>
+                <div className="flex items-center gap-3 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div
+                    className="w-24 h-14 rounded-lg border border-slate-300 flex items-center justify-center overflow-hidden p-1 shrink-0"
+                    style={{
+                      backgroundImage:
+                        'linear-gradient(45deg, #e2e8f0 25%, transparent 25%), linear-gradient(-45deg, #e2e8f0 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e2e8f0 75%), linear-gradient(-45deg, transparent 75%, #e2e8f0 75%)',
+                      backgroundSize: '10px 10px',
+                      backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0px',
+                      backgroundColor: '#ffffff'
+                    }}
+                  >
+                    {formData.tandaTanganUrl ? (
+                      <img
+                        src={formData.tandaTanganUrl}
+                        alt="Preview Tanda Tangan"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-slate-300" />
+                    )}
+                  </div>
+                  <div className="flex-1 space-y-1.5 min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <label className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg font-semibold text-[11px] shadow-2xs cursor-pointer">
+                        <Upload className="w-3 h-3 text-blue-600" />
+                        <span>{isProcessingSignature ? 'Memproses...' : formData.tandaTanganUrl ? 'Ganti TTD (.PNG)' : 'Unggah TTD (.PNG)'}</span>
+                        <input
+                          type="file"
+                          accept="image/png,image/webp,image/*"
+                          onChange={handleUploadSignature}
+                          disabled={isProcessingSignature}
+                          className="hidden"
+                        />
+                      </label>
+                      {formData.tandaTanganUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, tandaTanganUrl: undefined }))}
+                          className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 cursor-pointer"
+                          title="Hapus Tanda Tangan Digital"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Hapus
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-500 leading-snug">
+                      Gunakan PNG berlatar transparan agar menumpuk rapi di atas stempel saat cetak.
+                    </p>
+                    {signatureError && (
+                      <p className="text-[10px] text-rose-600 font-medium">{signatureError}</p>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2.5 pt-3 border-t border-slate-200">

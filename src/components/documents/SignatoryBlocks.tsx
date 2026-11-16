@@ -1,5 +1,5 @@
 import React from 'react';
-import { KopSuratConfig, Pejabat } from '../../types';
+import { KopSuratConfig, Pejabat, StatusJabatan } from '../../types';
 import { formatTanggalIndonesia } from '../../utils/numberGenerator';
 import { 
   formatJabatanWithStatus, 
@@ -8,6 +8,126 @@ import {
   resolveKepalaSekolah, 
   resolvePengurusBarang
 } from '../../utils/pejabatResolver';
+import { resolveStampUrlForRole } from '../../utils/signatureAssetHelper';
+
+export interface SignatureBlockWithImageProps {
+  pejabatInfo: {
+    jabatan?: string;
+    nama?: string;
+    nip?: string;
+    pangkat?: string;
+    pangkatGolongan?: string;
+    statusJabatan?: StatusJabatan;
+    tandaTanganUrl?: string;
+  };
+  signatureImgUrl?: string;
+  stampImgUrl?: string;
+  topLine?: string;
+  secondaryTopLine?: string;
+  subJabatan?: string;
+  reserveTopLineSpace?: boolean;
+  showPangkat?: boolean;
+  isCompact?: boolean;
+  className?: string;
+  nameClassName?: string;
+  jabatanClassName?: string;
+}
+
+/**
+ * RenderSignatureBlockWithImage
+ * Komponen cetak blok tanda tangan yang menyisipkan gambar PNG tanda tangan transparan
+ * dan stempel instansi resmi tepat di atas nama terang pejabat penandatangan.
+ */
+export const RenderSignatureBlockWithImage: React.FC<SignatureBlockWithImageProps> = ({
+  pejabatInfo,
+  signatureImgUrl,
+  stampImgUrl,
+  topLine,
+  secondaryTopLine,
+  subJabatan,
+  reserveTopLineSpace = false,
+  showPangkat = false,
+  isCompact = false,
+  className = '',
+  nameClassName = '',
+  jabatanClassName = ''
+}) => {
+  const effectiveSignatureUrl = signatureImgUrl || pejabatInfo?.tandaTanganUrl;
+  const pangkatText = pejabatInfo?.pangkat || pejabatInfo?.pangkatGolongan;
+  const formattedStatusPrefix =
+    pejabatInfo?.statusJabatan &&
+    pejabatInfo.statusJabatan !== 'Definitif' &&
+    !(pejabatInfo.jabatan || '').toLowerCase().startsWith(pejabatInfo.statusJabatan.toLowerCase())
+      ? `${pejabatInfo.statusJabatan.endsWith('.') ? pejabatInfo.statusJabatan : `${pejabatInfo.statusJabatan}.`} `
+      : '';
+
+  return (
+    <div className={`relative text-center text-xs break-inside-avoid avoid-break ${className}`}>
+      {topLine ? (
+        <p className="text-slate-800 mb-0.5 leading-tight">{topLine}</p>
+      ) : reserveTopLineSpace ? (
+        <p className="text-transparent select-none mb-0.5 leading-tight" aria-hidden="true">&nbsp;</p>
+      ) : null}
+
+      {secondaryTopLine && (
+        <p className="font-semibold uppercase text-slate-900 leading-tight">{secondaryTopLine}</p>
+      )}
+
+      <p className={`font-bold uppercase text-slate-900 leading-tight ${jabatanClassName}`}>
+        {formattedStatusPrefix}
+        {pejabatInfo?.jabatan || 'PEJABAT'}
+      </p>
+
+      {subJabatan && (
+        <p className="italic text-[8pt] text-slate-600 leading-tight">{subJabatan}</p>
+      )}
+
+      {/* Area Tanda Tangan & Stempel (Tanda tangan sedikit menumpuk/overlap transparan dengan stempel) */}
+      <div
+        className={`relative flex justify-center items-center overflow-visible ${
+          isCompact ? 'h-14 min-h-[52px] my-0.5' : 'h-20 min-h-[72px] my-1'
+        }`}
+      >
+        {/* Stempel Instansi (jika ada) */}
+        {stampImgUrl && (
+          <img
+            src={stampImgUrl}
+            alt="Stempel Sekolah"
+            className={`absolute object-contain opacity-85 pointer-events-none select-none mix-blend-multiply print:opacity-85 ${
+              isCompact
+                ? 'w-14 h-14 -translate-x-4'
+                : 'w-20 h-20 -translate-x-5'
+            }`}
+          />
+        )}
+
+        {/* Gambar Tanda Tangan PNG Transparan (jika ada) */}
+        {effectiveSignatureUrl && (
+          <img
+            src={effectiveSignatureUrl}
+            alt={`Tanda Tangan ${pejabatInfo?.nama || ''}`}
+            className={`absolute object-contain pointer-events-none select-none z-10 mix-blend-multiply ${
+              isCompact ? 'h-12 max-w-[140px]' : 'h-16 max-w-[170px]'
+            }`}
+          />
+        )}
+      </div>
+
+      {/* Nama Terang, NIP & Pangkat (Selalu berada di z-20 di bawah area gambar agar tidak tertutup) */}
+      <p className={`font-bold underline uppercase text-slate-900 tracking-wide relative z-20 leading-tight ${nameClassName}`}>
+        {pejabatInfo?.nama || '-'}
+      </p>
+      <p className="font-mono text-[8pt] text-slate-700 relative z-20 leading-tight mt-0.5">
+        NIP. {pejabatInfo?.nip && pejabatInfo.nip !== '-' ? pejabatInfo.nip : '-'}
+      </p>
+      {showPangkat && pangkatText && pangkatText !== '-' && (
+        <p className="text-[8pt] text-slate-600 relative z-20 leading-tight">
+          Pangkat/Gol: {pangkatText}
+        </p>
+      )}
+    </div>
+  );
+};
 
 /**
  * Force mapping pejabat: Pastikan tidak ada fallback ke Wakasek
@@ -29,39 +149,53 @@ export const getSignatoryData = (pejabatSettings: any) => {
  */
 export const RenderSignatureBlock: React.FC<{
   pejabatSettings?: any;
+  kopConfig?: KopSuratConfig;
   tanggalCetak?: string;
   lokasi?: string;
   className?: string;
-}> = ({ pejabatSettings, tanggalCetak, lokasi = 'Ciamis', className = '' }) => {
+}> = ({ pejabatSettings, kopConfig, tanggalCetak, lokasi = 'Ciamis', className = '' }) => {
   const { kepalaSekolah, pengurusBarang } = getSignatoryData(pejabatSettings);
+  const effectiveKop: KopSuratConfig | undefined = kopConfig || (pejabatSettings?.stempelUrl ? {
+    ...({} as KopSuratConfig),
+    stempelUrl: pejabatSettings.stempelUrl,
+    tampilkanStempel: pejabatSettings.tampilkanStempel,
+    stempelMode: pejabatSettings.stempelMode
+  } : undefined);
+
+  const kepsekStampUrl = resolveStampUrlForRole(effectiveKop, 'kepala_sekolah');
+  const pengurusStampUrl = resolveStampUrlForRole(effectiveKop, 'pengurus_barang');
 
   return (
     <div className={`grid grid-cols-2 text-center text-xs gap-4 mt-8 break-inside-avoid doc-signature-block avoid-break signature-area ${className}`}>
       {/* KIRI: KEPALA SEKOLAH */}
-      <div>
-        <p className="font-bold uppercase text-slate-900">MENGETAHUI / MENYETUJUI,</p>
-        <p className="font-bold uppercase text-slate-900">
-          {kepalaSekolah?.statusJabatan && kepalaSekolah.statusJabatan !== 'Definitif' ? `${kepalaSekolah.statusJabatan}. ` : ''}
-          {kepalaSekolah?.jabatanKedinasan || kepalaSekolah?.jabatan || 'KEPALA SEKOLAH'}
-        </p>
-        <p className="italic text-[8pt] text-slate-600">(Kuasa Pengguna Anggaran)</p>
-        <div className="h-16 min-h-[64px]" />
-        <p className="font-bold underline uppercase text-slate-900 tracking-wide">{kepalaSekolah?.nama || '(Nama Kepala Sekolah)'}</p>
-        <p className="font-mono text-[8pt] text-slate-700">NIP. {kepalaSekolah?.nip || '-'}</p>
-      </div>
+      <RenderSignatureBlockWithImage
+        topLine="MENGETAHUI / MENYETUJUI,"
+        pejabatInfo={{
+          jabatan: kepalaSekolah?.jabatanKedinasan || kepalaSekolah?.jabatan || 'KEPALA SEKOLAH',
+          statusJabatan: kepalaSekolah?.statusJabatan,
+          nama: kepalaSekolah?.nama || '(Nama Kepala Sekolah)',
+          nip: kepalaSekolah?.nip || '-',
+          pangkatGolongan: kepalaSekolah?.pangkatGolongan || kepalaSekolah?.pangkat
+        }}
+        subJabatan="(Kuasa Pengguna Anggaran)"
+        signatureImgUrl={kepalaSekolah?.tandaTanganUrl}
+        stampImgUrl={kepsekStampUrl}
+      />
 
       {/* KANAN: PENGURUS BARANG (TIDAK BOLEH WAKASEK) */}
-      <div>
-        <p className="text-slate-800 mb-0.5">{lokasi}, {tanggalCetak || new Date().toLocaleDateString('id-ID')}</p>
-        <p className="font-bold uppercase text-slate-900">
-          {pengurusBarang?.statusJabatan && pengurusBarang.statusJabatan !== 'Definitif' ? `${pengurusBarang.statusJabatan}. ` : ''}
-          {pengurusBarang?.jabatanKedinasan || pengurusBarang?.jabatan || 'PENGURUS BARANG'}
-        </p>
-        <p className="italic text-[8pt] text-slate-600">(Penyalur / Pengelola Persediaan)</p>
-        <div className="h-16 min-h-[64px]" />
-        <p className="font-bold underline uppercase text-slate-900 tracking-wide">{pengurusBarang?.nama || '(Nama Pengurus Barang)'}</p>
-        <p className="font-mono text-[8pt] text-slate-700">NIP. {pengurusBarang?.nip || '-'}</p>
-      </div>
+      <RenderSignatureBlockWithImage
+        topLine={`${lokasi}, ${tanggalCetak || new Date().toLocaleDateString('id-ID')}`}
+        pejabatInfo={{
+          jabatan: pengurusBarang?.jabatanKedinasan || pengurusBarang?.jabatan || 'PENGURUS BARANG',
+          statusJabatan: pengurusBarang?.statusJabatan,
+          nama: pengurusBarang?.nama || '(Nama Pengurus Barang)',
+          nip: pengurusBarang?.nip || '-',
+          pangkatGolongan: pengurusBarang?.pangkatGolongan || pengurusBarang?.pangkat
+        }}
+        subJabatan="(Penyalur / Pengelola Persediaan)"
+        signatureImgUrl={pengurusBarang?.tandaTanganUrl}
+        stampImgUrl={pengurusStampUrl}
+      />
     </div>
   );
 };
@@ -151,6 +285,7 @@ export const SignatoryBukuPersediaan: React.FC<BaseSignatoryProps> = ({
         kepalaSekolah: resolvedKepsek,
         pengurusBarang: resolvedPengurus
       }}
+      kopConfig={kopConfig}
       lokasi={lokasiDisplay}
       tanggalCetak={tanggalDisplay}
       className={className}
@@ -211,6 +346,7 @@ export const SignatoryBukuPengeluaran: React.FC<SignatoryBukuPengeluaranProps> =
         kepalaSekolah: resolvedKepsek,
         pengurusBarang: resolvedPengurus
       }}
+      kopConfig={kopConfig}
       lokasi={lokasiDisplay}
       tanggalCetak={tanggalDisplay}
       className={className}
@@ -307,6 +443,7 @@ export const SignatorySection: React.FC<SignatorySectionProps> = ({
         kepalaSekolah: resolvedKepsek,
         pengurusBarang: resolvedPengurus
       }}
+      kopConfig={kopConfig}
       lokasi={lokasiDisplay}
       tanggalCetak={tanggalCetakDisplay}
       className={className}
@@ -355,6 +492,7 @@ export const SignatoryStockOpname: React.FC<SignatoryStockOpnameProps> = (props)
         kepalaSekolah: resolvedKepsek,
         pengurusBarang: resolvedPengurus
       }}
+      kopConfig={props.kopConfig}
       lokasi={lokasiDisplay}
       tanggalCetak={tanggalDisplay}
       className={props.className}
@@ -413,30 +551,34 @@ export const SignatoryKartuBarang: React.FC<BaseSignatoryProps & {
         pangkatGolongan: rawPengurus.pangkatGolongan || (rawPengurus as any)?.pangkat || '-',
         jabatan: rawPengurus.jabatanKedinasan || rawPengurus.jabatan || 'Pengurus Barang',
         statusJabatan: rawPengurus.statusJabatan,
-        unitKerja: rawPengurus.unitKerja || 'Pengelola Persediaan Barang'
+        unitKerja: rawPengurus.unitKerja || 'Pengelola Persediaan Barang',
+        tandaTanganUrl: rawPengurus.tandaTanganUrl
       }
     : resolvePengurusBarang(effectiveList);
 
   const kotaDisplay = lokasi || dataDokumen?.lokasi || (pejabatSettings as any)?.lokasi || kopConfig?.kotaSurat || 'Ciamis';
   const tanggalDisplay = tanggalCetak || dataDokumen?.tanggalCetak || formatTanggalIndonesia(tanggalSurat);
+  const stampUrl = resolveStampUrlForRole(kopConfig, 'pengurus_barang', true);
 
   return (
     <div className={`signature-block doc-signature-block avoid-break break-inside-avoid ${isCompact ? 'compact-mode mt-2 pt-1' : 'mt-4 pt-2'} ${className}`}>
       <div className="flex justify-end text-center text-[10px]">
         <div className="w-64 sm:w-72">
-          <p className="text-slate-800">
-            {kotaDisplay}, {tanggalDisplay}
-          </p>
-          <p className="font-bold text-slate-900 uppercase mt-0.5 text-[10px]">
-            {pengurusBarang?.statusJabatan && pengurusBarang.statusJabatan !== 'Definitif' ? `${pengurusBarang.statusJabatan}. ` : ''}
-            {pengurusBarang?.jabatanKedinasan || pengurusBarang?.jabatan || 'PENGURUS BARANG'}
-          </p>
-          <p className="text-[9px] text-slate-600 italic">(Penyalur / Pengelola Persediaan)</p>
-          <div className={`${isCompact ? 'h-10 min-h-[36px]' : 'h-14 min-h-[50px]'}`} />
-          <p className="font-bold underline uppercase text-slate-900 tracking-wide text-[10px]">
-            {pengurusBarang?.nama || '(Nama Pengurus Barang)'}
-          </p>
-          <p className="font-mono text-[9px] text-slate-700">NIP. {pengurusBarang?.nip || '-'}</p>
+          <RenderSignatureBlockWithImage
+            topLine={`${kotaDisplay}, ${tanggalDisplay}`}
+            pejabatInfo={{
+              jabatan: (pengurusBarang as any)?.jabatanKedinasan || pengurusBarang?.jabatan || 'PENGURUS BARANG',
+              statusJabatan: pengurusBarang?.statusJabatan,
+              nama: pengurusBarang?.nama || '(Nama Pengurus Barang)',
+              nip: pengurusBarang?.nip || '-'
+            }}
+            subJabatan="(Penyalur / Pengelola Persediaan)"
+            signatureImgUrl={pengurusBarang?.tandaTanganUrl}
+            stampImgUrl={stampUrl}
+            isCompact={isCompact}
+            jabatanClassName="text-[10px]"
+            nameClassName="text-[10px]"
+          />
         </div>
       </div>
     </div>
@@ -455,7 +597,7 @@ export const SignatorySheetBOS: React.FC<BaseSignatoryProps & {
   customPengurusBarang?: ResolvedOfficial;
   customBendaharaBos?: ResolvedOfficial;
 }> = ({
-  pejabatList,
+  pejabatList = [],
   kopConfig,
   tanggalSurat = new Date().toISOString().split('T')[0],
   customKepalaSekolah,
@@ -469,7 +611,7 @@ export const SignatorySheetBOS: React.FC<BaseSignatoryProps & {
 
   const formattedKepsekJabatan = formatJabatanWithStatus(kepalaSekolah, {
     defaultTitle: 'Kepala Sekolah',
-    namaSekolah: kopConfig.namaSekolah,
+    namaSekolah: kopConfig?.namaSekolah,
     includeSchoolName: true
   });
 
@@ -481,64 +623,57 @@ export const SignatorySheetBOS: React.FC<BaseSignatoryProps & {
     defaultTitle: 'Pengurus Barang Persediaan'
   });
 
+  const kepsekStampUrl = resolveStampUrlForRole(kopConfig, 'kepala_sekolah');
+  const bendaharaStampUrl = resolveStampUrlForRole(kopConfig, 'bendahara_bos');
+  const pengurusStampUrl = resolveStampUrlForRole(kopConfig, 'pengurus_barang');
+
   return (
     <div className={`doc-signature-block signature-block avoid-break mt-6 pt-4 border-t border-slate-200 ${className}`}>
-      <div className="grid grid-cols-3 text-center text-xs text-slate-800">
+      <div className="grid grid-cols-3 text-center text-xs text-slate-800 gap-4">
         {/* Kolom 1: Mengetahui/Menyetujui Kepala Satuan Pendidikan */}
-        <div className="flex flex-col justify-between">
-          <div>
-            <p className="font-semibold text-slate-700">Mengetahui/Menyetujui,</p>
-            <p className="font-bold text-slate-900 uppercase">{formattedKepsekJabatan}</p>
-            <p className="text-[8pt] text-slate-600 italic">Kuasa Pengguna Barang</p>
-          </div>
-          <div className="mt-16">
-            <p className="font-bold underline text-slate-900 uppercase tracking-wide">
-              {kepalaSekolah?.nama || '(Nama Kepala Sekolah)'}
-            </p>
-            <p className="text-[11px] text-slate-700 font-mono">NIP. {kepalaSekolah?.nip || '-'}</p>
-            {kepalaSekolah?.pangkatGolongan && (
-              <p className="text-[10px] text-slate-500">Pangkat/Gol: {kepalaSekolah.pangkatGolongan}</p>
-            )}
-          </div>
-        </div>
+        <RenderSignatureBlockWithImage
+          topLine="Mengetahui/Menyetujui,"
+          pejabatInfo={{
+            jabatan: formattedKepsekJabatan,
+            nama: kepalaSekolah?.nama || '(Nama Kepala Sekolah)',
+            nip: kepalaSekolah?.nip || '-',
+            pangkatGolongan: kepalaSekolah?.pangkatGolongan
+          }}
+          subJabatan="Kuasa Pengguna Barang"
+          signatureImgUrl={kepalaSekolah?.tandaTanganUrl}
+          stampImgUrl={kepsekStampUrl}
+          showPangkat={true}
+        />
 
         {/* Kolom 2: Bendahara BOS */}
-        <div className="flex flex-col justify-between">
-          <div>
-            <p className="text-transparent select-none">&nbsp;</p>
-            <p className="font-bold text-slate-900 uppercase">{formattedBendaharaJabatan}</p>
-            <p className="text-[8pt] text-slate-600 italic">Pengelola Keuangan Sekolah</p>
-          </div>
-          <div className="mt-16">
-            <p className="font-bold underline text-slate-900 uppercase tracking-wide">
-              {bendaharaBos?.nama || '(Nama Bendahara BOS)'}
-            </p>
-            <p className="text-[11px] text-slate-700 font-mono">NIP. {bendaharaBos?.nip || '-'}</p>
-            {bendaharaBos?.pangkatGolongan && (
-              <p className="text-[10px] text-slate-500">Pangkat/Gol: {bendaharaBos.pangkatGolongan}</p>
-            )}
-          </div>
-        </div>
+        <RenderSignatureBlockWithImage
+          reserveTopLineSpace={true}
+          pejabatInfo={{
+            jabatan: formattedBendaharaJabatan,
+            nama: bendaharaBos?.nama || '(Nama Bendahara BOS)',
+            nip: bendaharaBos?.nip || '-',
+            pangkatGolongan: bendaharaBos?.pangkatGolongan
+          }}
+          subJabatan="Pengelola Keuangan Sekolah"
+          signatureImgUrl={bendaharaBos?.tandaTanganUrl}
+          stampImgUrl={bendaharaStampUrl}
+          showPangkat={true}
+        />
 
         {/* Kolom 3: Pengurus Barang */}
-        <div className="flex flex-col justify-between">
-          <div>
-            <p className="text-slate-700">
-              {kopConfig.kotaSurat || 'Cihaurbeuti'}, {formatTanggalIndonesia(tanggalSurat)}
-            </p>
-            <p className="font-bold text-slate-900 uppercase">{formattedPengurusJabatan}</p>
-            <p className="text-[8pt] text-slate-600 italic">Pengurus / Penyimpan Barang Persediaan</p>
-          </div>
-          <div className="mt-16">
-            <p className="font-bold underline text-slate-900 uppercase tracking-wide">
-              {pengurusBarang?.nama || '(Nama Pengurus Barang)'}
-            </p>
-            <p className="text-[11px] text-slate-700 font-mono">NIP. {pengurusBarang?.nip || '-'}</p>
-            {pengurusBarang?.pangkatGolongan && (
-              <p className="text-[10px] text-slate-500">Pangkat/Gol: {pengurusBarang.pangkatGolongan}</p>
-            )}
-          </div>
-        </div>
+        <RenderSignatureBlockWithImage
+          topLine={`${kopConfig?.kotaSurat || 'Cihaurbeuti'}, ${formatTanggalIndonesia(tanggalSurat)}`}
+          pejabatInfo={{
+            jabatan: formattedPengurusJabatan,
+            nama: pengurusBarang?.nama || '(Nama Pengurus Barang)',
+            nip: pengurusBarang?.nip || '-',
+            pangkatGolongan: pengurusBarang?.pangkatGolongan
+          }}
+          subJabatan="Pengurus / Penyimpan Barang Persediaan"
+          signatureImgUrl={pengurusBarang?.tandaTanganUrl}
+          stampImgUrl={pengurusStampUrl}
+          showPangkat={true}
+        />
       </div>
     </div>
   );

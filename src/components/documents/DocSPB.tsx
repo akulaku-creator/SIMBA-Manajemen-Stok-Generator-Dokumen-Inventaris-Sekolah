@@ -2,8 +2,10 @@ import React from 'react';
 import { KopSuratConfig, Pejabat, TransaksiPengeluaran } from '../../types';
 import { formatTanggalIndonesia } from '../../utils/numberGenerator';
 import { getSignatoryInfo, resolvePemohon } from '../../utils/pejabatResolver';
+import { resolveStampUrlForRole } from '../../utils/signatureAssetHelper';
 import { KopSuratView } from '../KopSuratView';
 import { DocQRCode } from './DocQRCode';
+import { RenderSignatureBlockWithImage } from './SignatoryBlocks';
 
 interface Props {
   transaksi: TransaksiPengeluaran;
@@ -196,49 +198,42 @@ export const DocSPB: React.FC<Props> = ({
       <div className="doc-signature-block avoid-break break-inside-avoid mt-6 print:mt-4 text-xs font-sans">
         <div className="grid grid-cols-2 gap-8 text-center">
           {/* Kolom Kiri: Kepala Sekolah (Mengetahui) */}
-          <div>
-            <div className="invisible select-none leading-tight print:hidden">&nbsp;</div>
-            <p className="font-semibold uppercase text-slate-900">MENGETAHUI,</p>
-            <p className="font-semibold uppercase text-slate-900">
-              {kepalaSekolah.statusJabatan && kepalaSekolah.statusJabatan !== 'Definitif' ? `${kepalaSekolah.statusJabatan}. ` : ''}
-              {kepalaSekolah.jabatan || 'KEPALA SEKOLAH'}
-            </p>
-            <p className="text-[8pt] text-slate-600 italic">Kuasa Pengguna Anggaran</p>
-            <div className="h-16 print:h-14 flex items-center justify-center">
-              {/* Signature area */}
-            </div>
-            <p className="font-bold underline text-slate-900 text-sm uppercase">{kepalaSekolah.nama || '-'}</p>
-            <p className="text-xs text-slate-700 font-mono mt-0.5">
-              NIP. {kepalaSekolah.nip && kepalaSekolah.nip !== '-' ? kepalaSekolah.nip : '-'}
-            </p>
-            {kepalaSekolah.pangkat && kepalaSekolah.pangkat !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {kepalaSekolah.pangkat}</p>
-            )}
-          </div>
+          <RenderSignatureBlockWithImage
+            reserveTopLineSpace={true}
+            secondaryTopLine="MENGETAHUI,"
+            pejabatInfo={{
+              jabatan: kepalaSekolah.jabatan || 'KEPALA SEKOLAH',
+              statusJabatan: kepalaSekolah.statusJabatan,
+              nama: kepalaSekolah.nama || '-',
+              nip: kepalaSekolah.nip || '-',
+              pangkat: kepalaSekolah.pangkat
+            }}
+            subJabatan="Kuasa Pengguna Anggaran"
+            signatureImgUrl={kepalaSekolah.tandaTanganUrl}
+            stampImgUrl={resolveStampUrlForRole(kopConfig, 'kepala_sekolah')}
+            showPangkat={true}
+            nameClassName="text-sm"
+            jabatanClassName="font-semibold"
+          />
 
           {/* Kolom Kanan: Pengurus Barang / Pembantu (Menyerahkan) */}
-          <div>
-            <p className="text-slate-800 mb-0.5">
-              {kopConfig.kotaSurat || 'Ciamis'}, {formatTanggalIndonesia(transaksi.tanggal)}
-            </p>
-            <p className="font-semibold uppercase text-slate-900">Menyerahkan,</p>
-            <p className="font-semibold uppercase text-slate-900">
-              {pengurusBarang.jabatan || 'PENGURUS BARANG PEMBANTU'}
-            </p>
-            <p className="text-[8pt] text-slate-600 italic">
-              Pengelola Persediaan Barang
-            </p>
-            <div className="h-16 print:h-14 flex items-center justify-center">
-              {/* Signature area */}
-            </div>
-            <p className="font-bold underline text-slate-900 text-sm uppercase">{pengurusBarang.nama || 'Yati Cahyani, S.AP.'}</p>
-            <p className="text-xs text-slate-700 font-mono mt-0.5">
-              NIP. {pengurusBarang.nip && pengurusBarang.nip !== '-' ? pengurusBarang.nip : '-'}
-            </p>
-            {pengurusBarang.pangkat && pengurusBarang.pangkat !== '-' && (
-              <p className="text-[8pt] text-slate-600">Pangkat/Gol: {pengurusBarang.pangkat}</p>
-            )}
-          </div>
+          <RenderSignatureBlockWithImage
+            topLine={`${kopConfig.kotaSurat || 'Ciamis'}, ${formatTanggalIndonesia(transaksi.tanggal)}`}
+            secondaryTopLine="Menyerahkan,"
+            pejabatInfo={{
+              jabatan: pengurusBarang.jabatan || 'PENGURUS BARANG PEMBANTU',
+              statusJabatan: pengurusBarang.statusJabatan,
+              nama: pengurusBarang.nama || 'Yati Cahyani, S.AP.',
+              nip: pengurusBarang.nip || '-',
+              pangkat: pengurusBarang.pangkat
+            }}
+            subJabatan="Pengelola Persediaan Barang"
+            signatureImgUrl={pengurusBarang.tandaTanganUrl}
+            stampImgUrl={resolveStampUrlForRole(kopConfig, 'pengurus_barang')}
+            showPangkat={true}
+            nameClassName="text-sm"
+            jabatanClassName="font-semibold"
+          />
         </div>
 
         {/* Digital Verification QR Badge (TTE) - Compact at Bottom Center */}

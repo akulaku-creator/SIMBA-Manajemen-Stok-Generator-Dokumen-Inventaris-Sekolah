@@ -106,6 +106,7 @@ export interface Pejabat {
   role?: string;
   peran?: string;
   statusJabatan?: StatusJabatan;
+  tandaTanganUrl?: string; // PNG transparan tanda tangan digital (Data URL / path)
 }
 
 export interface Barang {
@@ -222,6 +223,11 @@ export interface KopSuratConfig {
   logoSekolahUrl?: string;
   logoSekolahType?: 'tutwuri' | 'smk' | 'sma' | 'custom' | 'none';
   tampilkanLogoSekolah?: boolean;
+
+  // Stempel Resmi Instansi / Sekolah (PNG Transparan)
+  stempelUrl?: string;
+  tampilkanStempel?: boolean;
+  stempelMode?: 'kepsek_and_single' | 'all_officials';
 }
 
 export interface NumberingPatternConfig {
