@@ -1,11 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged, 
-  User, 
-  signOut 
+import {
+  getAuth,
+  signInWithPopup,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  User,
+  signOut,
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -21,6 +21,9 @@ provider.addScope('https://www.googleapis.com/auth/drive.file');
 provider.addScope('https://www.googleapis.com/auth/drive.readonly');
 provider.addScope('https://www.googleapis.com/auth/drive');
 
+// Lightweight Google Sign-In provider for app authentication
+export const appAuthProvider = new GoogleAuthProvider();
+
 // Flag to track ongoing sign in flow
 let isSigningIn = false;
 
@@ -28,7 +31,7 @@ let isSigningIn = false;
 let cachedAccessToken: string | null = null;
 
 /**
- * Initialize auth listener on app mount.
+ * Initialize auth listener on app mount (Workspace OAuth flow).
  */
 export const initAuth = (
   onAuthSuccess?: (user: User, token: string) => void,
@@ -47,6 +50,36 @@ export const initAuth = (
       if (onAuthFailure) onAuthFailure();
     }
   });
+};
+
+/**
+ * Subscribe to Firebase Authentication state changes (for API ID token calls).
+ */
+export const subscribeFirebaseAuth = (callback: (user: User | null) => void) => {
+  return onAuthStateChanged(auth, callback);
+};
+
+/**
+ * Sign in with Google for SIMBA application session (Firebase ID Token).
+ */
+export const signInWithGoogleApp = async (): Promise<{ user: User; idToken: string }> => {
+  try {
+    isSigningIn = true;
+    const result = await signInWithPopup(auth, appAuthProvider);
+    const idToken = await result.user.getIdToken();
+    return { user: result.user, idToken };
+  } finally {
+    isSigningIn = false;
+  }
+};
+
+/**
+ * Get current Firebase ID Token from active authenticated session (memory only).
+ */
+export const getFirebaseIdToken = async (): Promise<string | null> => {
+  const user = auth.currentUser;
+  if (!user) return null;
+  return user.getIdToken();
 };
 
 /**

@@ -4,7 +4,7 @@
  */
 
 import { CheckCircle, Info, LayoutDashboard, Lock, ShieldAlert, X } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { DashboardStats } from './components/DashboardStats';
 import { DocumentViewer } from './components/DocumentViewer';
 import { KopSettingsModal } from './components/KopSettingsModal';
@@ -61,6 +61,8 @@ import { CategoryFormData } from './components/MasterKategoriManager';
 import { DEFAULT_NUMBERING_CONFIG } from './utils/numberGenerator';
 import { getNamaRekeningByKode } from './data/kodeRekeningData';
 import { applyThemeConfig, getStoredThemeConfig } from './utils/themeHelper';
+import { subscribeFirebaseAuth, logoutGoogle } from './utils/googleAuth';
+import { fetchSimbaBootstrap, syncSimbaState } from './utils/dbApiClient';
 
 export default function App() {
   // Single-Tenant School Configuration (SMAN 1 CIHAURBEUTI)
@@ -225,6 +227,10 @@ export default function App() {
     return false;
   });
 
+  const [firebaseUid, setFirebaseUid] = useState<string | null>(null);
+  const hasBootstrappedCloudRef = useRef(false);
+  const isApplyingBootstrapRef = useRef(false);
+
   // UI Navigation & Modals State
   const [activeTab, setActiveTab] = useState<MainTab>('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -373,6 +379,94 @@ export default function App() {
     localStorage.setItem('simba_current_user_id', currentUserId);
   }, [currentUserId]);
 
+  // Listen for Firebase Authentication session and hydrate from Cloud SQL PostgreSQL
+  useEffect(() => {
+    const unsubscribe = subscribeFirebaseAuth(async (fbUser) => {
+      if (!fbUser) {
+        setFirebaseUid(null);
+        hasBootstrappedCloudRef.current = false;
+        return;
+      }
+
+      setFirebaseUid(fbUser.uid);
+      try {
+        const snapshot = await fetchSimbaBootstrap();
+        if (!snapshot) return;
+
+        if (snapshot.isEmpty) {
+          await syncSimbaState({
+            kategoriList,
+            masterBarang,
+            pejabatList,
+            penerimaanList,
+            transaksiList,
+            kopConfig,
+            numberingConfig,
+            userList,
+            actionLabel: 'INITIAL_SEED',
+          });
+          hasBootstrappedCloudRef.current = true;
+          return;
+        }
+
+        isApplyingBootstrapRef.current = true;
+        if (snapshot.kategoriList?.length) setKategoriList(snapshot.kategoriList);
+        if (snapshot.masterBarang?.length) setMasterBarang(snapshot.masterBarang);
+        if (snapshot.pejabatList?.length) setPejabatList(snapshot.pejabatList);
+        if (snapshot.penerimaanList) setPenerimaanList(snapshot.penerimaanList);
+        if (snapshot.transaksiList) setTransaksiList(snapshot.transaksiList);
+        if (snapshot.kopConfig) setKopConfig(snapshot.kopConfig);
+        if (snapshot.numberingConfig) setNumberingConfig(snapshot.numberingConfig);
+        if (snapshot.userList?.length) setUserList(snapshot.userList);
+
+        setTimeout(() => {
+          isApplyingBootstrapRef.current = false;
+          hasBootstrappedCloudRef.current = true;
+        }, 100);
+      } catch (err) {
+        console.error('Bootstrap sync failed:', err);
+        hasBootstrappedCloudRef.current = true;
+      }
+    });
+    return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Automatic debounced persistence to Cloud SQL PostgreSQL when authenticated with Firebase
+  useEffect(() => {
+    if (!firebaseUid || !hasBootstrappedCloudRef.current || isApplyingBootstrapRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      syncSimbaState({
+        kategoriList,
+        masterBarang,
+        pejabatList,
+        penerimaanList,
+        transaksiList,
+        kopConfig,
+        numberingConfig,
+        userList,
+        actionLabel: 'AUTO_SYNC',
+      }).catch((err) => {
+        console.error('Cloud persistence sync failed:', err);
+      });
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [
+    firebaseUid,
+    kategoriList,
+    masterBarang,
+    pejabatList,
+    penerimaanList,
+    transaksiList,
+    kopConfig,
+    numberingConfig,
+    userList,
+  ]);
+
   const currentUser: AppUser = userList.find(u => u.id === currentUserId) || userList[0] || {
     id: 'user-admin-1',
     nama: 'Dedi Kurniawan, S.Pd.',
@@ -410,14 +504,11 @@ export default function App() {
 
   const handleTabChange = (tab: MainTab) => {
     setActiveTab(tab);
-    if (window.history.pushState) {
-      const pathMap: Record<MainTab, string> = {
-        dashboard: '/',
-        generator: '/generator',
-        barang: '/master-barang',
-        pejabat: '/master-pegawai'
-      };
-      window.history.pushState(null, '', pathMap[tab] || '/');
+    if (typeof window !== 'undefined') {
+      const targetHash = tab === 'dashboard' ? '' : `#${tab}`;
+      if (window.location.hash !== targetHash) {
+        window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${targetHash}`);
+      }
     }
   };
 
@@ -969,6 +1060,10 @@ export default function App() {
   };
 
   const handleLoginSuccess = (user: AppUser, rememberMe?: boolean) => {
+    setUserList((prev) => {
+      const exists = prev.some((u) => u.id === user.id || (user.email && u.email?.toLowerCase() === user.email.toLowerCase()));
+      return exists ? prev : [...prev, user];
+    });
     setCurrentUserId(user.id);
     localStorage.setItem('simba_current_user_id', user.id);
     setIsAuthenticated(true);
@@ -1007,6 +1102,7 @@ export default function App() {
         status: 'SUCCESS'
       });
     }
+    logoutGoogle().catch(() => {});
     sessionStorage.removeItem('simba_auth_session');
     localStorage.removeItem('simba_auth_session');
     localStorage.removeItem('simba_remember_me');

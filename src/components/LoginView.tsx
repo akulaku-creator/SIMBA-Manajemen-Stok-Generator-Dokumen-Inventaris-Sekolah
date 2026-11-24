@@ -18,6 +18,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppUser, KopSuratConfig } from '../types';
 import { DEFAULT_USERS } from '../data/defaultUsers';
 import { logAuditEvent } from '../utils/auditLogger';
+import { signInWithGoogleApp } from '../utils/googleAuth';
 
 export interface LoginViewProps {
   userList?: AppUser[];
@@ -254,6 +255,54 @@ export const LoginView: React.FC<LoginViewProps> = ({
         onLoginSuccess(matchedUser, trustDevice);
       }
     }, 450);
+  };
+
+  const handleGoogleLogin = async () => {
+    if (isRateLimited || isLoading) return;
+    setErrorMsg('');
+    setIsLoading(true);
+    try {
+      const { user } = await signInWithGoogleApp();
+      const email = (user.email || '').trim().toLowerCase();
+      const effectiveUsers = userList && userList.length > 0 ? userList : DEFAULT_USERS;
+      const matched = effectiveUsers.find(
+        (u) => u.email && u.email.trim().toLowerCase() === email
+      );
+
+      const resolvedUser: AppUser = matched || {
+        id: `user-google-${user.uid.slice(0, 8)}`,
+        nama: user.displayName || email.split('@')[0] || 'Pengguna Google',
+        username: email.split('@')[0] || user.uid.slice(0, 8),
+        role: email === 'rifqi.far@gmail.com' ? 'admin' : 'operator',
+        email: user.email || '',
+        jabatan: email === 'rifqi.far@gmail.com' ? 'Administrator Sistem' : 'Pengelola Inventaris',
+        unitKerja: effectiveSchoolName,
+        avatarColor: 'bg-indigo-600',
+      };
+
+      logAuditEvent({
+        userId: resolvedUser.id,
+        username: resolvedUser.username,
+        userName: resolvedUser.nama,
+        userRole: resolvedUser.role,
+        action: 'LOGIN',
+        title: 'Login Berhasil (Google Auth)',
+        details: `Autentikasi Google berhasil untuk ${resolvedUser.email || resolvedUser.nama}.`,
+        status: 'SUCCESS',
+      });
+
+      if (onLogin) {
+        onLogin(resolvedUser, trustDevice);
+      } else if (onLoginSuccess) {
+        onLoginSuccess(resolvedUser, trustDevice);
+      }
+    } catch (err: any) {
+      if (err?.code !== 'auth/popup-closed-by-user') {
+        setErrorMsg('Autentikasi Google gagal atau dibatalkan. Silakan coba lagi.');
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const containerWrapper = isModal
@@ -513,6 +562,39 @@ export const LoginView: React.FC<LoginViewProps> = ({
                       <span>Masuk ke Sistem SIMBA</span>
                     </>
                   )}
+                </button>
+
+                <div className="relative flex items-center py-2">
+                  <div className="flex-grow border-t border-slate-200" />
+                  <span className="flex-shrink mx-3 text-[11px] font-medium text-slate-400">atau</span>
+                  <div className="flex-grow border-t border-slate-200" />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isRateLimited || isLoading}
+                  onClick={handleGoogleLogin}
+                  className="w-full bg-white hover:bg-slate-50 active:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-slate-700 border border-slate-300 text-xs sm:text-sm font-semibold py-2.5 rounded-lg shadow-xs transition duration-200 flex items-center justify-center gap-2.5 cursor-pointer"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.3 0 6.08-1.09 8.11-2.96l-3.88-3.05c-1.09.73-2.49 1.16-4.23 1.16-3.25 0-6-2.19-6.98-5.14H1.01v3.14C3.05 21.2 7.21 24 12 24Z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.02 14.01c-.25-.73-.39-1.51-.39-2.31s.14-1.58.39-2.31V6.25H1.01C.37 7.53 0 8.97 0 10.7s.37 3.17 1.01 4.45l4.01-3.14Z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.79 0 3.4.62 4.67 1.83l3.51-3.51C18.08 1.19 15.3 0 12 0 7.21 0 3.05 2.8 1.01 6.85l4.01 3.14C6 6.94 8.75 4.75 12 4.75Z"
+                    />
+                  </svg>
+                  <span>Masuk dengan Akun Google</span>
                 </button>
               </form>
             </div>

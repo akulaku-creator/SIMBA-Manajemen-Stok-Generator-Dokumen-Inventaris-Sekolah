@@ -578,18 +578,42 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
     setGitHubTestResult(null);
     setGitHubPushResult(null);
     
-    // Save to localStorage immediately
-    saveStoredGitHubConfig(githubConfig);
+    const normalizedConfig: GitHubSyncConfig = {
+      ...githubConfig,
+      branch: (githubConfig.branch || 'main').trim() || 'main',
+    };
+    setGithubConfig(normalizedConfig);
+    saveStoredGitHubConfig(normalizedConfig);
 
     try {
-      const result = await testGitHubConnection(githubConfig);
-      setGitHubTestResult(result);
-      if (result.success) {
+      const result = await testGitHubConnection(normalizedConfig);
+      if (
+        result.success &&
+        result.branchExists === false &&
+        result.repoDetails?.defaultBranch &&
+        normalizedConfig.branch === 'master'
+      ) {
+        const autoConfig: GitHubSyncConfig = {
+          ...normalizedConfig,
+          branch: result.repoDetails.defaultBranch,
+        };
+        setGithubConfig(autoConfig);
+        saveStoredGitHubConfig(autoConfig);
+        setGitHubTestResult({
+          ...result,
+          branchExists: true,
+          message: `Koneksi GitHub berhasil terhubung ke "${result.repoDetails.fullName}"! Branch target otomatis disesuaikan dari "master" ke branch default "${result.repoDetails.defaultBranch}".`,
+        });
         if (onShowToast) {
-          onShowToast(`GitHub: Koneksi terverifikasi ke ${result.repoDetails?.fullName || githubConfig.repoName}!`);
+          onShowToast(`GitHub terhubung! Branch otomatis disesuaikan ke "${result.repoDetails.defaultBranch}".`);
         }
       } else {
-        if (onShowToast) {
+        setGitHubTestResult(result);
+        if (result.success) {
+          if (onShowToast) {
+            onShowToast(`GitHub: Koneksi terverifikasi ke ${result.repoDetails?.fullName || normalizedConfig.repoName}!`);
+          }
+        } else if (onShowToast) {
           onShowToast(`GitHub: ${result.message}`);
         }
       }
@@ -636,10 +660,12 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
       // 2. Push to GitHub
       const res = await pushUpdateToGitHub(githubConfig, payload, customMsg || customCommitMessage);
       setGitHubPushResult(res);
+      const effectiveBranch = res.resolvedBranch || githubConfig.branch || 'main';
 
-      // Update state config with new lastSyncedAt & lastCommitSha
+      // Update state config with new lastSyncedAt, lastCommitSha, & resolved branch
       setGithubConfig(prev => ({
         ...prev,
+        branch: effectiveBranch,
         lastSyncedAt: res.timestamp,
         lastCommitSha: res.commitSha,
         lastCommitUrl: res.commitUrl
@@ -652,12 +678,12 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
         userRole: currentUser.role,
         action: 'SYNC_GITHUB',
         title: 'Auto-Push Update Versi ke GitHub',
-        details: `Berhasil sinkronisasi basis data ke GitHub (${githubConfig.repoOwner}/${githubConfig.repoName} [${githubConfig.branch}] - Commit: ${res.commitSha || 'OK'}).`,
+        details: `Berhasil sinkronisasi basis data ke GitHub (${githubConfig.repoOwner}/${githubConfig.repoName} [${effectiveBranch}] - Commit: ${res.commitSha || 'OK'}).`,
         status: 'SUCCESS'
       });
 
       if (onShowToast) {
-        onShowToast(`Berhasil push update ke GitHub! Commit: #${res.commitSha || 'OK'}`);
+        onShowToast(`Berhasil push update ke GitHub (${effectiveBranch})! Commit: #${res.commitSha || 'OK'}`);
       }
     } catch (err: any) {
       console.error('GitHub Push Error:', err);
@@ -1083,7 +1109,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const defaultSchool = deriveSchoolCode(kopData.namaSekolah, 'SMKN1-KP');
+                    const defaultSchool = deriveSchoolCode(kopData.namaSekolah, 'SMAN1-CH');
                     setNumberingData(prev => ({
                       ...prev,
                       schoolCode: defaultSchool
@@ -1109,7 +1135,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                       value={numberingData.schoolCode}
                       onChange={e => setNumberingData(prev => ({ ...prev, schoolCode: e.target.value.toUpperCase() }))}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 font-mono font-bold text-xs text-indigo-900 bg-indigo-50/30 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                      placeholder="SMKN1-KP"
+                      placeholder="SMAN1-CH"
                     />
                   </div>
                   <div className="flex items-center text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
@@ -2639,6 +2665,29 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                         {gitHubTestResult.repoDetails && (
                           <div className="mt-2 pt-2 border-t border-emerald-200/80 flex flex-wrap items-center gap-3 text-[11px] text-emerald-900 font-mono">
                             <span>Default Branch: <strong>{gitHubTestResult.repoDetails.defaultBranch}</strong></span>
+                            {gitHubTestResult.availableBranches && gitHubTestResult.availableBranches.length > 0 && (
+                              <span className="inline-flex items-center gap-1 flex-wrap">
+                                <span>• Branch Aktif:</span>
+                                {gitHubTestResult.availableBranches.map(bName => (
+                                  <button
+                                    key={bName}
+                                    type="button"
+                                    onClick={() => {
+                                      const next = { ...githubConfig, branch: bName };
+                                      setGithubConfig(next);
+                                      saveStoredGitHubConfig(next);
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded border text-[10px] cursor-pointer transition-colors ${
+                                      (githubConfig.branch || 'main') === bName
+                                        ? 'bg-emerald-700 text-white border-emerald-700 font-bold'
+                                        : 'bg-white text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                                    }`}
+                                  >
+                                    {bName}
+                                  </button>
+                                ))}
+                              </span>
+                            )}
                             <span>•</span>
                             <span>Izin Push: <strong>{gitHubTestResult.repoDetails.permissions?.push !== false ? 'Ya (Diizinkan)' : 'Tidak'}</strong></span>
                             <span>•</span>

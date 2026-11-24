@@ -19,7 +19,7 @@ export const ANGKA_KATA = [
 ];
 
 export const DEFAULT_NUMBERING_PATTERN: NumberingPatternConfig = {
-  schoolCode: 'SMKN1-KP',
+  schoolCode: 'SMAN1-CH',
   patternNPB: '{NO}/NPB/{SEKOLAH}/{BULAN_ROMAN}/{TAHUN}',
   patternSPB: '421.3/{NO}/SPB-{SEKOLAH}/{BULAN_ROMAN}/{TAHUN}',
   patternSPPB: '028/{NO}/SPPB-{SEKOLAH}/{BULAN_ROMAN}/{TAHUN}',

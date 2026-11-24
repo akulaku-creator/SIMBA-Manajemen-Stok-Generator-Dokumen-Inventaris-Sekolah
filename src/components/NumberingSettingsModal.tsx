@@ -43,7 +43,7 @@ export const NumberingSettingsModal: React.FC<Props> = ({
   const previewBASO = parseDynamicNumber(formData.patternBASO, activeBASOCounter, today, formData.schoolCode, 'BA-SO', kopConfig?.namaSekolah);
 
   const handleResetDefault = () => {
-    const defaultSchool = deriveSchoolCode(kopConfig?.namaSekolah, 'SMKN1-KP');
+    const defaultSchool = deriveSchoolCode(kopConfig?.namaSekolah, 'SMAN1-CH');
     setFormData({
       schoolCode: defaultSchool,
       patternNPB: '{NO}/NPB/{SEKOLAH}/{BULAN_ROMAN}/{TAHUN}',

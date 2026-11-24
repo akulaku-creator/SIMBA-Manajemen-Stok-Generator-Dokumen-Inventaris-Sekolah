@@ -74,11 +74,14 @@ export function getVerificationUrl(
 ): string {
   const verifCode = generateVerificationCode(docType, transaksi, docNumber);
   
-  // Use window origin when available, or fallback
   const origin = typeof window !== 'undefined' && window.location.origin
     ? window.location.origin
-    : 'https://simba-app.web.app';
-  
+    : '';
+  const rawPathname = typeof window !== 'undefined' && window.location.pathname
+    ? window.location.pathname.replace(/index\.html$/i, '')
+    : '/';
+  const basePath = rawPathname.endsWith('/') ? rawPathname : `${rawPathname}/`;
+
   const params = new URLSearchParams({
     verify: 'doc',
     type: docType.toLowerCase(),
@@ -88,7 +91,7 @@ export function getVerificationUrl(
     t: (transaksi.tanggal || '').slice(0, 10)
   });
 
-  return `${origin}/?${params.toString()}`;
+  return `${origin}${basePath}?${params.toString()}`;
 }
 
 /**
