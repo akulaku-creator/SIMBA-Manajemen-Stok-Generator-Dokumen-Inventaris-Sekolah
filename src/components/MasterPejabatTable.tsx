@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { DAFTAR_JABATAN_KEDINASAN, Pejabat } from '../types';
 import { exportMasterPegawaiToExcel } from '../utils/excelHelper';
 import { processTransparentPngUpload } from '../utils/signatureAssetHelper';
+import { sanitizeImageUrl } from '../utils/urlSanitizer';
 import { ImportPejabatModal } from './ImportPejabatModal';
 
 interface Props {
@@ -121,11 +122,12 @@ export const MasterPejabatTable: React.FC<Props> = ({
     e.preventDefault();
     if (!formData.nama || !formData.jabatan) return;
 
+    const safeSignatureUrl = sanitizeImageUrl(formData.tandaTanganUrl) ?? undefined;
     if (editingId) {
       onUpdatePejabat({
         ...(formData as Pejabat),
         statusJabatan: formData.statusJabatan || 'Definitif',
-        tandaTanganUrl: formData.tandaTanganUrl || undefined,
+        tandaTanganUrl: safeSignatureUrl,
         id: editingId
       });
     } else {
@@ -137,7 +139,7 @@ export const MasterPejabatTable: React.FC<Props> = ({
         jabatan: formData.jabatan || '',
         statusJabatan: formData.statusJabatan || 'Definitif',
         unitKerja: formData.unitKerja || '',
-        tandaTanganUrl: formData.tandaTanganUrl || undefined
+        tandaTanganUrl: safeSignatureUrl
       };
       onAddPejabat(newPejabat);
     }
@@ -481,9 +483,9 @@ export const MasterPejabatTable: React.FC<Props> = ({
                       backgroundColor: '#ffffff'
                     }}
                   >
-                    {formData.tandaTanganUrl ? (
+                    {sanitizeImageUrl(formData.tandaTanganUrl) ? (
                       <img
-                        src={formData.tandaTanganUrl}
+                        src={sanitizeImageUrl(formData.tandaTanganUrl)}
                         alt="Preview Tanda Tangan"
                         className="max-h-full max-w-full object-contain"
                       />

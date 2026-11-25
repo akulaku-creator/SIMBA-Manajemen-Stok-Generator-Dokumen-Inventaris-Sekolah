@@ -1,5 +1,6 @@
 import React from 'react';
 import { KopSuratConfig } from '../types';
+import { sanitizeImageUrl } from '../utils/urlSanitizer';
 
 interface Props {
   config: KopSuratConfig;
@@ -9,12 +10,12 @@ export const KopSuratView: React.FC<Props> = ({ config }) => {
   // Determine Left Logo (Logo Provinsi / Pemda)
   const showLeft = config.tampilkanLogoProvinsi !== false;
   const leftType = config.logoProvinsiType || (config.logoType as any) || 'pemda';
-  const leftUrl = config.logoProvinsiUrl || (leftType === 'custom' ? config.logoUrl : undefined);
+  const leftUrl = sanitizeImageUrl(config.logoProvinsiUrl || (leftType === 'custom' ? config.logoUrl : undefined));
 
   // Determine Right Logo (Logo Sekolah / Tut Wuri)
   const showRight = config.tampilkanLogoSekolah !== false;
   const rightType = config.logoSekolahType || 'tutwuri';
-  const rightUrl = config.logoSekolahUrl;
+  const rightUrl = sanitizeImageUrl(config.logoSekolahUrl);
 
   const renderTutWuriSvg = () => (
     <div className="w-20 h-20 rounded-full border-2 border-slate-900 flex items-center justify-center p-1 bg-amber-50/50">

@@ -16,9 +16,15 @@ import {
   Users,
   X 
 } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppUser } from '../types';
 import { logAuditEvent } from '../utils/auditLogger';
+import {
+  hashClientCredential,
+  validateNewCredentialStrength,
+  verifyClientCredential
+} from '../utils/credentialHelper';
+import { setupLocalCredentialApi, verifyAdminPinApi } from '../utils/dbApiClient';
 
 export interface ResetScopeOptions {
   deletePenyaluran: boolean;
@@ -41,6 +47,7 @@ interface Props {
   currentUser: AppUser;
   schoolName?: string;
   onOpenAuditLog?: () => void;
+  onSaveAdminPinHash?: (hash: string) => void;
 }
 
 export const ResetTransaksiModal: React.FC<Props> = ({
@@ -53,7 +60,8 @@ export const ResetTransaksiModal: React.FC<Props> = ({
   onConfirmReset,
   currentUser,
   schoolName,
-  onOpenAuditLog
+  onOpenAuditLog,
+  onSaveAdminPinHash
 }) => {
   // Checkbox Scope Selections
   const [chkTransaksiPenyaluran, setChkTransaksiPenyaluran] = useState(true);
@@ -64,11 +72,22 @@ export const ResetTransaksiModal: React.FC<Props> = ({
 
   // Security & Reason inputs
   const [adminPin, setAdminPin] = useState('');
+  const [confirmNewPin, setConfirmNewPin] = useState('');
+  const [needsPinSetup, setNeedsPinSetup] = useState(false);
   const [showPin, setShowPin] = useState(false);
   const [alasanReset, setAlasanReset] = useState('');
   const [restoreStock, setRestoreStock] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setAdminPin('');
+      setConfirmNewPin('');
+      setErrorMsg('');
+      setNeedsPinSetup(false);
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -77,9 +96,14 @@ export const ResetTransaksiModal: React.FC<Props> = ({
   const isTransactionRelatedSelected = chkTransaksiPenyaluran || chkTransaksiPenerimaan || chkMutasiStok;
   
   // Validation: Admin role, at least 1 scope checked, PIN entered, reason filled
-  const isFormValid = isAdmin && hasAnyScope && adminPin.trim().length > 0 && alasanReset.trim().length > 0;
+  const isFormValid =
+    isAdmin &&
+    hasAnyScope &&
+    adminPin.trim().length > 0 &&
+    (!needsPinSetup || confirmNewPin.trim().length > 0) &&
+    alasanReset.trim().length > 0;
 
-  const handleExecute = () => {
+  const handleExecute = async () => {
     setErrorMsg('');
 
     if (!isAdmin) {
@@ -102,27 +126,88 @@ export const ResetTransaksiModal: React.FC<Props> = ({
       return;
     }
 
-    // Verify Admin PIN / Password (default: 123456 or admin password)
-    const validPin = currentUser.pin || '123456';
-    const validPassword = currentUser.password || 'admin';
     const entered = adminPin.trim();
+    setIsProcessing(true);
 
-    if (entered !== validPin && entered !== validPassword && entered !== '123456') {
-      logAuditEvent({
-        userId: currentUser.id,
-        username: currentUser.username,
-        userName: currentUser.nama,
-        userRole: currentUser.role,
-        action: 'RESET_TRANSAKSI',
-        title: 'Gagal Verifikasi PIN Reset Data',
-        details: `Percobaan reset data ditolak: PIN/Password admin salah dimasukkan oleh @${currentUser.username}`,
-        status: 'FAILED'
-      });
-      setErrorMsg('PIN atau Kata Sandi Admin yang dimasukkan salah. (Default PIN: 123456)');
+    try {
+      if (needsPinSetup) {
+        const strengthError = validateNewCredentialStrength(entered);
+        if (strengthError) {
+          setErrorMsg(strengthError);
+          setIsProcessing(false);
+          return;
+        }
+        if (entered !== confirmNewPin.trim()) {
+          setErrorMsg('Konfirmasi PIN Keamanan Admin tidak cocok.');
+          setIsProcessing(false);
+          return;
+        }
+        const newHash = await hashClientCredential(entered);
+        await setupLocalCredentialApi(currentUser.username || currentUser.email || currentUser.id, entered);
+        onSaveAdminPinHash?.(newHash);
+      } else {
+        const apiCheck = await verifyAdminPinApi(entered);
+        if (apiCheck.backendUsed) {
+          if (!apiCheck.verified) {
+            if (apiCheck.hasConfiguredCredential === false && !currentUser.passwordHash) {
+              setNeedsPinSetup(true);
+              setAdminPin('');
+              setConfirmNewPin('');
+              setErrorMsg('Akun Administrator ini belum memiliki PIN Keamanan lokal. Buat PIN baru minimal 6 karakter terlebih dahulu.');
+              setIsProcessing(false);
+              return;
+            }
+            const clientFallbackOk = currentUser.passwordHash
+              ? await verifyClientCredential(entered, currentUser.passwordHash)
+              : false;
+            if (!clientFallbackOk) {
+              logAuditEvent({
+                userId: currentUser.id,
+                username: currentUser.username,
+                userName: currentUser.nama,
+                userRole: currentUser.role,
+                action: 'RESET_TRANSAKSI',
+                title: 'Gagal Verifikasi PIN Reset Data',
+                details: `Percobaan reset data ditolak: PIN/Password admin salah dimasukkan oleh @${currentUser.username}`,
+                status: 'FAILED'
+              });
+              setErrorMsg(apiCheck.error || 'PIN atau Kata Sandi Administrator tidak sesuai.');
+              setIsProcessing(false);
+              return;
+            }
+          }
+        } else {
+          if (!currentUser.passwordHash) {
+            setNeedsPinSetup(true);
+            setAdminPin('');
+            setConfirmNewPin('');
+            setErrorMsg('Akun Administrator ini belum memiliki PIN Keamanan lokal. Buat PIN baru minimal 6 karakter terlebih dahulu.');
+            setIsProcessing(false);
+            return;
+          }
+          const isValid = await verifyClientCredential(entered, currentUser.passwordHash);
+          if (!isValid) {
+            logAuditEvent({
+              userId: currentUser.id,
+              username: currentUser.username,
+              userName: currentUser.nama,
+              userRole: currentUser.role,
+              action: 'RESET_TRANSAKSI',
+              title: 'Gagal Verifikasi PIN Reset Data',
+              details: `Percobaan reset data ditolak: PIN/Password admin salah dimasukkan oleh @${currentUser.username}`,
+              status: 'FAILED'
+            });
+            setErrorMsg('PIN atau Kata Sandi Administrator tidak sesuai.');
+            setIsProcessing(false);
+            return;
+          }
+        }
+      }
+    } catch {
+      setErrorMsg('Terjadi kendala saat memverifikasi kredensial Administrator.');
+      setIsProcessing(false);
       return;
     }
-
-    setIsProcessing(true);
 
     const scopeDetails: string[] = [];
     if (chkTransaksiPenyaluran) scopeDetails.push(`Penyaluran (${transaksiCount} berkas)`);
@@ -172,9 +257,10 @@ export const ResetTransaksiModal: React.FC<Props> = ({
 
       setIsProcessing(false);
       setAdminPin('');
+      setConfirmNewPin('');
       setAlasanReset('');
       onClose();
-    }, 450);
+    }, 300);
   };
 
   return (
@@ -433,10 +519,13 @@ export const ResetTransaksiModal: React.FC<Props> = ({
             <div className="flex items-center justify-between">
               <label className="font-bold text-purple-950 flex items-center gap-1.5">
                 <KeyRound className="w-4 h-4 text-purple-600" />
-                Verifikasi Kata Sandi / PIN Administrator: <span className="text-red-600">*</span>
+                {needsPinSetup
+                  ? 'Buat PIN Keamanan Administrator (Pertama Kali):'
+                  : 'Verifikasi Kata Sandi / PIN Administrator:'}{' '}
+                <span className="text-red-600">*</span>
               </label>
               <span className="text-[10px] text-purple-700 font-mono">
-                Akun: @{currentUser.username} (Default PIN: 123456)
+                Akun: @{currentUser.username}
               </span>
             </div>
 
@@ -445,7 +534,7 @@ export const ResetTransaksiModal: React.FC<Props> = ({
                 type={showPin ? 'text' : 'password'}
                 value={adminPin}
                 onChange={(e) => setAdminPin(e.target.value)}
-                placeholder="Masukkan PIN Admin (contoh: 123456)"
+                placeholder={needsPinSetup ? 'Buat PIN baru minimal 6 karakter unik' : 'Masukkan PIN / Kata Sandi Admin'}
                 className="w-full pl-3 pr-10 py-2 bg-white border border-purple-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
               />
               <button
@@ -456,6 +545,21 @@ export const ResetTransaksiModal: React.FC<Props> = ({
                 {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
+
+            {needsPinSetup && (
+              <div>
+                <label className="block text-[11px] font-semibold text-purple-950 mb-1">
+                  Konfirmasi PIN Keamanan Baru: <span className="text-red-600">*</span>
+                </label>
+                <input
+                  type={showPin ? 'text' : 'password'}
+                  value={confirmNewPin}
+                  onChange={(e) => setConfirmNewPin(e.target.value)}
+                  placeholder="Ulangi PIN Keamanan baru"
+                  className="w-full px-3 py-2 bg-white border border-purple-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-[11px] font-semibold text-purple-950 mb-1">

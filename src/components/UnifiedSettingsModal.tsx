@@ -76,6 +76,13 @@ import {
   parseDynamicNumber 
 } from '../utils/numberGenerator';
 import { processTransparentPngUpload, resolveStampUrlForRole } from '../utils/signatureAssetHelper';
+import {
+  hashClientCredential,
+  validateNewCredentialStrength,
+  verifyClientCredential
+} from '../utils/credentialHelper';
+import { setupLocalCredentialApi, verifyAdminPinApi } from '../utils/dbApiClient';
+import { sanitizeImageUrl } from '../utils/urlSanitizer';
 import { KopSuratView } from './KopSuratView';
 import { ThemeSettingsComponent } from './ThemeSettingsComponent';
 import { DataMaintenanceSettings } from './DataMaintenanceSettings';
@@ -118,6 +125,7 @@ interface Props {
     transaksiList: TransaksiPengeluaran[];
     penerimaanList: TransaksiPenerimaan[];
   }) => void;
+  onSaveAdminPinHash?: (hash: string) => void;
 }
 
 const VALID_SETTING_SECTIONS = ['all', 'kop', 'numbering', 'pejabat', 'backup', 'github', 'danger', 'theme', 'maintenance'] as const;
@@ -147,7 +155,8 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   onRestoreDatabase,
   onShowToast,
   onOpenResetTransaksi,
-  onDataCleanupComplete
+  onDataCleanupComplete,
+  onSaveAdminPinHash
 }) => {
   // Navigation tabs within settings
   const [activeSection, setActiveSection] = useState<SettingSection>(() => resolveSettingTab(initialTab));
@@ -169,6 +178,8 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   const [validationResult, setValidationResult] = useState<BackupValidationResult | null>(null);
   const [restoreMode, setRestoreMode] = useState<'replace' | 'merge'>('replace');
   const [adminPinInput, setAdminPinInput] = useState('');
+  const [confirmRestorePinInput, setConfirmRestorePinInput] = useState('');
+  const [needsRestorePinSetup, setNeedsRestorePinSetup] = useState(false);
   const [showAdminPin, setShowAdminPin] = useState(false);
   const [restorePinError, setRestorePinError] = useState<string | null>(null);
   const [isRestoring, setIsRestoring] = useState(false);
@@ -197,6 +208,8 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
       setRestoreFile(null);
       setValidationResult(null);
       setAdminPinInput('');
+      setConfirmRestorePinInput('');
+      setNeedsRestorePinSetup(false);
       setRestorePinError(null);
       setRestoreSuccessMsg(null);
       setIsRestoring(false);
@@ -368,49 +381,41 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
   };
 
   // Upload Logo Provinsi
-  const handleUploadProvinsi = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadProvinsi = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file logo maksimal 5MB');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
+    try {
+      const { dataUrl } = await processTransparentPngUpload(file, { maxWidth: 420, maxHeight: 420 });
       setKopData(prev => ({
         ...prev,
-        logoProvinsiUrl: result,
+        logoProvinsiUrl: dataUrl,
         logoProvinsiType: 'custom',
         tampilkanLogoProvinsi: true,
-        logoUrl: result,
+        logoUrl: dataUrl,
         logoType: 'custom'
       }));
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    } catch (err: any) {
+      alert(err?.message || 'Gagal memproses berkas logo.');
+    }
   };
 
   // Upload Logo Sekolah
-  const handleUploadSekolah = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadSekolah = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file logo maksimal 5MB');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
+    try {
+      const { dataUrl } = await processTransparentPngUpload(file, { maxWidth: 420, maxHeight: 420 });
       setKopData(prev => ({
         ...prev,
-        logoSekolahUrl: result,
+        logoSekolahUrl: dataUrl,
         logoSekolahType: 'custom',
         tampilkanLogoSekolah: true
       }));
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    } catch (err: any) {
+      alert(err?.message || 'Gagal memproses berkas logo sekolah.');
+    }
   };
 
   // Trigger Full Backup (JSON or ZIP)
@@ -494,11 +499,13 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
     setRestoreFile(null);
     setValidationResult(null);
     setAdminPinInput('');
+    setConfirmRestorePinInput('');
+    setNeedsRestorePinSetup(false);
     setRestorePinError(null);
     setRestoreSuccessMsg(null);
   };
 
-  const handleExecuteRestore = () => {
+  const handleExecuteRestore = async () => {
     setRestorePinError(null);
     setRestoreSuccessMsg(null);
 
@@ -512,27 +519,93 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
       return;
     }
 
-    // Verify Admin PIN / Password (default: 123456 or currentUser pin/password)
-    const validPin = currentUser.pin || '123456';
-    const validPassword = currentUser.password || 'admin';
     const entered = adminPinInput.trim();
-
-    if (entered !== validPin && entered !== validPassword && entered !== '123456') {
-      logAuditEvent({
-        userId: currentUser.id,
-        username: currentUser.username,
-        userName: currentUser.nama,
-        userRole: currentUser.role,
-        action: 'RESTORE_DATABASE',
-        title: 'Gagal Otorisasi PIN Pemulihan Database',
-        details: `Percobaan pemulihan database ditolak: PIN/Password admin salah dimasukkan oleh @${currentUser.username}`,
-        status: 'FAILED'
-      });
-      setRestorePinError('PIN atau Kata Sandi Admin tidak sesuai. (Default PIN: 123456)');
+    if (!entered) {
+      setRestorePinError('Masukkan PIN atau Kata Sandi Administrator untuk mengonfirmasi pemulihan.');
       return;
     }
 
     setIsRestoring(true);
+    try {
+      if (needsRestorePinSetup) {
+        const strengthError = validateNewCredentialStrength(entered);
+        if (strengthError) {
+          setRestorePinError(strengthError);
+          setIsRestoring(false);
+          return;
+        }
+        if (entered !== confirmRestorePinInput.trim()) {
+          setRestorePinError('Konfirmasi PIN Keamanan baru tidak cocok.');
+          setIsRestoring(false);
+          return;
+        }
+        const newHash = await hashClientCredential(entered);
+        await setupLocalCredentialApi(currentUser.username || currentUser.email || currentUser.id, entered);
+        onSaveAdminPinHash?.(newHash);
+      } else {
+        const apiCheck = await verifyAdminPinApi(entered);
+        if (apiCheck.backendUsed) {
+          if (!apiCheck.verified) {
+            if (apiCheck.hasConfiguredCredential === false && !currentUser.passwordHash) {
+              setNeedsRestorePinSetup(true);
+              setAdminPinInput('');
+              setConfirmRestorePinInput('');
+              setRestorePinError('Akun Administrator belum memiliki PIN Keamanan lokal. Buat PIN baru minimal 6 karakter terlebih dahulu.');
+              setIsRestoring(false);
+              return;
+            }
+            const clientFallbackOk = currentUser.passwordHash
+              ? await verifyClientCredential(entered, currentUser.passwordHash)
+              : false;
+            if (!clientFallbackOk) {
+              logAuditEvent({
+                userId: currentUser.id,
+                username: currentUser.username,
+                userName: currentUser.nama,
+                userRole: currentUser.role,
+                action: 'RESTORE_DATABASE',
+                title: 'Gagal Otorisasi PIN Pemulihan Database',
+                details: `Percobaan pemulihan database ditolak: PIN/Password admin salah dimasukkan oleh @${currentUser.username}`,
+                status: 'FAILED'
+              });
+              setRestorePinError(apiCheck.error || 'PIN atau Kata Sandi Administrator tidak sesuai.');
+              setIsRestoring(false);
+              return;
+            }
+          }
+        } else {
+          if (!currentUser.passwordHash) {
+            setNeedsRestorePinSetup(true);
+            setAdminPinInput('');
+            setConfirmRestorePinInput('');
+            setRestorePinError('Akun Administrator belum memiliki PIN Keamanan lokal. Buat PIN baru minimal 6 karakter terlebih dahulu.');
+            setIsRestoring(false);
+            return;
+          }
+          const isValid = await verifyClientCredential(entered, currentUser.passwordHash);
+          if (!isValid) {
+            logAuditEvent({
+              userId: currentUser.id,
+              username: currentUser.username,
+              userName: currentUser.nama,
+              userRole: currentUser.role,
+              action: 'RESTORE_DATABASE',
+              title: 'Gagal Otorisasi PIN Pemulihan Database',
+              details: `Percobaan pemulihan database ditolak: PIN/Password admin salah dimasukkan oleh @${currentUser.username}`,
+              status: 'FAILED'
+            });
+            setRestorePinError('PIN atau Kata Sandi Administrator tidak sesuai.');
+            setIsRestoring(false);
+            return;
+          }
+        }
+      }
+    } catch {
+      setRestorePinError('Terjadi kesalahan saat memverifikasi kredensial Administrator.');
+      setIsRestoring(false);
+      return;
+    }
+
     setTimeout(() => {
       if (onRestoreDatabase && validationResult.payload) {
         onRestoreDatabase(
@@ -569,7 +642,9 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
           : `Data cadangan berhasil digabungkan (Merge Data) ke dalam sistem tanpa menghapus riwayat sebelumnya.`
       );
       setAdminPinInput('');
-    }, 600);
+      setConfirmRestorePinInput('');
+      setNeedsRestorePinSetup(false);
+    }, 400);
   };
 
   // Handler Simpan & Uji Koneksi GitHub
@@ -1007,8 +1082,8 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
 
                       <div className="flex items-center gap-3">
                         <div className="w-14 h-14 rounded-lg border border-slate-300 bg-white flex items-center justify-center overflow-hidden p-1 shrink-0">
-                          {kopData.logoProvinsiUrl ? (
-                            <img src={kopData.logoProvinsiUrl} alt="Logo Daerah" className="max-h-full max-w-full object-contain" />
+                          {sanitizeImageUrl(kopData.logoProvinsiUrl) ? (
+                            <img src={sanitizeImageUrl(kopData.logoProvinsiUrl)} alt="Logo Daerah" className="max-h-full max-w-full object-contain" />
                           ) : (
                             <Building2 className="w-6 h-6 text-slate-400" />
                           )}
@@ -1049,8 +1124,8 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
 
                       <div className="flex items-center gap-3">
                         <div className="w-14 h-14 rounded-lg border border-slate-300 bg-white flex items-center justify-center overflow-hidden p-1 shrink-0">
-                          {kopData.logoSekolahUrl ? (
-                            <img src={kopData.logoSekolahUrl} alt="Logo Sekolah" className="max-h-full max-w-full object-contain" />
+                          {sanitizeImageUrl(kopData.logoSekolahUrl) ? (
+                            <img src={sanitizeImageUrl(kopData.logoSekolahUrl)} alt="Logo Sekolah" className="max-h-full max-w-full object-contain" />
                           ) : (
                             <ImageIcon className="w-6 h-6 text-slate-400" />
                           )}
@@ -1259,9 +1334,9 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                         backgroundColor: '#ffffff'
                       }}
                     >
-                      {kopData.stempelUrl ? (
+                      {sanitizeImageUrl(kopData.stempelUrl) ? (
                         <img
-                          src={kopData.stempelUrl}
+                          src={sanitizeImageUrl(kopData.stempelUrl)}
                           alt="Stempel Resmi Sekolah"
                           className="max-h-full max-w-full object-contain opacity-90"
                         />
@@ -1451,9 +1526,9 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                             className="absolute w-12 h-12 object-contain opacity-80 -translate-x-4 mix-blend-multiply pointer-events-none"
                           />
                         )}
-                        {kepsek.tandaTanganUrl ? (
+                        {sanitizeImageUrl(kepsek.tandaTanganUrl) ? (
                           <img
-                            src={kepsek.tandaTanganUrl}
+                            src={sanitizeImageUrl(kepsek.tandaTanganUrl)}
                             alt="TTD Kepala Sekolah"
                             className="relative z-10 h-11 max-w-[130px] object-contain mix-blend-multiply"
                           />
@@ -1579,9 +1654,9 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                             className="absolute w-12 h-12 object-contain opacity-80 -translate-x-4 mix-blend-multiply pointer-events-none"
                           />
                         )}
-                        {pengurusBarang.tandaTanganUrl ? (
+                        {sanitizeImageUrl(pengurusBarang.tandaTanganUrl) ? (
                           <img
-                            src={pengurusBarang.tandaTanganUrl}
+                            src={sanitizeImageUrl(pengurusBarang.tandaTanganUrl)}
                             alt="TTD Pengurus Barang"
                             className="relative z-10 h-11 max-w-[130px] object-contain mix-blend-multiply"
                           />
@@ -1707,9 +1782,9 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                             className="absolute w-12 h-12 object-contain opacity-80 -translate-x-4 mix-blend-multiply pointer-events-none"
                           />
                         )}
-                        {sarpras.tandaTanganUrl ? (
+                        {sanitizeImageUrl(sarpras.tandaTanganUrl) ? (
                           <img
-                            src={sarpras.tandaTanganUrl}
+                            src={sanitizeImageUrl(sarpras.tandaTanganUrl)}
                             alt="TTD Wakasek Sarpras"
                             className="relative z-10 h-11 max-w-[130px] object-contain mix-blend-multiply"
                           />
@@ -1835,9 +1910,9 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                             className="absolute w-12 h-12 object-contain opacity-80 -translate-x-4 mix-blend-multiply pointer-events-none"
                           />
                         )}
-                        {bendahara.tandaTanganUrl ? (
+                        {sanitizeImageUrl(bendahara.tandaTanganUrl) ? (
                           <img
-                            src={bendahara.tandaTanganUrl}
+                            src={sanitizeImageUrl(bendahara.tandaTanganUrl)}
                             alt="TTD Bendahara BOS"
                             className="relative z-10 h-11 max-w-[130px] object-contain mix-blend-multiply"
                           />
@@ -2327,7 +2402,9 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                           </h5>
                         </div>
                         <p className="text-xs text-slate-500 leading-relaxed">
-                          Tindakan pemulihan database mengubah basis data inventaris sekolah. Masukkan PIN atau Kata Sandi Admin Anda untuk mengonfirmasi eksekusi ini. (Default PIN: <code className="bg-white px-1.5 py-0.5 rounded border border-slate-300 text-slate-800 font-mono font-bold">123456</code>)
+                          {needsRestorePinSetup
+                            ? 'Akun Administrator ini belum memiliki PIN Keamanan lokal. Buat PIN unik minimal 6 karakter untuk mengonfirmasi pemulihan.'
+                            : 'Tindakan pemulihan database mengubah basis data inventaris sekolah. Masukkan PIN atau Kata Sandi Administrator Anda untuk mengonfirmasi eksekusi ini.'}
                         </p>
 
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -2342,7 +2419,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                                 setAdminPinInput(e.target.value);
                                 setRestorePinError(null);
                               }}
-                              placeholder="Masukkan PIN / Sandi Admin..."
+                              placeholder={needsRestorePinSetup ? 'Buat PIN Admin baru (min. 6 karakter)' : 'Masukkan PIN / Sandi Admin...'}
                               className="w-full pl-9 pr-10 py-2.5 bg-white text-xs border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                             />
                             <button
@@ -2354,6 +2431,21 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                               {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                           </div>
+
+                          {needsRestorePinSetup && (
+                            <div className="relative flex-1">
+                              <input
+                                type={showAdminPin ? 'text' : 'password'}
+                                value={confirmRestorePinInput}
+                                onChange={(e) => {
+                                  setConfirmRestorePinInput(e.target.value);
+                                  setRestorePinError(null);
+                                }}
+                                placeholder="Ulangi PIN Admin baru..."
+                                className="w-full px-3 py-2.5 bg-white text-xs border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                              />
+                            </div>
+                          )}
 
                           <div className="flex items-center gap-2">
                             <button
@@ -2459,7 +2551,7 @@ export const UnifiedSettingsModal: React.FC<Props> = ({
                         Panduan Integrasi GitHub REST API SIMBA
                       </p>
                       <p className="text-[11px] leading-relaxed text-slate-600">
-                        Gunakan Personal Access Token (PAT) dari akun GitHub Anda yang memiliki izin cakupan (scope) <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-slate-800 font-bold">repo</code> (Read &amp; Write) untuk repositori privat, atau minimal izin menulis berkas. Kredensial disimpan secara aman di peramban lokal (localStorage) perangkat ini.
+                        Gunakan Personal Access Token (PAT) dari akun GitHub Anda yang memiliki izin cakupan (scope) <code className="bg-white px-1.5 py-0.5 rounded border border-slate-200 font-mono text-slate-800 font-bold">repo</code> (Read &amp; Write) untuk repositori privat, atau minimal izin menulis berkas. Token PAT hanya disimpan di memori sesi aktif (tidak ditulis ke localStorage).
                       </p>
                     </div>
                   </div>

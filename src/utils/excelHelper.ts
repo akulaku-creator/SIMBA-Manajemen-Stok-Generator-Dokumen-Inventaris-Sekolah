@@ -2,6 +2,33 @@ import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
 import { Barang, Pejabat, TransaksiPengeluaran } from '../types';
 import { getNamaRekeningByKode } from '../data/kodeRekeningData';
+import { stripPrototypePollution } from './urlSanitizer';
+
+const MAX_EXCEL_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
+const MAX_EXCEL_ROWS = 10000;
+
+/**
+ * Neutralize CSV/Spreadsheet Formula Injection (DDE / Excel formula payloads starting with =, +, -, @, \t, \r)
+ */
+export function sanitizeExcelCell(val: unknown): any {
+  if (typeof val !== 'string') return val;
+  if (/^[\s\t\r]*[=+\-@]/.test(val)) {
+    return `'${val}`;
+  }
+  return val;
+}
+
+function sanitizeExcelAoa(rows: any[][]): any[][] {
+  return rows.map((row) => row.map((cell) => sanitizeExcelCell(cell)));
+}
+
+function sanitizeExcelRecord(rec: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(rec)) {
+    out[k] = sanitizeExcelCell(v);
+  }
+  return out;
+}
 
 /**
  * Utility to normalize object keys (lowercase, trim, remove non-alphanumeric except space)
@@ -89,6 +116,10 @@ export async function parseExcelPejabat(file: File): Promise<{
   data: Pejabat[];
   errors: string[];
 }> {
+  if (file.size > MAX_EXCEL_FILE_BYTES) {
+    throw new Error('Ukuran file Excel melebihi batas maksimal 15 MB.');
+  }
+
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0];
@@ -96,10 +127,16 @@ export async function parseExcelPejabat(file: File): Promise<{
     throw new Error('File Excel tidak memiliki lembar kerja (worksheet).');
   }
 
-  const rawRows: Record<string, any>[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+  const rawRows: Record<string, any>[] = stripPrototypePollution(
+    XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' })
+  );
   
   if (!rawRows || rawRows.length === 0) {
     throw new Error('File Excel tidak memiliki baris data.');
+  }
+
+  if (rawRows.length > MAX_EXCEL_ROWS) {
+    throw new Error(`Jumlah baris melebihi batas maksimal impor (${MAX_EXCEL_ROWS} baris).`);
   }
 
   const data: Pejabat[] = [];
@@ -272,6 +309,10 @@ export async function parseExcelBarang(
   data: Barang[];
   errors: string[];
 }> {
+  if (file.size > MAX_EXCEL_FILE_BYTES) {
+    throw new Error('Ukuran file Excel melebihi batas maksimal 15 MB.');
+  }
+
   const buffer = await file.arrayBuffer();
   const wb = XLSX.read(buffer, { type: 'array' });
   const sheetName = wb.SheetNames[0];
@@ -284,6 +325,10 @@ export async function parseExcelBarang(
   
   if (!rawAoa || rawAoa.length === 0) {
     throw new Error('File Excel tidak memiliki baris data inventaris barang.');
+  }
+
+  if (rawAoa.length > MAX_EXCEL_ROWS + 10) {
+    throw new Error(`Jumlah baris Excel melebihi batas maksimal impor (${MAX_EXCEL_ROWS} baris).`);
   }
 
   // 2. Temukan baris header (baris pertama yang berisi teks bermakna)
@@ -380,8 +425,10 @@ export async function parseExcelBarang(
   if (colIdxStok === -1) colIdxStok = 7;
   if (colIdxLokasi === -1) colIdxLokasi = 8;
 
-  // Baca juga data berbasis object keys dari SheetJS
-  const rawObjects: Record<string, any>[] = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+  // Baca juga data berbasis object keys dari SheetJS (dengan proteksi prototype pollution)
+  const rawObjects: Record<string, any>[] = stripPrototypePollution(
+    XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' })
+  );
 
   const data: Barang[] = [];
   const errors: string[] = [];
@@ -572,7 +619,7 @@ export async function exportMasterBarangToExcel(
       const hargaSatuan = Number(b.hargaSatuan || 0);
       const totalNilai = stokSekarang * hargaSatuan;
 
-      formattedData.push({
+      formattedData.push(sanitizeExcelRecord({
         'No': idx + 1,
         'Jenis Aset': b.jenisBarang || 'BHP',
         'Kode Rekening': String(b.kodeRekening || '').trim(),
@@ -587,7 +634,7 @@ export async function exportMasterBarangToExcel(
         'Harga Satuan (Rp)': hargaSatuan,
         'Total Nilai Persediaan (Rp)': totalNilai,
         'Lokasi Gudang': b.lokasiGudang || '-'
-      });
+      }));
     });
 
     const percent = Math.min(75, Math.round(10 + ((i + chunk.length) / (total || 1)) * 65));
@@ -658,14 +705,14 @@ export async function exportMasterPegawaiToExcel(
     const chunk = pejabatList.slice(i, i + CHUNK_SIZE);
     chunk.forEach((p, cIdx) => {
       const idx = i + cIdx;
-      formattedData.push({
+      formattedData.push(sanitizeExcelRecord({
         'No': idx + 1,
         'Nama Pegawai & Gelar': p.nama || '-',
         'NIP': p.nip || '-',
         'Pangkat / Golongan': p.pangkatGolongan || '-',
         'Jabatan Kedinasan': p.jabatan || '-',
         'Unit Kerja': p.unitKerja || '-'
-      });
+      }));
     });
 
     const percent = Math.min(80, Math.round(15 + ((i + chunk.length) / (total || 1)) * 65));
@@ -776,7 +823,7 @@ export function exportTransaksiToExcel(
     ]);
   });
 
-  const fullSheetData = [...headerInfo, tableHeaders, ...dataRows];
+  const fullSheetData = sanitizeExcelAoa([...headerInfo, tableHeaders, ...dataRows]);
   const worksheet = XLSX.utils.aoa_to_sheet(fullSheetData);
 
   worksheet['!cols'] = [
@@ -994,8 +1041,8 @@ export function exportMutationToExcel(
     ]);
   }
 
-  // 4. Buat Workbook dan export
-  const ws = XLSX.utils.aoa_to_sheet(excelRows);
+  // 4. Buat Workbook dan export (dengan sanitasi formula-injection per sel)
+  const ws = XLSX.utils.aoa_to_sheet(sanitizeExcelAoa(excelRows));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Mutasi_BHP_12Bulan');
   const safeSekolah = schoolName.replace(/[^a-zA-Z0-9]/g, '_').substring(0, 16);

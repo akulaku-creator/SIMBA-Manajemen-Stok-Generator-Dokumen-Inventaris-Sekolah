@@ -2,6 +2,9 @@ import { GitHubSyncConfig } from '../types';
 
 export const GITHUB_CONFIG_KEY = 'simba_github_config';
 
+// Session-only in-memory storage for sensitive GitHub PAT (never persisted to localStorage)
+let inMemoryGitHubPat = '';
+
 export const DEFAULT_GITHUB_CONFIG: GitHubSyncConfig = {
   personalAccessToken: '',
   repoOwner: '',
@@ -14,15 +17,25 @@ export const DEFAULT_GITHUB_CONFIG: GitHubSyncConfig = {
 };
 
 /**
- * Retrieve GitHub configuration from localStorage
+ * Retrieve GitHub configuration (non-secret metadata from localStorage, PAT from active memory)
  */
 export function getStoredGitHubConfig(): GitHubSyncConfig {
   try {
     const raw = localStorage.getItem(GITHUB_CONFIG_KEY);
-    if (!raw) return { ...DEFAULT_GITHUB_CONFIG };
+    if (!raw) return { ...DEFAULT_GITHUB_CONFIG, personalAccessToken: inMemoryGitHubPat };
     const parsed = JSON.parse(raw);
+
+    // Scrub any legacy plaintext PAT persisted in localStorage
+    if (typeof parsed.personalAccessToken === 'string' && parsed.personalAccessToken.trim()) {
+      if (!inMemoryGitHubPat) {
+        inMemoryGitHubPat = parsed.personalAccessToken.trim();
+      }
+      const { personalAccessToken: _removed, ...safeMeta } = parsed;
+      localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(safeMeta));
+    }
+
     return {
-      personalAccessToken: parsed.personalAccessToken || '',
+      personalAccessToken: inMemoryGitHubPat,
       repoOwner: parsed.repoOwner || '',
       repoName: parsed.repoName || '',
       branch: parsed.branch || 'main',
@@ -32,16 +45,18 @@ export function getStoredGitHubConfig(): GitHubSyncConfig {
       lastCommitUrl: parsed.lastCommitUrl,
     };
   } catch {
-    return { ...DEFAULT_GITHUB_CONFIG };
+    return { ...DEFAULT_GITHUB_CONFIG, personalAccessToken: inMemoryGitHubPat };
   }
 }
 
 /**
- * Save GitHub configuration to localStorage
+ * Save GitHub configuration (PAT stored in memory only; metadata persisted to localStorage)
  */
 export function saveStoredGitHubConfig(config: GitHubSyncConfig): void {
   try {
-    localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(config));
+    inMemoryGitHubPat = (config.personalAccessToken || '').trim();
+    const { personalAccessToken: _excluded, ...nonSecretConfig } = config;
+    localStorage.setItem(GITHUB_CONFIG_KEY, JSON.stringify(nonSecretConfig));
   } catch (e) {
     console.error('Failed to save GitHub config to localStorage:', e);
   }

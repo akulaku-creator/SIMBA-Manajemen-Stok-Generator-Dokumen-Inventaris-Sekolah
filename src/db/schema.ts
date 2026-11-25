@@ -183,6 +183,21 @@ export const pengaturanInstansi = pgTable('pengaturan_instansi', {
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// 10. Tabel Audit Trigger Level Database (Append-Only via Trigger PostgreSQL)
+export const dbAuditLogs = pgTable('db_audit_logs', {
+  id: serial('id').primaryKey(),
+  tableName: varchar('table_name', { length: 80 }).notNull(),
+  operation: varchar('operation', { length: 10 }).notNull(),
+  recordPk: text('record_pk'),
+  oldData: jsonb('old_data'),
+  newData: jsonb('new_data'),
+  changedFields: jsonb('changed_fields'),
+  dbUser: varchar('db_user', { length: 100 }).notNull().default('current_user'),
+  appActor: varchar('app_actor', { length: 150 }),
+  clientAddr: text('client_addr'),
+  executedAt: timestamp('executed_at').defaultNow().notNull(),
+});
+
 // Drizzle Relations
 export const kategoriRekeningRelations = relations(kategoriRekening, ({ many }) => ({
   barangList: many(masterBarang),

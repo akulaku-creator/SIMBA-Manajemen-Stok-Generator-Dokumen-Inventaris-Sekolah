@@ -63,6 +63,8 @@ import { getNamaRekeningByKode } from './data/kodeRekeningData';
 import { applyThemeConfig, getStoredThemeConfig } from './utils/themeHelper';
 import { subscribeFirebaseAuth, logoutGoogle } from './utils/googleAuth';
 import { fetchSimbaBootstrap, syncSimbaState } from './utils/dbApiClient';
+import { clearLocalApiToken, getLocalApiToken, sanitizeUsersForPersistence } from './utils/credentialHelper';
+import { sanitizeImageUrl, stripPrototypePollution } from './utils/urlSanitizer';
 
 export default function App() {
   // Single-Tenant School Configuration (SMAN 1 CIHAURBEUTI)
@@ -200,10 +202,20 @@ export default function App() {
     }));
   });
 
-  // User Management & Roles
+  // User Management & Roles (always strip legacy plaintext credentials)
   const [userList, setUserList] = useState<AppUser[]>(() => {
     const saved = localStorage.getItem('simba_users_list');
-    return saved ? JSON.parse(saved) : DEFAULT_USERS;
+    if (saved) {
+      try {
+        const parsed = stripPrototypePollution(JSON.parse(saved));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return sanitizeUsersForPersistence(parsed);
+        }
+      } catch {
+        // fallback to default users
+      }
+    }
+    return sanitizeUsersForPersistence(DEFAULT_USERS);
   });
 
   const [currentUserId, setCurrentUserId] = useState<string>(() => {
@@ -228,6 +240,7 @@ export default function App() {
   });
 
   const [firebaseUid, setFirebaseUid] = useState<string | null>(null);
+  const [hasLocalSession, setHasLocalSession] = useState<boolean>(() => Boolean(getLocalApiToken()));
   const hasBootstrappedCloudRef = useRef(false);
   const isApplyingBootstrapRef = useRef(false);
 
@@ -372,69 +385,82 @@ export default function App() {
   }, [penerimaanList]);
 
   useEffect(() => {
-    localStorage.setItem('simba_users_list', JSON.stringify(userList));
+    localStorage.setItem('simba_users_list', JSON.stringify(sanitizeUsersForPersistence(userList)));
   }, [userList]);
 
   useEffect(() => {
     localStorage.setItem('simba_current_user_id', currentUserId);
   }, [currentUserId]);
 
+  const bootstrapCloudState = async () => {
+    try {
+      const snapshot = await fetchSimbaBootstrap();
+      if (!snapshot) return;
+
+      if (snapshot.isEmpty) {
+        await syncSimbaState({
+          kategoriList,
+          masterBarang,
+          pejabatList,
+          penerimaanList,
+          transaksiList,
+          kopConfig,
+          numberingConfig,
+          userList: sanitizeUsersForPersistence(userList),
+          actionLabel: 'INITIAL_SEED',
+        });
+        hasBootstrappedCloudRef.current = true;
+        return;
+      }
+
+      isApplyingBootstrapRef.current = true;
+      if (snapshot.kategoriList?.length) setKategoriList(snapshot.kategoriList);
+      if (snapshot.masterBarang?.length) setMasterBarang(snapshot.masterBarang);
+      if (snapshot.pejabatList?.length) setPejabatList(snapshot.pejabatList);
+      if (snapshot.penerimaanList) setPenerimaanList(snapshot.penerimaanList);
+      if (snapshot.transaksiList) setTransaksiList(snapshot.transaksiList);
+      if (snapshot.kopConfig) setKopConfig(snapshot.kopConfig);
+      if (snapshot.numberingConfig) setNumberingConfig(snapshot.numberingConfig);
+      if (snapshot.userList?.length) setUserList(sanitizeUsersForPersistence(snapshot.userList));
+
+      setTimeout(() => {
+        isApplyingBootstrapRef.current = false;
+        hasBootstrappedCloudRef.current = true;
+      }, 100);
+    } catch (err) {
+      console.error('Bootstrap sync failed:', err);
+      hasBootstrappedCloudRef.current = true;
+    }
+  };
+
   // Listen for Firebase Authentication session and hydrate from Cloud SQL PostgreSQL
   useEffect(() => {
     const unsubscribe = subscribeFirebaseAuth(async (fbUser) => {
       if (!fbUser) {
         setFirebaseUid(null);
-        hasBootstrappedCloudRef.current = false;
+        if (!getLocalApiToken()) {
+          hasBootstrappedCloudRef.current = false;
+        }
         return;
       }
 
       setFirebaseUid(fbUser.uid);
-      try {
-        const snapshot = await fetchSimbaBootstrap();
-        if (!snapshot) return;
-
-        if (snapshot.isEmpty) {
-          await syncSimbaState({
-            kategoriList,
-            masterBarang,
-            pejabatList,
-            penerimaanList,
-            transaksiList,
-            kopConfig,
-            numberingConfig,
-            userList,
-            actionLabel: 'INITIAL_SEED',
-          });
-          hasBootstrappedCloudRef.current = true;
-          return;
-        }
-
-        isApplyingBootstrapRef.current = true;
-        if (snapshot.kategoriList?.length) setKategoriList(snapshot.kategoriList);
-        if (snapshot.masterBarang?.length) setMasterBarang(snapshot.masterBarang);
-        if (snapshot.pejabatList?.length) setPejabatList(snapshot.pejabatList);
-        if (snapshot.penerimaanList) setPenerimaanList(snapshot.penerimaanList);
-        if (snapshot.transaksiList) setTransaksiList(snapshot.transaksiList);
-        if (snapshot.kopConfig) setKopConfig(snapshot.kopConfig);
-        if (snapshot.numberingConfig) setNumberingConfig(snapshot.numberingConfig);
-        if (snapshot.userList?.length) setUserList(snapshot.userList);
-
-        setTimeout(() => {
-          isApplyingBootstrapRef.current = false;
-          hasBootstrappedCloudRef.current = true;
-        }, 100);
-      } catch (err) {
-        console.error('Bootstrap sync failed:', err);
-        hasBootstrappedCloudRef.current = true;
-      }
+      await bootstrapCloudState();
     });
     return () => unsubscribe();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Automatic debounced persistence to Cloud SQL PostgreSQL when authenticated with Firebase
+  // Hydrate from Cloud SQL when authenticated via local server-signed HMAC session
   useEffect(() => {
-    if (!firebaseUid || !hasBootstrappedCloudRef.current || isApplyingBootstrapRef.current) {
+    if (!hasLocalSession || firebaseUid || hasBootstrappedCloudRef.current) return;
+    bootstrapCloudState();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLocalSession, firebaseUid]);
+
+  // Automatic debounced persistence to Cloud SQL PostgreSQL when authenticated (Firebase or Local Session)
+  useEffect(() => {
+    if ((!firebaseUid && !hasLocalSession) || !hasBootstrappedCloudRef.current || isApplyingBootstrapRef.current) {
       return;
     }
 
@@ -447,7 +473,7 @@ export default function App() {
         transaksiList,
         kopConfig,
         numberingConfig,
-        userList,
+        userList: sanitizeUsersForPersistence(userList),
         actionLabel: 'AUTO_SYNC',
       }).catch((err) => {
         console.error('Cloud persistence sync failed:', err);
@@ -457,6 +483,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [
     firebaseUid,
+    hasLocalSession,
     kategoriList,
     masterBarang,
     pejabatList,
@@ -549,22 +576,37 @@ export default function App() {
   }, [scopedTransaksi, selectedTransaksiId]);
 
   const handleUpdateKopConfig = (newKop: KopSuratConfig) => {
-    setKopConfig(newKop);
-    localStorage.setItem('simba_kop_config', JSON.stringify(newKop));
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang berwenang mengubah Kop Surat.');
+      return;
+    }
+    const sanitizedKop: KopSuratConfig = {
+      ...newKop,
+      logoUrl: sanitizeImageUrl(newKop.logoUrl) ?? undefined,
+      logoProvinsiUrl: sanitizeImageUrl(newKop.logoProvinsiUrl) ?? undefined,
+      logoSekolahUrl: sanitizeImageUrl(newKop.logoSekolahUrl) ?? undefined,
+      stempelUrl: sanitizeImageUrl(newKop.stempelUrl) ?? undefined,
+    };
+    setKopConfig(sanitizedKop);
+    localStorage.setItem('simba_kop_config', JSON.stringify(sanitizedKop));
     logAuditEvent({
       userId: currentUser.id,
       username: currentUser.username,
       userName: currentUser.nama,
       userRole: currentUser.role,
       action: 'UPDATE_KOP',
-      title: `Pembaruan Kop Surat ${newKop.namaSekolah}`,
-      details: `Kop surat dan identitas lembaga telah diperbarui untuk ${newKop.namaSekolah} (NPSN: ${newKop.npsn}).`,
+      title: `Pembaruan Kop Surat ${sanitizedKop.namaSekolah}`,
+      details: `Kop surat dan identitas lembaga telah diperbarui untuk ${sanitizedKop.namaSekolah} (NPSN: ${sanitizedKop.npsn}).`,
       status: 'SUCCESS'
     });
     showToast('Identitas dan Kop Surat sekolah berhasil diperbarui.');
   };
 
   const handleUpdateNumberingConfig = (newCfg: NumberingPatternConfig) => {
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang berwenang mengubah format nomor surat.');
+      return;
+    }
     setNumberingConfig(newCfg);
     localStorage.setItem('simba_numbering_config', JSON.stringify(newCfg));
     logAuditEvent({
@@ -928,18 +970,32 @@ export default function App() {
     showToast(summary);
   };
 
-  // Master Pejabat Handlers (Single-Tenant)
+  // Master Pejabat Handlers (Single-Tenant, Admin only)
   const handleAddPejabat = (p: Pejabat) => {
-    setPejabatList(prev => [...prev, p]);
-    showToast(`Pejabat ${p.nama} berhasil ditambahkan untuk [${activeSekolah.nama}].`);
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat menambah pegawai.');
+      return;
+    }
+    const safeP: Pejabat = { ...p, tandaTanganUrl: sanitizeImageUrl(p.tandaTanganUrl) ?? undefined };
+    setPejabatList(prev => [...prev, safeP]);
+    showToast(`Pejabat ${safeP.nama} berhasil ditambahkan untuk [${activeSekolah.nama}].`);
   };
 
   const handleUpdatePejabat = (p: Pejabat) => {
-    setPejabatList(pejabatList.map(item => item.id === p.id ? p : item));
-    showToast(`Data pejabat ${p.nama} diperbarui.`);
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat memperbarui data pegawai.');
+      return;
+    }
+    const safeP: Pejabat = { ...p, tandaTanganUrl: sanitizeImageUrl(p.tandaTanganUrl) ?? undefined };
+    setPejabatList(pejabatList.map(item => item.id === safeP.id ? safeP : item));
+    showToast(`Data pejabat ${safeP.nama} diperbarui.`);
   };
 
   const handleDeletePejabat = (id: string) => {
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat menghapus pegawai.');
+      return;
+    }
     const p = pejabatList.find(item => item.id === id);
     if (confirm(`Apakah Anda yakin ingin menghapus pegawai "${p?.nama}"?`)) {
       setPejabatList(pejabatList.filter(item => item.id !== id));
@@ -948,12 +1004,20 @@ export default function App() {
   };
 
   const handleImportPejabat = (importedList: Pejabat[], mode: 'append' | 'replace') => {
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat mengimpor pegawai.');
+      return;
+    }
+    const safeList = importedList.map(p => ({
+      ...p,
+      tandaTanganUrl: sanitizeImageUrl(p.tandaTanganUrl) ?? undefined,
+    }));
     if (mode === 'replace') {
-      setPejabatList(importedList);
-      showToast(`Berhasil mengganti data Pegawai [${activeSekolah.nama}] dengan ${importedList.length} data baru.`);
+      setPejabatList(safeList);
+      showToast(`Berhasil mengganti data Pegawai [${activeSekolah.nama}] dengan ${safeList.length} data baru.`);
     } else {
-      setPejabatList(prev => [...prev, ...importedList]);
-      showToast(`Berhasil mengimpor ${importedList.length} pegawai baru ke [${activeSekolah.nama}].`);
+      setPejabatList(prev => [...prev, ...safeList]);
+      showToast(`Berhasil mengimpor ${safeList.length} pegawai baru ke [${activeSekolah.nama}].`);
     }
   };
 
@@ -1018,18 +1082,32 @@ export default function App() {
     showToast(summaryMsg);
   };
 
-  // User Management Handlers
+  // User Management Handlers (Admin only)
   const handleAddUser = (newUser: AppUser) => {
-    setUserList(prev => [...prev, newUser]);
-    showToast(`Pengguna baru "${newUser.nama}" (${newUser.role}) berhasil ditambahkan.`);
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat menambah akun pengguna.');
+      return;
+    }
+    const [safeUser] = sanitizeUsersForPersistence([newUser]);
+    setUserList(prev => [...prev, safeUser]);
+    showToast(`Pengguna baru "${safeUser.nama}" (${safeUser.role}) berhasil ditambahkan.`);
   };
 
   const handleUpdateUser = (updatedUser: AppUser) => {
-    setUserList(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-    showToast(`Data akun "${updatedUser.nama}" diperbarui.`);
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat mengubah akun pengguna.');
+      return;
+    }
+    const [safeUser] = sanitizeUsersForPersistence([updatedUser]);
+    setUserList(prev => prev.map(u => u.id === safeUser.id ? safeUser : u));
+    showToast(`Data akun "${safeUser.nama}" diperbarui.`);
   };
 
   const handleDeleteUser = (userId: string) => {
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat menghapus akun pengguna.');
+      return;
+    }
     if (userId === currentUserId) {
       alert('Tidak dapat menghapus akun yang sedang aktif digunakan.');
       return;
@@ -1040,6 +1118,10 @@ export default function App() {
   };
 
   const handleSwitchUser = (userId: string) => {
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Pergantian akun langsung hanya diizinkan untuk Administrator.');
+      return;
+    }
     const target = userList.find(u => u.id === userId);
     if (target) {
       setCurrentUserId(target.id);
@@ -1047,25 +1129,36 @@ export default function App() {
     }
   };
 
-  const handleQuickSwitchRole = (role: UserRole) => {
-    const targetUser = userList.find(u => u.role === role);
-    if (targetUser) {
-      setCurrentUserId(targetUser.id);
-      showToast(`Beralih peran ke: ${role.toUpperCase()} (${targetUser.nama})`);
-    } else {
-      const updated = { ...currentUser, role };
-      handleUpdateUser(updated);
-      showToast(`Peran akun "${currentUser.nama}" diubah menjadi ${role.toUpperCase()}.`);
-    }
+  const handleSetupUserCredential = (updatedUser: AppUser) => {
+    const [safeUser] = sanitizeUsersForPersistence([updatedUser]);
+    setUserList(prev => {
+      const exists = prev.some(u => u.id === safeUser.id);
+      return exists ? prev.map(u => (u.id === safeUser.id ? safeUser : u)) : [...prev, safeUser];
+    });
+  };
+
+  const handleSaveAdminPinHash = (hash: string) => {
+    setUserList(prev =>
+      prev.map(u =>
+        u.id === currentUser.id
+          ? { ...u, passwordHash: hash, requiresPasswordSetup: false }
+          : u
+      )
+    );
   };
 
   const handleLoginSuccess = (user: AppUser, rememberMe?: boolean) => {
+    const [safeUser] = sanitizeUsersForPersistence([user]);
     setUserList((prev) => {
-      const exists = prev.some((u) => u.id === user.id || (user.email && u.email?.toLowerCase() === user.email.toLowerCase()));
-      return exists ? prev : [...prev, user];
+      const idx = prev.findIndex(
+        (u) => u.id === safeUser.id || (safeUser.email && u.email?.toLowerCase() === safeUser.email.toLowerCase())
+      );
+      if (idx === -1) return [...prev, safeUser];
+      return prev.map((u, i) => (i === idx ? { ...u, ...safeUser } : u));
     });
-    setCurrentUserId(user.id);
-    localStorage.setItem('simba_current_user_id', user.id);
+    setCurrentUserId(safeUser.id);
+    localStorage.setItem('simba_current_user_id', safeUser.id);
+    setHasLocalSession(Boolean(getLocalApiToken()));
     setIsAuthenticated(true);
     setIsLoginModalOpen(false);
     
@@ -1080,13 +1173,13 @@ export default function App() {
     }
 
     // Role-Based Access Control (RBAC) initial landing route
-    if (user.role === 'pengguna') {
+    if (safeUser.role === 'pengguna') {
       setActiveTab('npb_request');
     } else {
       setActiveTab('dashboard');
     }
 
-    showToast(`Selamat datang, ${user.nama} (${user.role.toUpperCase()})`);
+    showToast(`Selamat datang, ${safeUser.nama} (${safeUser.role.toUpperCase()})`);
   };
 
   const handleLogout = () => {
@@ -1103,6 +1196,9 @@ export default function App() {
       });
     }
     logoutGoogle().catch(() => {});
+    clearLocalApiToken();
+    setHasLocalSession(false);
+    hasBootstrappedCloudRef.current = false;
     sessionStorage.removeItem('simba_auth_session');
     localStorage.removeItem('simba_auth_session');
     localStorage.removeItem('simba_remember_me');
@@ -1121,7 +1217,7 @@ export default function App() {
         kategoriList,
         kopConfig: activeKopConfig,
         numberingConfig: activeNumberingConfig,
-        userList,
+        userList: sanitizeUsersForPersistence(userList),
         currentUser
       });
       setLastBackupTime(res.formattedDate);
@@ -1132,16 +1228,23 @@ export default function App() {
     }
   };
 
-  // Unified Settings Save Handler
+  // Unified Settings Save Handler (Admin only)
   const handleSaveUnifiedSettings = (updated: {
     kopConfig: KopSuratConfig;
     numberingConfig: NumberingPatternConfig;
     pejabatList: Pejabat[];
     kategoriList?: KategoriBarangItem[];
   }) => {
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang berwenang menyimpan pengaturan sistem.');
+      return;
+    }
     handleUpdateKopConfig(updated.kopConfig);
     handleUpdateNumberingConfig(updated.numberingConfig);
-    setPejabatList(updated.pejabatList);
+    setPejabatList(updated.pejabatList.map(p => ({
+      ...p,
+      tandaTanganUrl: sanitizeImageUrl(p.tandaTanganUrl) ?? undefined,
+    })));
     if (updated.kategoriList && updated.kategoriList.length > 0) {
       handleUpdateKategoriList(updated.kategoriList);
     }
@@ -1317,7 +1420,7 @@ export default function App() {
     showToast('Data master, riwayat transaksi, dan stok aktif berhasil disinkronkan!');
   };
 
-  // Restore Database Handler (Replace All or Merge)
+  // Restore Database Handler (Replace All or Merge) - Admin only
   const handleRestoreDatabase = (
     restoredData: {
       masterBarang: Barang[];
@@ -1331,26 +1434,36 @@ export default function App() {
     },
     mode: 'replace' | 'merge'
   ) => {
+    if (currentUser.role !== 'admin') {
+      showToast('Akses Ditolak: Hanya Administrator yang dapat memulihkan basis data.');
+      return;
+    }
+    const cleanData = stripPrototypePollution(restoredData);
+    const safePejabat = (cleanData.pejabatList || []).map((p: Pejabat) => ({
+      ...p,
+      tandaTanganUrl: sanitizeImageUrl(p.tandaTanganUrl) ?? undefined,
+    }));
+
     if (mode === 'replace') {
       // REPLACE ALL DATA
-      setMasterBarang(restoredData.masterBarang);
-      setTransaksiList(restoredData.transaksiList);
-      setPenerimaanList(restoredData.penerimaanList);
-      setPejabatList(restoredData.pejabatList);
-      if (restoredData.kategoriList && restoredData.kategoriList.length > 0) {
-        setKategoriList(restoredData.kategoriList);
+      setMasterBarang(cleanData.masterBarang);
+      setTransaksiList(cleanData.transaksiList);
+      setPenerimaanList(cleanData.penerimaanList);
+      setPejabatList(safePejabat);
+      if (cleanData.kategoriList && cleanData.kategoriList.length > 0) {
+        setKategoriList(cleanData.kategoriList);
       }
-      if (restoredData.kopConfig && restoredData.kopConfig.namaSekolah) {
-        handleUpdateKopConfig(restoredData.kopConfig);
+      if (cleanData.kopConfig && cleanData.kopConfig.namaSekolah) {
+        handleUpdateKopConfig(cleanData.kopConfig);
       }
-      if (restoredData.numberingConfig) {
-        handleUpdateNumberingConfig(restoredData.numberingConfig);
+      if (cleanData.numberingConfig) {
+        handleUpdateNumberingConfig(cleanData.numberingConfig);
       }
-      if (restoredData.userList && restoredData.userList.length > 0) {
-        setUserList(restoredData.userList);
+      if (cleanData.userList && cleanData.userList.length > 0) {
+        setUserList(sanitizeUsersForPersistence(cleanData.userList));
       }
-      if (restoredData.transaksiList.length > 0) {
-        setSelectedTransaksiId(restoredData.transaksiList[0].id);
+      if (cleanData.transaksiList.length > 0) {
+        setSelectedTransaksiId(cleanData.transaksiList[0].id);
       }
 
       logAuditEvent({
@@ -1442,6 +1555,7 @@ export default function App() {
       <LoginView
         userList={userList}
         onLoginSuccess={handleLoginSuccess}
+        onSetupUserCredential={handleSetupUserCredential}
         schoolName={activeSekolah.nama}
         kopConfig={activeKopConfig}
       />
@@ -1710,6 +1824,7 @@ export default function App() {
           setIsResetTransaksiOpen(true);
         }}
         onDataCleanupComplete={handleDataCleanupComplete}
+        onSaveAdminPinHash={handleSaveAdminPinHash}
       />
 
       {/* MODAL: Pengaturan Kop Surat & Logo Sekolah */}
@@ -1748,6 +1863,7 @@ export default function App() {
         currentUser={currentUser}
         schoolName={activeSekolah.nama}
         onOpenAuditLog={() => setIsAuditLogOpen(true)}
+        onSaveAdminPinHash={handleSaveAdminPinHash}
       />
 
       {/* MODAL KEAMANAN: Log Audit Sistem & Integritas Data (Langkah 5) */}
@@ -1768,6 +1884,7 @@ export default function App() {
           onCloseModal={() => setIsLoginModalOpen(false)}
           userList={userList}
           onLoginSuccess={handleLoginSuccess}
+          onSetupUserCredential={handleSetupUserCredential}
           schoolName={activeSekolah.nama}
           kopConfig={activeKopConfig}
         />

@@ -1,4 +1,13 @@
 import { KopSuratConfig } from '../types';
+import { sanitizeImageUrl } from './urlSanitizer';
+
+const ALLOWED_RASTER_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/gif',
+]);
 
 /**
  * Process and optimize uploaded signature or stamp image (PNG transparent recommended)
@@ -16,8 +25,8 @@ export async function processTransparentPngUpload(
   const maxWidth = options.maxWidth ?? 480;
   const maxHeight = options.maxHeight ?? 320;
 
-  if (!file.type.startsWith('image/')) {
-    throw new Error('Berkas harus berupa gambar (direkomendasikan format .PNG transparan).');
+  if (!ALLOWED_RASTER_IMAGE_TYPES.has(file.type.toLowerCase())) {
+    throw new Error('Berkas harus berupa gambar PNG, JPG, WebP, atau GIF (direkomendasikan .PNG transparan).');
   }
 
   if (file.size > maxFileSizeMB * 1024 * 1024) {
@@ -80,19 +89,20 @@ export function resolveStampUrlForRole(
   role: 'kepala_sekolah' | 'pengurus_barang' | 'bendahara_bos' | 'sarpras' | 'pemohon',
   isSingleOfficialDoc: boolean = false
 ): string | undefined {
-  if (!kopConfig?.stempelUrl || kopConfig.tampilkanStempel === false) {
+  const safeStampUrl = sanitizeImageUrl(kopConfig?.stempelUrl);
+  if (!safeStampUrl || kopConfig?.tampilkanStempel === false) {
     return undefined;
   }
   if (role === 'pemohon') {
     // Unit pemohon / penerima internal tidak memakai stempel instansi
     return undefined;
   }
-  if (kopConfig.stempelMode === 'all_officials') {
-    return kopConfig.stempelUrl;
+  if (kopConfig?.stempelMode === 'all_officials') {
+    return safeStampUrl;
   }
   // Default ('kepsek_and_single'): Kepala Sekolah selalu mendapat stempel, atau pejabat tunggal di dokumen tunggal (Kartu Barang, SPPB)
   if (role === 'kepala_sekolah' || isSingleOfficialDoc) {
-    return kopConfig.stempelUrl;
+    return safeStampUrl;
   }
   return undefined;
 }

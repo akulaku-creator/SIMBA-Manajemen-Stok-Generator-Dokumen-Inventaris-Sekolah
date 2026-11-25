@@ -10,6 +10,11 @@ import {
   TransaksiPengeluaran 
 } from '../types';
 import { getAuditLogs, logAuditEvent } from './auditLogger';
+import { sanitizeUsersForPersistence } from './credentialHelper';
+import { sanitizeImageUrl, stripPrototypePollution } from './urlSanitizer';
+
+const MAX_BACKUP_FILE_BYTES = 25 * 1024 * 1024; // 25 MB
+const MAX_BACKUP_JSON_CHARS = 50 * 1024 * 1024; // 50 MB uncompressed text cap
 
 export interface FullBackupPayload {
   appVersion: string;
@@ -114,7 +119,7 @@ export const createBackupPayload = (params: {
       masterKategori: params.kategoriList,
       kopConfig: params.kopConfig,
       numberingConfig: params.numberingConfig,
-      userList: params.userList,
+      userList: sanitizeUsersForPersistence(params.userList),
       auditLogs
     }
   };
@@ -229,6 +234,14 @@ export const validateBackupFile = async (file: File): Promise<BackupValidationRe
     };
   }
 
+  if (file.size > MAX_BACKUP_FILE_BYTES) {
+    return {
+      isValid: false,
+      fileType: isZip ? 'zip' : 'json',
+      errorMessage: 'Ukuran berkas cadangan melebihi batas maksimal 25 MB.'
+    };
+  }
+
   let jsonContent = '';
 
   try {
@@ -258,11 +271,19 @@ export const validateBackupFile = async (file: File): Promise<BackupValidationRe
     };
   }
 
-  // Parse JSON
+  if (jsonContent.length > MAX_BACKUP_JSON_CHARS) {
+    return {
+      isValid: false,
+      fileType: isZip ? 'zip' : 'json',
+      errorMessage: 'Isi berkas cadangan melebihi batas ukuran aman pemulihan (50 MB).'
+    };
+  }
+
+  // Parse JSON and strip prototype pollution keys
   let rawObj: any;
   try {
-    rawObj = JSON.parse(jsonContent);
-  } catch (parseErr) {
+    rawObj = stripPrototypePollution(JSON.parse(jsonContent));
+  } catch {
     return {
       isValid: false,
       fileType: isZip ? 'zip' : 'json',
@@ -271,18 +292,18 @@ export const validateBackupFile = async (file: File): Promise<BackupValidationRe
   }
 
   // Normalize payload (supports direct payload or { data: ... })
-  const dataBlock = rawObj.data || rawObj;
+  const dataBlock = rawObj?.data || rawObj;
 
-  const masterBarang = Array.isArray(dataBlock.masterBarang) ? dataBlock.masterBarang : null;
-  const transaksiPenyaluran = Array.isArray(dataBlock.transaksiPenyaluran) 
+  const masterBarang = Array.isArray(dataBlock?.masterBarang) ? dataBlock.masterBarang : null;
+  const transaksiPenyaluran = Array.isArray(dataBlock?.transaksiPenyaluran) 
     ? dataBlock.transaksiPenyaluran 
-    : (Array.isArray(dataBlock.transaksiList) ? dataBlock.transaksiList : null);
-  const transaksiPenerimaan = Array.isArray(dataBlock.transaksiPenerimaan)
+    : (Array.isArray(dataBlock?.transaksiList) ? dataBlock.transaksiList : null);
+  const transaksiPenerimaan = Array.isArray(dataBlock?.transaksiPenerimaan)
     ? dataBlock.transaksiPenerimaan
-    : (Array.isArray(dataBlock.penerimaanList) ? dataBlock.penerimaanList : null);
-  const masterPejabat = Array.isArray(dataBlock.masterPejabat)
+    : (Array.isArray(dataBlock?.penerimaanList) ? dataBlock.penerimaanList : null);
+  const rawPejabat = Array.isArray(dataBlock?.masterPejabat)
     ? dataBlock.masterPejabat
-    : (Array.isArray(dataBlock.pejabatList) ? dataBlock.pejabatList : null);
+    : (Array.isArray(dataBlock?.pejabatList) ? dataBlock.pejabatList : []);
 
   if (!masterBarang || !transaksiPenyaluran || !transaksiPenerimaan) {
     return {
@@ -292,13 +313,27 @@ export const validateBackupFile = async (file: File): Promise<BackupValidationRe
     };
   }
 
+  const masterPejabat: Pejabat[] = rawPejabat.map((p: Pejabat) => ({
+    ...p,
+    tandaTanganUrl: sanitizeImageUrl(p?.tandaTanganUrl) ?? undefined
+  }));
+
   // Optional collections
   const masterKategori = Array.isArray(dataBlock.masterKategori) 
     ? dataBlock.masterKategori 
     : (Array.isArray(dataBlock.kategoriList) ? dataBlock.kategoriList : []);
-  const kopConfig = dataBlock.kopConfig || rawObj.kopConfig || {};
+  const rawKop = dataBlock.kopConfig || rawObj.kopConfig || {};
+  const kopConfig: KopSuratConfig = {
+    ...rawKop,
+    logoUrl: sanitizeImageUrl(rawKop?.logoUrl) ?? undefined,
+    logoProvinsiUrl: sanitizeImageUrl(rawKop?.logoProvinsiUrl) ?? undefined,
+    logoSekolahUrl: sanitizeImageUrl(rawKop?.logoSekolahUrl) ?? undefined,
+    stempelUrl: sanitizeImageUrl(rawKop?.stempelUrl) ?? undefined
+  };
   const numberingConfig = dataBlock.numberingConfig || rawObj.numberingConfig;
-  const userList = Array.isArray(dataBlock.userList) ? dataBlock.userList : [];
+  const userList = sanitizeUsersForPersistence(
+    Array.isArray(dataBlock.userList) ? dataBlock.userList : []
+  );
   const auditLogs = Array.isArray(dataBlock.auditLogs) ? dataBlock.auditLogs : [];
 
   const normalizedPayload: FullBackupPayload = {
@@ -310,7 +345,7 @@ export const validateBackupFile = async (file: File): Promise<BackupValidationRe
       totalBarang: masterBarang.length,
       totalTransaksiPenyaluran: transaksiPenyaluran.length,
       totalTransaksiPenerimaan: transaksiPenerimaan.length,
-      totalPejabat: (masterPejabat || []).length,
+      totalPejabat: masterPejabat.length,
       totalKategori: masterKategori.length,
       totalAuditLogs: auditLogs.length,
       totalUsers: userList.length,
@@ -320,7 +355,7 @@ export const validateBackupFile = async (file: File): Promise<BackupValidationRe
       masterBarang,
       transaksiPenyaluran,
       transaksiPenerimaan,
-      masterPejabat: masterPejabat || [],
+      masterPejabat,
       masterKategori,
       kopConfig,
       numberingConfig,
@@ -340,7 +375,7 @@ export const validateBackupFile = async (file: File): Promise<BackupValidationRe
       totalBarang: masterBarang.length,
       totalPenyaluran: transaksiPenyaluran.length,
       totalPenerimaan: transaksiPenerimaan.length,
-      totalPejabat: (masterPejabat || []).length,
+      totalPejabat: masterPejabat.length,
       totalKategori: masterKategori.length,
       totalUsers: userList.length
     }

@@ -2,6 +2,8 @@ import {
   AlertCircle,
   Building2,
   Edit2,
+  Eye,
+  EyeOff,
   Plus,
   Search,
   Shield,
@@ -15,6 +17,11 @@ import {
 import React, { useMemo, useState } from 'react';
 import { AppUser, UserRole } from '../types';
 import { APP_CONFIG } from '../config/appConfig';
+import {
+  hashClientCredential,
+  sanitizeUserForStorage,
+  validateNewCredentialStrength
+} from '../utils/credentialHelper';
 
 interface Props {
   isOpen: boolean;
@@ -49,7 +56,8 @@ export const UserManagementModal: React.FC<Props> = ({
   const [nama, setNama] = useState('');
   const [username, setUsername] = useState('');
   const [role, setRole] = useState<UserRole>('operator');
-  const [pin, setPin] = useState('123456');
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [nip, setNip] = useState('');
   const [jabatan, setJabatan] = useState('');
   const [unitKerja, setUnitKerja] = useState('');
@@ -76,7 +84,8 @@ export const UserManagementModal: React.FC<Props> = ({
     setNama('');
     setUsername('');
     setRole('operator');
-    setPin('123456');
+    setPin('');
+    setShowPin(false);
     setNip('');
     setJabatan('');
     setUnitKerja('');
@@ -95,7 +104,8 @@ export const UserManagementModal: React.FC<Props> = ({
     setNama(u.nama);
     setUsername(u.username);
     setRole(u.role);
-    setPin(u.pin || u.password || '123456');
+    setPin('');
+    setShowPin(false);
     setNip(u.nip || '');
     setJabatan(u.jabatan || '');
     setUnitKerja(u.unitKerja || '');
@@ -104,9 +114,14 @@ export const UserManagementModal: React.FC<Props> = ({
     setIsFormOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+
+    if (currentUser && currentUser.role !== 'admin') {
+      setErrorMsg('Akses Ditolak: Hanya Administrator yang dapat mengelola pengguna.');
+      return;
+    }
 
     if (!nama.trim() || !username.trim()) {
       setErrorMsg('Nama lengkap dan username wajib diisi.');
@@ -122,21 +137,33 @@ export const UserManagementModal: React.FC<Props> = ({
       return;
     }
 
+    const trimmedPin = pin.trim();
+    if (!editingId || trimmedPin.length > 0) {
+      const strengthError = validateNewCredentialStrength(trimmedPin);
+      if (strengthError) {
+        setErrorMsg(strengthError);
+        return;
+      }
+    }
+
+    const nextHash = trimmedPin.length > 0 ? await hashClientCredential(trimmedPin) : undefined;
+
     if (editingId) {
       const existing = userList.find(u => u.id === editingId);
       if (existing) {
-        onUpdateUser({
+        const updatedUser = sanitizeUserForStorage({
           ...existing,
           nama: nama.trim(),
           username: username.trim(),
           role: role,
-          pin: pin.trim() || '123456',
-          password: pin.trim() || '123456',
+          passwordHash: nextHash ?? existing.passwordHash,
+          requiresPasswordSetup: nextHash ? false : existing.requiresPasswordSetup,
           nip: nip.trim() || undefined,
           jabatan: jabatan.trim() || undefined,
           unitKerja: unitKerja.trim() || undefined,
           email: email.trim() || undefined
         });
+        onUpdateUser(updatedUser);
       }
     } else {
       const avatarColors = [
@@ -147,19 +174,19 @@ export const UserManagementModal: React.FC<Props> = ({
         'bg-blue-600'
       ];
       const randomColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
-      const newUser: AppUser = {
+      const newUser = sanitizeUserForStorage({
         id: `user-${Date.now()}`,
         nama: nama.trim(),
         username: username.trim(),
         role: role,
-        pin: pin.trim() || '123456',
-        password: pin.trim() || '123456',
+        passwordHash: nextHash,
+        requiresPasswordSetup: !nextHash,
         nip: nip.trim() || undefined,
         jabatan: jabatan.trim() || undefined,
         unitKerja: unitKerja.trim() || undefined,
         email: email.trim() || undefined,
         avatarColor: randomColor
-      };
+      });
       onAddUser(newUser);
     }
 
@@ -306,15 +333,27 @@ export const UserManagementModal: React.FC<Props> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Kata Sandi / PIN *</label>
-                  <input
-                    type="text"
-                    required
-                    value={pin}
-                    onChange={e => setPin(e.target.value)}
-                    placeholder="Contoh: 123456"
-                    className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                  />
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {editingId ? 'Kata Sandi / PIN Baru (Opsional)' : 'Kata Sandi / PIN *'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPin ? 'text' : 'password'}
+                      required={!editingId}
+                      value={pin}
+                      onChange={e => setPin(e.target.value)}
+                      placeholder={editingId ? 'Kosongkan jika tidak mengubah sandi' : 'Minimal 6 karakter unik'}
+                      className="w-full bg-white border border-slate-300 rounded-xl pl-3 pr-9 py-2 text-slate-800 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPin(prev => !prev)}
+                      className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      title={showPin ? 'Sembunyikan' : 'Tampilkan'}
+                    >
+                      {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>

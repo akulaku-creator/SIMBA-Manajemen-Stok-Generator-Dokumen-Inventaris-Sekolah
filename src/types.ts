@@ -264,6 +264,8 @@ export interface AppUser {
   role: UserRole;
   pin?: string;
   password?: string;
+  passwordHash?: string;
+  requiresPasswordSetup?: boolean;
   nip?: string;
   jabatan?: string;
   unitKerja?: string;

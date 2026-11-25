@@ -2,6 +2,7 @@ import { Building2, Check, Eye, EyeOff, FileText, Image as ImageIcon, Link2, Rot
 import React, { useEffect, useState } from 'react';
 import { KopSuratConfig } from '../types';
 import { processTransparentPngUpload } from '../utils/signatureAssetHelper';
+import { sanitizeImageUrl } from '../utils/urlSanitizer';
 import { KopSuratView } from './KopSuratView';
 
 interface Props {
@@ -67,77 +68,72 @@ export const KopSettingsModal: React.FC<Props> = ({
   if (!isOpen) return null;
 
   // Handle Upload Logo Provinsi
-  const handleUploadProvinsi = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadProvinsi = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file maksimal 5MB');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setLogoProvinsiPreview(result);
+    try {
+      const { dataUrl } = await processTransparentPngUpload(file, { maxWidth: 420, maxHeight: 420 });
+      setLogoProvinsiPreview(dataUrl);
       setFormData(prev => ({
         ...prev,
-        logoProvinsiUrl: result,
+        logoProvinsiUrl: dataUrl,
         logoProvinsiType: 'custom',
         tampilkanLogoProvinsi: true,
-        // sync legacy fields
-        logoUrl: result,
+        logoUrl: dataUrl,
         logoType: 'custom'
       }));
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    } catch (err: any) {
+      alert(err?.message || 'Gagal memproses berkas logo.');
+    }
   };
 
   // Handle Upload Logo Sekolah
-  const handleUploadSekolah = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUploadSekolah = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file maksimal 5MB');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setLogoSekolahPreview(result);
+    try {
+      const { dataUrl } = await processTransparentPngUpload(file, { maxWidth: 420, maxHeight: 420 });
+      setLogoSekolahPreview(dataUrl);
       setFormData(prev => ({
         ...prev,
-        logoSekolahUrl: result,
+        logoSekolahUrl: dataUrl,
         logoSekolahType: 'custom',
         tampilkanLogoSekolah: true
       }));
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
+    } catch (err: any) {
+      alert(err?.message || 'Gagal memproses berkas logo sekolah.');
+    }
   };
 
   const handleApplyProvinsiUrl = () => {
-    if (!provinsiUrlInput.trim()) return;
-    setLogoProvinsiPreview(provinsiUrlInput.trim());
+    const safeUrl = sanitizeImageUrl(provinsiUrlInput);
+    if (!safeUrl) {
+      alert('URL logo tidak valid. Gunakan protokol https:// atau jalur gambar yang aman.');
+      return;
+    }
+    setLogoProvinsiPreview(safeUrl);
     setFormData(prev => ({
       ...prev,
-      logoProvinsiUrl: provinsiUrlInput.trim(),
+      logoProvinsiUrl: safeUrl,
       logoProvinsiType: 'custom',
       tampilkanLogoProvinsi: true,
-      logoUrl: provinsiUrlInput.trim(),
+      logoUrl: safeUrl,
       logoType: 'custom'
     }));
   };
 
   const handleApplySekolahUrl = () => {
-    if (!sekolahUrlInput.trim()) return;
-    setLogoSekolahPreview(sekolahUrlInput.trim());
+    const safeUrl = sanitizeImageUrl(sekolahUrlInput);
+    if (!safeUrl) {
+      alert('URL logo sekolah tidak valid. Gunakan protokol https:// atau jalur gambar yang aman.');
+      return;
+    }
+    setLogoSekolahPreview(safeUrl);
     setFormData(prev => ({
       ...prev,
-      logoSekolahUrl: sekolahUrlInput.trim(),
+      logoSekolahUrl: safeUrl,
       logoSekolahType: 'custom',
       tampilkanLogoSekolah: true
     }));
@@ -161,11 +157,15 @@ export const KopSettingsModal: React.FC<Props> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const safeProv = sanitizeImageUrl(logoProvinsiPreview) ?? undefined;
+    const safeSek = sanitizeImageUrl(logoSekolahPreview) ?? undefined;
+    const safeStempel = sanitizeImageUrl(formData.stempelUrl) ?? undefined;
     const updated: KopSuratConfig = {
       ...formData,
-      logoProvinsiUrl: logoProvinsiPreview,
-      logoSekolahUrl: logoSekolahPreview,
-      logoUrl: logoProvinsiPreview, // maintain backward compatibility
+      logoProvinsiUrl: safeProv,
+      logoSekolahUrl: safeSek,
+      logoUrl: safeProv, // maintain backward compatibility
+      stempelUrl: safeStempel,
       logoType: formData.logoProvinsiType as any
     };
     onSave(updated);
@@ -347,9 +347,9 @@ export const KopSettingsModal: React.FC<Props> = ({
                         <div className="p-3 bg-white border border-blue-200 rounded-xl space-y-3">
                           <div className="flex items-center gap-3">
                             <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                              {logoProvinsiPreview ? (
+                              {sanitizeImageUrl(logoProvinsiPreview) ? (
                                 <img
-                                  src={logoProvinsiPreview}
+                                  src={sanitizeImageUrl(logoProvinsiPreview)}
                                   alt="Preview Logo Provinsi"
                                   className="w-full h-full object-contain"
                                   referrerPolicy="no-referrer"
@@ -365,7 +365,7 @@ export const KopSettingsModal: React.FC<Props> = ({
                                 <span>Pilih Berkas Gambar...</span>
                                 <input
                                   type="file"
-                                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                  accept="image/png,image/jpeg,image/webp,image/gif"
                                   onChange={handleUploadProvinsi}
                                   className="hidden"
                                 />
@@ -541,9 +541,9 @@ export const KopSettingsModal: React.FC<Props> = ({
                         <div className="p-3 bg-white border border-indigo-200 rounded-xl space-y-3">
                           <div className="flex items-center gap-3">
                             <div className="w-14 h-14 rounded-lg border border-slate-200 bg-slate-50 flex items-center justify-center overflow-hidden shrink-0">
-                              {logoSekolahPreview ? (
+                              {sanitizeImageUrl(logoSekolahPreview) ? (
                                 <img
-                                  src={logoSekolahPreview}
+                                  src={sanitizeImageUrl(logoSekolahPreview)}
                                   alt="Preview Logo Sekolah"
                                   className="w-full h-full object-contain"
                                   referrerPolicy="no-referrer"
@@ -559,7 +559,7 @@ export const KopSettingsModal: React.FC<Props> = ({
                                 <span>Pilih Logo Sekolah...</span>
                                 <input
                                   type="file"
-                                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                                  accept="image/png,image/jpeg,image/webp,image/gif"
                                   onChange={handleUploadSekolah}
                                   className="hidden"
                                 />
@@ -672,8 +672,8 @@ export const KopSettingsModal: React.FC<Props> = ({
                       backgroundColor: '#ffffff'
                     }}
                   >
-                    {formData.stempelUrl ? (
-                      <img src={formData.stempelUrl} alt="Stempel Instansi" className="max-h-full max-w-full object-contain opacity-90" />
+                    {sanitizeImageUrl(formData.stempelUrl) ? (
+                      <img src={sanitizeImageUrl(formData.stempelUrl)} alt="Stempel Instansi" className="max-h-full max-w-full object-contain opacity-90" />
                     ) : (
                       <Stamp className="w-7 h-7 text-slate-300" />
                     )}

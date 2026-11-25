@@ -9,6 +9,7 @@ import {
   resolvePengurusBarang
 } from '../../utils/pejabatResolver';
 import { resolveStampUrlForRole } from '../../utils/signatureAssetHelper';
+import { sanitizeImageUrl } from '../../utils/urlSanitizer';
 
 export interface SignatureBlockWithImageProps {
   pejabatInfo: {
@@ -52,7 +53,8 @@ export const RenderSignatureBlockWithImage: React.FC<SignatureBlockWithImageProp
   nameClassName = '',
   jabatanClassName = ''
 }) => {
-  const effectiveSignatureUrl = signatureImgUrl || pejabatInfo?.tandaTanganUrl;
+  const effectiveSignatureUrl = sanitizeImageUrl(signatureImgUrl || pejabatInfo?.tandaTanganUrl);
+  const effectiveStampUrl = sanitizeImageUrl(stampImgUrl);
   const pangkatText = pejabatInfo?.pangkat || pejabatInfo?.pangkatGolongan;
   const formattedStatusPrefix =
     pejabatInfo?.statusJabatan &&
@@ -89,9 +91,9 @@ export const RenderSignatureBlockWithImage: React.FC<SignatureBlockWithImageProp
         }`}
       >
         {/* Stempel Instansi (jika ada) */}
-        {stampImgUrl && (
+        {effectiveStampUrl && (
           <img
-            src={stampImgUrl}
+            src={effectiveStampUrl}
             alt="Stempel Sekolah"
             className={`absolute object-contain opacity-85 pointer-events-none select-none mix-blend-multiply print:opacity-85 ${
               isCompact
